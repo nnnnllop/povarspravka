@@ -1,0 +1,67 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+def hasReleaseSigning = ["storeFile", "storePassword", "keyAlias", "keyPassword"].every {
+    keystoreProperties.getProperty(it)?.trim()
+}
+if (keystorePropertiesFile.exists() && !hasReleaseSigning) {
+    throw new GradleException("Incomplete key.properties: storeFile, storePassword, keyAlias and keyPassword are required")
+}
+
+android {
+    namespace = "ru.povarspravka.app"
+    compileSdk = 34
+    // Installed NDK; satisfies plugins requiring NDK >= 25.1.8937393.
+    ndkVersion = "28.2.13676358"
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
+
+    defaultConfig {
+        applicationId = "ru.povarspravka.app"
+        minSdk = 24
+        targetSdk = 34
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+    }
+
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile = rootProject.file(keystoreProperties["storeFile"])
+                storePassword = keystoreProperties["storePassword"]
+                keyAlias = keystoreProperties["keyAlias"]
+                keyPassword = keystoreProperties["keyPassword"]
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            if (!hasReleaseSigning) {
+                throw new GradleException("Release build requires a valid key.properties and keystore! Debug fallback is prohibited in release mode.")
+            }
+            signingConfig = signingConfigs.release
+            minifyEnabled = false
+            shrinkResources = false
+        }
+    }
+}
+
+flutter {
+    source = "../.."
+}

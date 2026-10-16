@@ -1,0 +1,33 @@
+{
+  "catalogName": "USDA FoodData Central Offline Catalog (SR Legacy / Foundation)",
+  "version": "1.0.0",
+  "generatedAt": "2026-10-16 10:39:29Z",
+  "sourceDataset": {
+    "dataset_type": "USDA FoodData Central (SR Legacy + Foundation Foods)",
+    "sr_count": 7793,
+    "foundation_count": 387,
+    "total_count": 8180,
+    "computed_kcal_count": 252,
+    "sr_dir": "C:\\projects\\povarspravka\\tools\\usda\\cache\\sr_legacy\\FoodData_Central_sr_legacy_food_csv_2018-04"
+  },
+  "databasePath": "C:\\projects\\povarspravka\\tools\\data_pipeline\\usda\\output\\usda_products.db",
+  "databaseSizeMB": 21.91,
+  "statistics": {
+    "groups": 25,
+    "products": 8180,
+    "fts_records": 8180,
+    "nutrients": 213172,
+    "measures": 14636,
+    "synonyms": 32333
+  },
+  "referenceDatabase": "C:\\projects\\povarspravka\\tools\\data_pipeline\\output\\reference.db",
+  "referenceStatistics": {
+    "groups": 37,
+    "products": 9283,
+    "fts_records": 9283,
+    "nutrients": 225082,
+    "measures": 15097,
+    "synonyms": 32358
+  },
+  "elapsedSeconds": 8.54
+}

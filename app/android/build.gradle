@@ -1,0 +1,27 @@
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.buildDir = "../build"
+subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
+}
+// printing 5.12 declares API 30, but its AndroidX resources use API 31+
+// (android:attr/lStar). Align this library with the app without editing pub cache.
+subprojects { subproject ->
+    if (subproject.name == "printing") {
+        subproject.afterEvaluate {
+            subproject.android.compileSdkVersion 34
+        }
+    }
+}
+subprojects {
+    project.evaluationDependsOn(":app")
+}
+
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
+}

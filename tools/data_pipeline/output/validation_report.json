@@ -1,0 +1,72 @@
+{
+  "total_products": 1103,
+  "passed_products": 1103,
+  "pass_rate_pct": 100.0,
+  "fatal_errors": 0,
+  "duplicate_codes_count": 0,
+  "duplicate_codes": [],
+  "total_warnings": 3,
+  "products_with_warnings_count": 3,
+  "products_per_group": {
+    "Молоко и молочные продукты": 162,
+    "Яйцепродукты": 15,
+    "Мясо и мясные продукты": 180,
+    "Рыба, нерыбные объекты промысла и продукты из них": 145,
+    "Жировые продукты (жирностью более 50%)": 44,
+    "Зерно и продукты его переработки": 124,
+    "Бобовые, орехи": 28,
+    "Овощи, грибы и продукты их переработки": 159,
+    "Фрукты, ягоды и продукты их переработки": 73,
+    "Кондитерские изделия": 78,
+    "Напитки": 76,
+    "Вспомогательные пищевые вещества и улучшители вкуса": 19
+  },
+  "quality_metrics": {
+    "avg_energy_difference_pct": 0.78,
+    "avg_proximate_sum_grams": 98.15
+  },
+  "warnings_sample": [
+    {
+      "id": 202,
+      "code": "3.2.2.2",
+      "name": "Печень свиная",
+      "warnings": [
+        "Energy mismatch: book=109.0 vs calc=128.2 (diff=17.6%)"
+      ],
+      "metrics": {
+        "calc_kcal": 128.2,
+        "energy_diff": 19.2,
+        "energy_diff_pct": 17.6,
+        "proximate_sum": 100.0
+      }
+    },
+    {
+      "id": 216,
+      "code": "3.3.11",
+      "name": "Консервы из птицы «Курица в собственном соку»",
+      "warnings": [
+        "Proximate mass sum out of expected range: 40.0g (water=4.4, P=23.2, F=9.9, C=0.4, ash=2.1, alc=0.0)"
+      ],
+      "metrics": {
+        "calc_kcal": 183.5,
+        "energy_diff": 0.5,
+        "energy_diff_pct": 0.3,
+        "proximate_sum": 40.0
+      }
+    },
+    {
+      "id": 901,
+      "code": "9.2.1.13",
+      "name": "Шиповник",
+      "warnings": [
+        "Energy mismatch: book=284.0 vs calc=234.4 (diff=17.5%)"
+      ],
+      "metrics": {
+        "calc_kcal": 234.4,
+        "energy_diff": 49.6,
+        "energy_diff_pct": 17.5,
+        "proximate_sum": 76.8
+      }
+    }
+  ]
+}
