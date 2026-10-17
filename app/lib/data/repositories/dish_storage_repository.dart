@@ -83,7 +83,7 @@ class DishStorageRepository {
           (item['id'] as String).isEmpty ||
           item['weightGrams'] is! num ||
           !(item['weightGrams'] as num).toDouble().isFinite ||
-          (item['weightGrams'] as num).toDouble() <= 0 ||
+          (item['weightGrams'] as num).toDouble() < 0 ||
           item['product'] is! Map<String, dynamic>) {
         throw const FormatException('Invalid ingredient structure');
       }

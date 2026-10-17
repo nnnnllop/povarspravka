@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/calculation/calculation_engine.dart';
@@ -30,13 +32,27 @@ final calculationResultProvider = Provider<CalculationResult>((ref) {
   return CalculationEngine.calculate(dish);
 });
 
-int _idSequence = 0;
-String _newId() => '${DateTime.now().microsecondsSinceEpoch}_${_idSequence++}';
+final _random = Random.secure();
+String _newId() {
+  final bytes = List<int>.generate(16, (_) => _random.nextInt(256));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40; // RFC 4122 version 4
+  bytes[8] = (bytes[8] & 0x3f) | 0x80; // RFC 4122 variant 10
+  final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20, 32)}';
+}
 Dish _snapshot(Dish dish) => Dish.fromJson(dish.toJson());
 
 class SavedDishesNotifier extends StateNotifier<List<Dish>> {
   final DishStorageRepository _storage;
   Dish? _latestDraft;
+  Future<void> _operationTail = Future<void>.value();
+
+  // Serialize read-modify-write, not merely the final disk writes.
+  Future<T> _serialized<T>(Future<T> Function() operation) {
+    final result = _operationTail.then((_) => operation());
+    _operationTail = result.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    return result;
+  }
 
   SavedDishesNotifier(this._storage) : super(const []);
 
@@ -45,12 +61,12 @@ class SavedDishesNotifier extends StateNotifier<List<Dish>> {
     state = dishes;
   }
 
-  Future<void> updateDraftReference(Dish draft) async {
+  Future<void> updateDraftReference(Dish draft) => _serialized(() async {
+    await _storage.saveAll(activeDraft: draft, savedDishes: state);
     _latestDraft = draft;
-    await _storage.saveAll(activeDraft: _latestDraft, savedDishes: state);
-  }
+  });
 
-  Future<void> saveDish(Dish dish) async {
+  Future<void> saveDish(Dish dish) => _serialized(() async {
     dish = _snapshot(dish);
     final existingIdx = state.indexWhere((d) => d.id == dish.id);
     final updated = List<Dish>.from(state);
@@ -61,15 +77,15 @@ class SavedDishesNotifier extends StateNotifier<List<Dish>> {
     }
     await _storage.saveAll(activeDraft: _latestDraft, savedDishes: updated);
     state = updated;
-  }
+  });
 
-  Future<void> deleteDish(String id) async {
+  Future<void> deleteDish(String id) => _serialized(() async {
     final updated = state.where((d) => d.id != id).toList();
     await _storage.saveAll(activeDraft: _latestDraft, savedDishes: updated);
     state = updated;
-  }
+  });
 
-  Future<Dish> duplicateDish(Dish dish) async {
+  Future<Dish> duplicateDish(Dish dish) => _serialized(() async {
     final now = DateTime.now();
     final copyTitle =
         dish.title.trim().isEmpty ? 'Блюдо (копия)' : '${dish.title} (копия)';
@@ -87,7 +103,7 @@ class SavedDishesNotifier extends StateNotifier<List<Dish>> {
     await _storage.saveAll(activeDraft: _latestDraft, savedDishes: updated);
     state = updated;
     return duplicated;
-  }
+  });
 }
 
 class DishNotifier extends StateNotifier<Dish> {

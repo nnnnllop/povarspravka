@@ -1,3 +1,4 @@
+import 'calculation_math.dart';
 import 'models/dish.dart';
 import 'models/product.dart';
 
@@ -26,7 +27,7 @@ class CalculationValidation {
     range(p.protein, 0, 100, 'protein');
     range(p.fat, 0, 100, 'fat');
     range(p.carbs, 0, 100, 'carbs');
-    if (p.protein + p.fat + p.carbs > 100.05) {
+    if (CalculationMath.sumExceeds([p.protein, p.fat, p.carbs], 100)) {
       throw ArgumentError(
         'Product nutrients sum (${p.protein} + ${p.fat} + ${p.carbs}) exceeds 100g',
       );

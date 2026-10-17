@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/calculation/calculation_engine.dart';
+import '../../core/calculation/calculation_validation.dart';
 import '../../core/calculation/models/product.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
@@ -351,6 +352,21 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
   }
 
   void _pickProductForRecipe(Product product) {
+    try {
+      CalculationValidation.product(product);
+    } catch (_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Продукт «${product.name}» недоступен для расчёта (сумма БЖУ превышает 100 г в исходных данных USDA).',
+          ),
+          backgroundColor: AppColors.error,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+
     // Захватываем dishNotifier и родительский контекст ДО закрытия модального окна,
     // чтобы избежать StateError: Bad state: Cannot use ref after the widget was disposed.
     final dishNotifier = ref.read(dishProvider.notifier);
@@ -411,6 +427,13 @@ class ProductInfoCardSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final nutrientsAsync = ref.watch(productNutrientsProvider(product.id));
+
+    bool isValid = true;
+    try {
+      CalculationValidation.product(product);
+    } catch (_) {
+      isValid = false;
+    }
 
     return Container(
       constraints: BoxConstraints(
@@ -735,15 +758,47 @@ class ProductInfoCardSheet extends ConsumerWidget {
               ),
             ),
 
+            if (!isValid)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded,
+                          color: AppColors.error, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Сумма нутриентов в данных USDA превышает 100 г (${(product.protein + product.fat + product.carbs).toStringAsFixed(2)} г). Продукт доступен только для справки.',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.error,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
             // Кнопка "Добавить в расчет"
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: onAddToRecipe,
+                  onPressed: isValid ? onAddToRecipe : null,
                   icon: const Icon(Icons.add_circle_outline_rounded, size: 20),
-                  label: const Text('Добавить в расчет'),
+                  label: Text(isValid
+                      ? 'Добавить в расчет'
+                      : 'Недоступно для расчёта (ошибка БЖУ в USDA)'),
                 ),
               ),
             ),

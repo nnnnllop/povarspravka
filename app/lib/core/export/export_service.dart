@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -11,6 +12,26 @@ import 'xlsx_blank_generator.dart';
 enum ExportType { pdf, docx, xlsx }
 
 class ExportService {
+  /// Bounded UTF-8 filename component; the complete title remains inside the document.
+  static String fileBaseTitle(String title) {
+    var cleaned = title.replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1f\x7f]'), '_').trim();
+    cleaned = cleaned.replaceAll(RegExp(r'[. ]+$'), '');
+    final buffer = StringBuffer();
+    var bytes = 0;
+    for (final rune in cleaned.runes) {
+      final character = String.fromCharCode(rune);
+      final length = utf8.encode(character).length;
+      if (bytes + length > 80) break;
+      buffer.write(character); bytes += length;
+    }
+    cleaned = buffer.toString().replaceAll(RegExp(r'[. ]+$'), '');
+    if (cleaned.isEmpty) return 'Бланк_расчета';
+    if (RegExp(r'^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)', caseSensitive: false).hasMatch(cleaned)) {
+      return '_$cleaned';
+    }
+    return cleaned;
+  }
+
   /// Прямая печать или встроенный просмотр PDF на Android
   static Future<void> printPdf(Dish dish) async {
     final pdfBytes = await PdfBlankGenerator.generate(dish);
@@ -24,14 +45,11 @@ class ExportService {
   /// Экспорт и открытие системного диалога "Поделиться" для любого из форматов
   static Future<void> shareFile(Dish dish, ExportType type) async {
     final tempDir = await getTemporaryDirectory();
-    final baseTitle = dish.title.isNotEmpty
-        ? dish.title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')
-        : 'Бланк_расчета';
-
-    final exportId =
-        '${DateTime.now().microsecondsSinceEpoch}_${dish.id.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')}';
-    final exportDir = Directory(p.join(tempDir.path, 'exports', exportId));
-    await exportDir.create(recursive: true);
+    final baseTitle = fileBaseTitle(dish.title);
+    final exportsRoot = Directory(p.join(tempDir.path, 'exports'));
+    await exportsRoot.create(recursive: true);
+    // OS-created unique directory: safe even for equal timestamps and recipe IDs.
+    final exportDir = await exportsRoot.createTemp('blank_');
 
     String fileName;
     List<int> bytes;

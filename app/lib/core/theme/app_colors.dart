@@ -28,6 +28,10 @@ class AppColors {
   static const kcal = Color(0xFFDC2626); // Рубиновый (ккал)
   static const kcalLight = Color(0xFFFEE2E2);
 
+  // Ошибки и предупреждения
+  static const error = Color(0xFFDC2626);
+  static const errorLight = Color(0xFFFEE2E2);
+
   // Источники справочников
   static const badgeSkurikhin = Color(0xFFB45309); // Золотисто-бронзовый
   static const badgeSkurikhinBg = Color(0xFFFEF3C7);

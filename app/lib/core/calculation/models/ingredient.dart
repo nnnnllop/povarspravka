@@ -21,8 +21,7 @@ class Ingredient {
     CalculationValidation.range(wastePct, 0, 100, 'wastePct');
     if (wastePct >= 100.0) return 0.0;
     if (wastePct <= 0.0) return gross;
-    return CalculationMath.ratioRounded(gross, 100.0, 6,
-        multiplier: 100.0 - wastePct);
+    return CalculationMath.wasteAdjusted(gross, wastePct, 12);
   }
 
   /// No finite gross weight exists for positive net at 100% waste.
@@ -31,8 +30,7 @@ class Ingredient {
     CalculationValidation.range(wastePct, 0, 100, 'wastePct');
     if (wastePct >= 100.0) return net == 0 ? 0 : null;
     if (wastePct <= 0.0) return net;
-    return CalculationMath.ratioRounded(net, 100.0 - wastePct, 6,
-        multiplier: 100.0);
+    return CalculationMath.wasteAdjusted(net, wastePct, 12, inverse: true);
   }
 
   double get netGrams {
@@ -42,12 +40,17 @@ class Ingredient {
       return weightGrams;
     }
     if (product.wastePct >= 100.0) return 0.0;
-    return CalculationMath.ratioRounded(weightGrams, 100.0, 6,
-        multiplier: 100.0 - product.wastePct);
+    return CalculationMath.wasteAdjusted(weightGrams, product.wastePct, 12);
   }
 
   /// Округленная масса нетто (г), отображаемая в столбце «Количество, г» бланка
-  double get netGramsRounded => CalculationMath.round1(netGrams);
+  double get netGramsRounded {
+    CalculationValidation.range(weightGrams, 0, 9999999, 'weightGrams');
+    CalculationValidation.range(product.wastePct, 0, 100, 'wastePct');
+    return isGross
+        ? CalculationMath.wasteAdjusted(weightGrams, product.wastePct, 1)
+        : CalculationMath.round1(weightGrams);
+  }
 
   /// Белки в блюде (г) — рассчитываются от отображаемой массы нетто и белка на 100 г с округлением до 0,01 г
   double get proteinInDish =>
@@ -80,7 +83,7 @@ class Ingredient {
 
   factory Ingredient.fromJson(Map<String, dynamic> json) {
     final weight = json['weightGrams'];
-    if (weight is! num || !weight.toDouble().isFinite || weight <= 0) {
+    if (weight is! num || !weight.toDouble().isFinite || weight < 0) {
       throw const FormatException('Missing or invalid weightGrams');
     }
     final id = json['id'];

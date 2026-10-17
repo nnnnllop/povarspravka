@@ -13,25 +13,16 @@ class CalculationEngine {
   /// чтобы ручная проверка калькулятором по напечатанному бланку сходилась копейка в копейку.
   static CalculationResult calculate(Dish dish) {
     CalculationValidation.dish(dish);
-    double rawTotalWeight = 0.0;
-    double rawTotalProtein = 0.0;
-    double rawTotalFat = 0.0;
-    double rawTotalCarbs = 0.0;
-    double rawTotalKcal = 0.0;
-
-    for (final ing in dish.ingredients) {
-      rawTotalWeight += ing.netGramsRounded;
-      rawTotalProtein += ing.proteinInDish;
-      rawTotalFat += ing.fatInDish;
-      rawTotalCarbs += ing.carbsInDish;
-      rawTotalKcal += ing.blankKcalInDish;
-    }
-
-    rawTotalWeight = _round1(rawTotalWeight);
-    rawTotalProtein = _round2(rawTotalProtein);
-    rawTotalFat = _round2(rawTotalFat);
-    rawTotalCarbs = _round2(rawTotalCarbs);
-    rawTotalKcal = _round1(rawTotalKcal);
+    final rawTotalWeight = CalculationMath.sumRounded(
+        dish.ingredients.map((i) => i.netGramsRounded), 1);
+    final rawTotalProtein = CalculationMath.sumRounded(
+        dish.ingredients.map((i) => i.proteinInDish), 2);
+    final rawTotalFat = CalculationMath.sumRounded(
+        dish.ingredients.map((i) => i.fatInDish), 2);
+    final rawTotalCarbs = CalculationMath.sumRounded(
+        dish.ingredients.map((i) => i.carbsInDish), 2);
+    final rawTotalKcal = CalculationMath.sumRounded(
+        dish.ingredients.map((i) => i.blankKcalInDish), 1);
 
     // Сохранность при тепловой обработке
     final pPct = CalculationMath.productRounded(dish.retentionProtein, 100, 10);
@@ -54,8 +45,10 @@ class CalculationEngine {
     // An empty recipe has zero mass, not a fictitious 100 g yield.
     final yieldGrams = dish.effectiveYieldGrams;
 
-    final totalCookedMacros = cookedProtein + cookedFat + cookedCarbs;
-    if (yieldGrams > 0 && totalCookedMacros > yieldGrams + 0.05) {
+    final totalCookedMacros = CalculationMath.sumRounded(
+        [cookedProtein, cookedFat, cookedCarbs], 2);
+    if (CalculationMath.sumExceeds(
+        [cookedProtein, cookedFat, cookedCarbs], yieldGrams)) {
       throw ArgumentError(
         'Cooked macronutrients mass ($totalCookedMacros g) cannot exceed dish yield ($yieldGrams g)',
       );

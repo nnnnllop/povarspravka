@@ -386,17 +386,22 @@ class XlsxBlankGenerator {
     // 6-строчный блок формул под таблицей (чистые символические формулы бланка 1:1)
     final formulaLines = [
       'Сохранность после тепловой обработки:',
-      '= Сумма белков *$pPctText /100',
+      '= Сумма белков *$pPctText/100',
       '= Сумма жиров *$fPctText/100',
       '= Сумма углеводов *$cPctText/100',
       'Энергетическая ценность:',
       'Белки (после т.о) х 4 + Жиры (после т.о) х 9 + Углеводы (после т.о) х 4',
     ];
 
-    for (final line in formulaLines) {
+    for (var lineIndex = 0; lineIndex < formulaLines.length; lineIndex++) {
+      final line = formulaLines[lineIndex];
+      final nutrient = switch (lineIndex) {1 => ('белков', 'D'), 2 => ('жиров', 'F'), 3 => ('углеводов', 'H'), _ => null};
+      final explanationCell = nutrient == null
+          ? '<c r="B$rowIdx" s="7" t="inlineStr"><is><t>${_escape(line)}</t></is></c>'
+          : '<c r="B$rowIdx" s="7" t="str"><f>${_escape('"= Сумма ${nutrient.$1} *"&TEXT(${nutrient.$2}$retRow,"0.##########")&"/100"')}</f><v>${_escape(line)}</v></c>';
       sheetSb.write('''
     <row r="$rowIdx" ht="16" customHeight="1">
-      <c r="B$rowIdx" s="7" t="inlineStr"><is><t>${_escape(line)}</t></is></c>
+      $explanationCell
     </row>
 ''');
       rowIdx++;

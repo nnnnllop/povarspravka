@@ -59,11 +59,11 @@ def xlsx():
     for file in files:
         with zipfile.ZipFile(file) as z: sheet=ET.fromstring(z.read('xl/worksheets/sheet1.xml'))
         cells=sheet.findall('.//s:sheetData/s:row/s:c',NS)
-        values={c.attrib['r']:D(c.find('s:v',NS).text) for c in cells if c.find('s:v',NS) is not None}
+        values={c.attrib['r']:D(c.find('s:v',NS).text) for c in cells if c.find('s:v',NS) is not None and c.attrib.get('t') != 'str'}
         count=0
         for c in cells:
             f=c.find('s:f',NS)
-            if f is None:continue
+            if f is None or c.attrib.get('t') == 'str':continue
             expected=calc(f.text,values);actual=values[c.attrib['r']]
             assert expected==actual,(file.name,c.attrib['r'],f.text,expected,actual)
             count+=1

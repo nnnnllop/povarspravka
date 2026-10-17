@@ -32,8 +32,8 @@ class Dish {
   });
 
   /// Итоговая масса сырья (нетто), отображаемая в бланке
-  double get totalRawNetGrams => CalculationMath.round1(
-      ingredients.fold(0.0, (sum, item) => sum + item.netGramsRounded));
+  double get totalRawNetGrams => CalculationMath.sumRounded(
+      ingredients.map((item) => item.netGramsRounded), 1);
 
   /// Выход готового блюда (пользовательский либо равен сумме сырья)
   double get effectiveYieldGrams => (customYieldGrams != null &&
