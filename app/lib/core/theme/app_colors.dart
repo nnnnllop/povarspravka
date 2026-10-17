@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 
 class AppColors {
   // Базовые фоны и поверхности
-  static const backgroundLight = Color(0xFFF8FAFC);
+  static const backgroundLight = Color(0xFFFAF8F5);
   static const surfaceLight = Color(0xFFFFFFFF);
   static const cardLight = Color(0xFFFFFFFF);
-  static const borderLight = Color(0xFFE2E8F0);
+  static const borderLight = Color(0xFFE5DED5);
 
-  static const backgroundDark = Color(0xFF090D16);
-  static const surfaceDark = Color(0xFF0F172A);
-  static const cardDark = Color(0xFF1E293B);
-  static const borderDark = Color(0xFF334155);
+  static const backgroundDark = Color(0xFF191714);
+  static const surfaceDark = Color(0xFF24201C);
+  static const cardDark = Color(0xFF302B25);
+  static const borderDark = Color(0xFF51483E);
 
   // Акценты бренда (Теплый гастрономический брендинг)
   static const primary = Color(0xFFB45309); // Amber 700
@@ -31,15 +31,15 @@ class AppColors {
   // Источники справочников
   static const badgeSkurikhin = Color(0xFFB45309); // Золотисто-бронзовый
   static const badgeSkurikhinBg = Color(0xFFFEF3C7);
-  static const badgeUsda = Color(0xFF0284C7); // Сине-голубой
+  static const badgeUsda = Color(0xFF03699C); // Сине-голубой
   static const badgeUsdaBg = Color(0xFFE0F2FE);
 
   // Текст
-  static const textPrimaryLight = Color(0xFF0F172A);
-  static const textSecondaryLight = Color(0xFF64748B);
-  static const textMutedLight = Color(0xFF94A3B8);
+  static const textPrimaryLight = Color(0xFF24201C);
+  static const textSecondaryLight = Color(0xFF736A60);
+  static const textMutedLight = Color(0xFFA99F93);
 
-  static const textPrimaryDark = Color(0xFFF8FAFC);
-  static const textSecondaryDark = Color(0xFF94A3B8);
-  static const textMutedDark = Color(0xFF64748B);
+  static const textPrimaryDark = Color(0xFFFAF8F5);
+  static const textSecondaryDark = Color(0xFFA99F93);
+  static const textMutedDark = Color(0xFF736A60);
 }

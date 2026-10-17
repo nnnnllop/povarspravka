@@ -144,7 +144,9 @@ class HomeScreen extends ConsumerWidget {
                       if (activeDish.ingredients.isNotEmpty)
                         OutlinedButton.icon(
                           onPressed: () {
-                            ref.read(dishProvider.notifier).saveCurrentToLibrary();
+                            ref
+                                .read(dishProvider.notifier)
+                                .saveCurrentToLibrary();
                             ref.read(dishProvider.notifier).createNewDish();
                             Navigator.push(
                               context,
@@ -243,7 +245,7 @@ class HomeScreen extends ConsumerWidget {
             _buildInfoCard(
               title: 'Два режима бланка',
               description:
-                  '1. «Как на фото»: диагональный крест в колонке ккал сырья, итоговая калорийность только после т.о.\n2. «Подробный»: калории рассчитаны для каждого продукта.',
+                  '1. «Бланк с крестом (ГОСТ)»: диагональный крест в колонке ккал сырья, итоговая калорийность только после т.о.\n2. «Подробный расчёт»: калории рассчитаны для каждого продукта.',
               icon: Icons.splitscreen_rounded,
               color: AppColors.primary,
               isDark: isDark,

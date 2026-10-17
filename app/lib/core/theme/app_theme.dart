@@ -6,10 +6,16 @@ class AppTheme {
   static ThemeData get light {
     return ThemeData(
       useMaterial3: true,
+      fontFamily: AppTypography.fontName,
+      textTheme:
+          const TextTheme(bodyMedium: TextStyle(fontSize: 14, height: 1.5)),
       brightness: Brightness.light,
       scaffoldBackgroundColor: AppColors.backgroundLight,
       colorScheme: ColorScheme.light(
         primary: AppColors.primary,
+        secondary: AppColors.primary,
+        secondaryContainer: AppColors.primaryContainerLight,
+        onSecondaryContainer: AppColors.textPrimaryLight,
         onPrimary: Colors.white,
         primaryContainer: AppColors.primaryContainerLight,
         onPrimaryContainer: AppColors.primary,
@@ -38,7 +44,8 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: AppColors.borderLight),
@@ -58,7 +65,8 @@ class AppTheme {
           foregroundColor: Colors.white,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           textStyle: AppTypography.titleMedium.copyWith(color: Colors.white),
         ),
       ),
@@ -68,11 +76,17 @@ class AppTheme {
   static ThemeData get dark {
     return ThemeData(
       useMaterial3: true,
+      fontFamily: AppTypography.fontName,
+      textTheme:
+          const TextTheme(bodyMedium: TextStyle(fontSize: 14, height: 1.5)),
       brightness: Brightness.dark,
       scaffoldBackgroundColor: AppColors.backgroundDark,
       colorScheme: ColorScheme.dark(
         primary: AppColors.primaryLight,
-        onPrimary: Colors.white,
+        secondary: AppColors.primaryLight,
+        secondaryContainer: AppColors.primaryContainerDark,
+        onSecondaryContainer: AppColors.textPrimaryDark,
+        onPrimary: const Color(0xFF241707),
         primaryContainer: AppColors.primaryContainerDark,
         onPrimaryContainer: AppColors.primaryLight,
         surface: AppColors.surfaceDark,
@@ -100,7 +114,8 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.cardDark,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: AppColors.borderDark),
@@ -111,7 +126,8 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.primaryLight, width: 1.5),
+          borderSide:
+              const BorderSide(color: AppColors.primaryLight, width: 1.5),
         ),
       ),
     );

@@ -36,10 +36,11 @@ class Dish {
       ingredients.fold(0.0, (sum, item) => sum + item.netGramsRounded));
 
   /// Выход готового блюда (пользовательский либо равен сумме сырья)
-  double get effectiveYieldGrams =>
-      (customYieldGrams != null && customYieldGrams! > 0)
-          ? CalculationMath.round1(customYieldGrams!)
-          : totalRawNetGrams;
+  double get effectiveYieldGrams => (customYieldGrams != null &&
+          customYieldGrams!.isFinite &&
+          customYieldGrams! >= 0.1)
+      ? CalculationMath.round1(customYieldGrams!)
+      : totalRawNetGrams;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -108,9 +109,8 @@ class Dish {
       showPer100gRowInExport:
           showPer100gRowInExport ?? this.showPer100gRowInExport,
       ingredients: ingredients ?? this.ingredients,
-      customYieldGrams: clearCustomYield
-          ? null
-          : (customYieldGrams ?? this.customYieldGrams),
+      customYieldGrams:
+          clearCustomYield ? null : (customYieldGrams ?? this.customYieldGrams),
       retentionProtein: retentionProtein ?? this.retentionProtein,
       retentionFat: retentionFat ?? this.retentionFat,
       retentionCarbs: retentionCarbs ?? this.retentionCarbs,

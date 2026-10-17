@@ -187,7 +187,9 @@ class DishNotifier extends StateNotifier<Dish> {
   }
 
   void setCustomYield(double? yieldGrams) {
-    final shouldClear = yieldGrams == null || yieldGrams <= 0;
+    if (yieldGrams != null && (!yieldGrams.isFinite || yieldGrams < 0.1))
+      return;
+    final shouldClear = yieldGrams == null;
     state = state.copyWith(
       customYieldGrams: shouldClear ? null : yieldGrams,
       clearCustomYield: shouldClear,
@@ -253,6 +255,14 @@ class DishNotifier extends StateNotifier<Dish> {
       ingredients: updatedList,
       updatedAt: DateTime.now(),
     );
+    _persist();
+  }
+
+  void restoreIngredient(Ingredient ingredient, int index) {
+    if (state.ingredients.any((item) => item.id == ingredient.id)) return;
+    final items = List<Ingredient>.from(state.ingredients);
+    items.insert(index.clamp(0, items.length), ingredient);
+    state = state.copyWith(ingredients: items, updatedAt: DateTime.now());
     _persist();
   }
 

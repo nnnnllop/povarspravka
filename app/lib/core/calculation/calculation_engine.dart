@@ -39,39 +39,31 @@ class CalculationEngine {
     final cookedProtein = CalculationMath.productRounded(
         rawTotalProtein, pPct, 2,
         divideBy100: true);
-    final cookedFat = CalculationMath.productRounded(
-        rawTotalFat, fPct, 2,
-        divideBy100: true);
-    final cookedCarbs = CalculationMath.productRounded(
-        rawTotalCarbs, cPct, 2,
+    final cookedFat =
+        CalculationMath.productRounded(rawTotalFat, fPct, 2, divideBy100: true);
+    final cookedCarbs = CalculationMath.productRounded(rawTotalCarbs, cPct, 2,
         divideBy100: true);
 
     // Формула ЭЦ: Б × 4 + Ж × 9 + У × 4
     final cookedKcal =
         CalculationMath.energy(cookedProtein, cookedFat, cookedCarbs);
 
-    final baseYield =
-        (dish.customYieldGrams != null && dish.customYieldGrams! > 0)
-            ? _round1(dish.customYieldGrams!)
-            : rawTotalWeight;
-
-    final yieldGrams = baseYield > 0 ? baseYield : 100.0;
+    // One source of truth for the editor, saved recipes and exports.
+    // An empty recipe has zero mass, not a fictitious 100 g yield.
+    final yieldGrams = dish.effectiveYieldGrams;
 
     // В 100 г готового блюда
     final per100gProtein = yieldGrams > 0
-        ? CalculationMath.productRounded(
-            cookedProtein / yieldGrams, 100, 2)
+        ? CalculationMath.productRounded(cookedProtein / yieldGrams, 100, 2)
         : 0.0;
     final per100gFat = yieldGrams > 0
         ? CalculationMath.productRounded(cookedFat / yieldGrams, 100, 2)
         : 0.0;
     final per100gCarbs = yieldGrams > 0
-        ? CalculationMath.productRounded(
-            cookedCarbs / yieldGrams, 100, 2)
+        ? CalculationMath.productRounded(cookedCarbs / yieldGrams, 100, 2)
         : 0.0;
     final per100gKcal = yieldGrams > 0
-        ? CalculationMath.productRounded(
-            cookedKcal / yieldGrams, 100, 1)
+        ? CalculationMath.productRounded(cookedKcal / yieldGrams, 100, 1)
         : 0.0;
 
     return CalculationResult(
@@ -117,6 +109,7 @@ class CalculationEngine {
   static double? parseInputDouble(String input) {
     final cleaned = input.trim().replaceAll(',', '.');
     if (cleaned.isEmpty) return null;
-    return double.tryParse(cleaned);
+    final parsed = double.tryParse(cleaned);
+    return parsed != null && parsed.isFinite ? parsed : null;
   }
 }
