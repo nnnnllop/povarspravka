@@ -1,4 +1,5 @@
 import 'calculation_math.dart';
+import 'calculation_validation.dart';
 import 'models/blank_mode.dart';
 import 'models/calculation_result.dart';
 import 'models/dish.dart';
@@ -11,6 +12,7 @@ class CalculationEngine {
   /// Суммы по столбцам рассчитываются по округленным значениям ячеек (до 0,01 г / 0,1 ккал),
   /// чтобы ручная проверка калькулятором по напечатанному бланку сходилась копейка в копейку.
   static CalculationResult calculate(Dish dish) {
+    CalculationValidation.dish(dish);
     double rawTotalWeight = 0.0;
     double rawTotalProtein = 0.0;
     double rawTotalFat = 0.0;
@@ -52,18 +54,25 @@ class CalculationEngine {
     // An empty recipe has zero mass, not a fictitious 100 g yield.
     final yieldGrams = dish.effectiveYieldGrams;
 
+    final totalCookedMacros = cookedProtein + cookedFat + cookedCarbs;
+    if (yieldGrams > 0 && totalCookedMacros > yieldGrams + 0.05) {
+      throw ArgumentError(
+        'Cooked macronutrients mass ($totalCookedMacros g) cannot exceed dish yield ($yieldGrams g)',
+      );
+    }
+
     // В 100 г готового блюда
     final per100gProtein = yieldGrams > 0
-        ? CalculationMath.productRounded(cookedProtein / yieldGrams, 100, 2)
+        ? CalculationMath.ratioRounded(cookedProtein, yieldGrams, 2)
         : 0.0;
     final per100gFat = yieldGrams > 0
-        ? CalculationMath.productRounded(cookedFat / yieldGrams, 100, 2)
+        ? CalculationMath.ratioRounded(cookedFat, yieldGrams, 2)
         : 0.0;
     final per100gCarbs = yieldGrams > 0
-        ? CalculationMath.productRounded(cookedCarbs / yieldGrams, 100, 2)
+        ? CalculationMath.ratioRounded(cookedCarbs, yieldGrams, 2)
         : 0.0;
     final per100gKcal = yieldGrams > 0
-        ? CalculationMath.productRounded(cookedKcal / yieldGrams, 100, 1)
+        ? CalculationMath.ratioRounded(cookedKcal, yieldGrams, 1)
         : 0.0;
 
     return CalculationResult(
@@ -98,12 +107,27 @@ class CalculationEngine {
   }
 
   static String formatMacro(double value) {
-    return value.toStringAsFixed(2).replaceAll('.', ',');
+    return _round2(value).toStringAsFixed(2).replaceAll('.', ',');
   }
 
   static String formatKcal(double value) {
-    return value.toStringAsFixed(1).replaceAll('.', ',');
+    return _round1(value).toStringAsFixed(1).replaceAll('.', ',');
   }
+
+  /// Shared exact percentage text for UI and all exports.
+  static String formatPercent(double retention) =>
+      CalculationMath.productRounded(retention, 100, 10)
+          .toStringAsFixed(10)
+          .replaceFirst(RegExp(r'0+$'), '')
+          .replaceFirst(RegExp(r'\.$'), '')
+          .replaceAll('.', ',');
+
+  /// Exact format for waste percentage (e.g. 1.5 -> "1,5", 25 -> "25")
+  static String formatWastePercent(double wastePct) => wastePct
+      .toStringAsFixed(2)
+      .replaceFirst(RegExp(r'0+$'), '')
+      .replaceFirst(RegExp(r'\.$'), '')
+      .replaceAll('.', ',');
 
   /// Разбор пользовательского ввода с поддержкой запятой и точки
   static double? parseInputDouble(String input) {

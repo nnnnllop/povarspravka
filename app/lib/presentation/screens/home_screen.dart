@@ -226,7 +226,7 @@ class HomeScreen extends ConsumerWidget {
 
             // Справочный блок стандартов
             Text(
-              'Нормативные стандарты расчета',
+              'Допущения и правила расчета',
               style: AppTypography.titleMedium
                   .copyWith(fontWeight: FontWeight.w700),
             ),
@@ -235,7 +235,7 @@ class HomeScreen extends ConsumerWidget {
             _buildInfoCard(
               title: 'Коэффициенты сохранности нутриентов',
               description:
-                  'При тепловой кулинарной обработке сохраняются:\n• Белки (Б): 94%\n• Жиры (Ж): 88%\n• Углеводы (У): 91%',
+                  'По умолчанию приняты коэффициенты сохранности:\n• Белки (Б): 94%\n• Жиры (Ж): 88%\n• Углеводы (У): 91%\nЭто настраиваемое допущение, а не универсальная норма ГОСТ. Для блюд без т.о. выберите 100 / 100 / 100%.',
               icon: Icons.thermostat_rounded,
               color: AppColors.fat,
               isDark: isDark,
@@ -245,7 +245,7 @@ class HomeScreen extends ConsumerWidget {
             _buildInfoCard(
               title: 'Два режима бланка',
               description:
-                  '1. «Бланк с крестом (ГОСТ)»: диагональный крест в колонке ккал сырья, итоговая калорийность только после т.о.\n2. «Подробный расчёт»: калории рассчитаны для каждого продукта.',
+                  '1. «Бланк с крестом (учебный)»: диагональный крест в колонке ккал сырья, итоговая калорийность только после т.о.\n2. «Подробный расчёт»: калории рассчитаны для каждого продукта.',
               icon: Icons.splitscreen_rounded,
               color: AppColors.primary,
               isDark: isDark,
@@ -345,16 +345,32 @@ class HomeScreen extends ConsumerWidget {
             IconButton(
               icon: const Icon(Icons.copy_rounded, size: 18),
               tooltip: 'Дублировать блюдо',
-              onPressed: () {
-                ref.read(savedDishesProvider.notifier).duplicateDish(dish);
+              onPressed: () async {
+                try {
+                  await ref.read(savedDishesProvider.notifier).duplicateDish(dish);
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Ошибка при дублировании: $e')),
+                    );
+                  }
+                }
               },
             ),
             IconButton(
               icon: const Icon(Icons.delete_outline_rounded,
                   size: 20, color: AppColors.kcal),
               tooltip: 'Удалить',
-              onPressed: () {
-                ref.read(savedDishesProvider.notifier).deleteDish(dish.id);
+              onPressed: () async {
+                try {
+                  await ref.read(savedDishesProvider.notifier).deleteDish(dish.id);
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Ошибка при удалении: $e')),
+                    );
+                  }
+                }
               },
             ),
           ],
@@ -486,7 +502,7 @@ class HomeScreen extends ConsumerWidget {
           '• 1 г жиров = 9,0 ккал\n'
           '• 1 г углеводов = 4,0 ккал\n\n'
           'Итоговая формула:\nЭЦ = Б × 4 + Ж × 9 + У × 4\n\n'
-          'Расчет ведется по нутриентам, оставшимся после тепловой обработки (с учетом сохранности 94% белков, 88% жиров и 91% углеводов).',
+          'Расчет ведется по нутриентам с учетом выбранной сохранности. Значения по умолчанию 94 / 88 / 91% можно изменить; без т.о. используются 100 / 100 / 100%. Формула 4/9/4 не учитывает отдельный вклад алкоголя, пищевых волокон и органических кислот.',
         ),
         actions: [
           TextButton(

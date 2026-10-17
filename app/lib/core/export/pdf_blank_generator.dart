@@ -83,11 +83,8 @@ class PdfBlankGenerator {
     return pdf.save();
   }
 
-  static String _formatPercent(double retention) => (retention * 100)
-      .toStringAsFixed(10)
-      .replaceFirst(RegExp(r'0+$'), '')
-      .replaceFirst(RegExp(r'\.$'), '')
-      .replaceAll('.', ',');
+  static String _formatPercent(double retention) =>
+      CalculationEngine.formatPercent(retention);
 
   static pw.Widget _buildTitleBlock(
     Dish dish,
@@ -157,8 +154,8 @@ class PdfBlankGenerator {
                   align: pw.Alignment.center),
               _cell(ing.product.name, _w1, rowH, fontRegular,
                   align: pw.Alignment.centerLeft),
-              _cell(CalculationEngine.formatGrams(ing.netGramsRounded), _w2, rowH,
-                  fontRegular),
+              _cell(CalculationEngine.formatGrams(ing.netGramsRounded), _w2,
+                  rowH, fontRegular),
               _cell(CalculationEngine.formatMacro(ing.product.protein), _w3,
                   rowH, fontRegular),
               _cell(CalculationEngine.formatMacro(ing.proteinInDish), _w4, rowH,
@@ -317,7 +314,8 @@ class PdfBlankGenerator {
               children: [
                 _cell('После тепловой обработки', _w01, rowH + 2, fontBold,
                     bold: true, align: pw.Alignment.centerLeft),
-                _cell('', _w2, rowH + 2, fontRegular),
+                _cell(CalculationEngine.formatGrams(calc.yieldGrams), _w2,
+                    rowH + 2, fontRegular),
                 _cell(CalculationEngine.formatMacro(calc.cookedProtein), _w34,
                     rowH + 2, fontBold,
                     bold: true),

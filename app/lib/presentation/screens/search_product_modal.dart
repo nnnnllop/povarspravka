@@ -323,7 +323,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
             ),
             if (p.wastePct > 0)
               Text(
-                'отходы ${p.wastePct.toInt()}%',
+                'отходы ${CalculationEngine.formatWastePercent(p.wastePct)}%',
                 style: AppTypography.bodySmall.copyWith(fontSize: 10),
               ),
           ],
@@ -603,7 +603,7 @@ class ProductInfoCardSheet extends ConsumerWidget {
                             ),
                           _buildKvRow(
                             'Отходы при холодной обработке',
-                            '${CalculationEngine.formatGrams(product.wastePct)} %',
+                            '${CalculationEngine.formatWastePercent(product.wastePct)} %',
                             highlight: product.wastePct > 0,
                           ),
                         ],
@@ -611,7 +611,7 @@ class ProductInfoCardSheet extends ConsumerWidget {
                     ),
 
                     // Бытовые меры веса (если есть)
-                    if (product.measures.isNotEmpty) ...[
+                    if (product.calculationMeasures.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       Text(
                         'Масса в бытовых мерах и штуках',
@@ -622,7 +622,7 @@ class ProductInfoCardSheet extends ConsumerWidget {
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
-                        children: product.measures.map((m) {
+                        children: product.calculationMeasures.map((m) {
                           return Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 6),

@@ -10,6 +10,10 @@ OUT=ROOT/'audit_artifacts/exports'
 NS={'s':'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
 def rounded(v,n): return v.quantize(D(1).scaleb(-n),rounding=ROUND_HALF_UP)
 def calc(expression,values):
+    if expression.startswith('IF('):
+        match = re.fullmatch(r'IF\(([A-Z]+\d+)>0,(.*),0\)', expression)
+        assert match, expression
+        return calc(match[2], values) if values.get(match[1], D(0)) > 0 else D(0)
     if expression.startswith('ROUND('):
         match=re.fullmatch(r'ROUND\((.*),(\d+)\)',expression)
         assert match,expression

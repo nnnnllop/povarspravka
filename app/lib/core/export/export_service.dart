@@ -28,6 +28,11 @@ class ExportService {
         ? dish.title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')
         : 'Бланк_расчета';
 
+    final exportId =
+        '${DateTime.now().microsecondsSinceEpoch}_${dish.id.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')}';
+    final exportDir = Directory(p.join(tempDir.path, 'exports', exportId));
+    await exportDir.create(recursive: true);
+
     String fileName;
     List<int> bytes;
     String mimeType;
@@ -41,16 +46,18 @@ class ExportService {
       case ExportType.docx:
         fileName = '${baseTitle}.docx';
         bytes = DocxBlankGenerator.generate(dish);
-        mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        mimeType =
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
         break;
       case ExportType.xlsx:
         fileName = '${baseTitle}.xlsx';
         bytes = XlsxBlankGenerator.generate(dish);
-        mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        mimeType =
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
         break;
     }
 
-    final filePath = p.join(tempDir.path, fileName);
+    final filePath = p.join(exportDir.path, fileName);
     final file = File(filePath);
     await file.writeAsBytes(bytes, flush: true);
 

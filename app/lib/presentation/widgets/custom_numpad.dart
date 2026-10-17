@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/calculation/calculation_engine.dart';
 import '../../core/calculation/models/product.dart';
+import '../../core/calculation/models/ingredient.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import 'source_badge.dart';
@@ -34,7 +35,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
   void initState() {
     super.initState();
     _currentInput = widget.initialGrams > 0
-        ? CalculationEngine.formatGrams(widget.initialGrams)
+        ? widget.initialGrams.toString().replaceAll('.', ',')
         : '100';
     _isGross = widget.initialIsGross;
     _isFreshInput = true;
@@ -91,6 +92,77 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     setState(() {
       _currentInput = CalculationEngine.formatGrams(newVal);
       _isFreshInput = false;
+    });
+  }
+
+  void _toggleGross(bool value) {
+    final mass = CalculationEngine.parseInputDouble(_currentInput);
+    if (mass == null) return;
+    final converted = value
+        ? Ingredient.grossFromNet(mass, widget.product.wastePct)
+        : Ingredient.netFromGross(mass, widget.product.wastePct);
+    if (converted == null || !converted.isFinite || converted > 9999999) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'При 100% отходов положительное нетто невозможно перевести в брутто.')));
+      return;
+    }
+    setState(() {
+      _isGross = value;
+      _currentInput = converted.toString().replaceAll('.', ',');
+      _isFreshInput = true;
+    });
+  }
+
+  Future<void> _chooseMeasure(ProductMeasure measure) async {
+    var countText = '1';
+    String? error;
+    final count = await showDialog<double>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+          builder: (ctx, update) => AlertDialog(
+                title: Text(measure.name),
+                content: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text(
+                      '1 мера = ${CalculationEngine.formatGrams(measure.grams)} г нетто. Источник: ${widget.product.sourceLabel}.'),
+                  TextFormField(
+                      key: const ValueKey('measure-count'),
+                      initialValue: '1',
+                      onChanged: (text) => countText = text,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                          labelText: 'Количество мер', errorText: error)),
+                ]),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Отмена')),
+                  TextButton(
+                      onPressed: () {
+                        final value =
+                            CalculationEngine.parseInputDouble(countText);
+                        final grams =
+                            value == null ? null : value * measure.grams;
+                        if (grams == null ||
+                            !grams.isFinite ||
+                            grams < .1 ||
+                            grams > 9999999) {
+                          update(() => error =
+                              'Количество должно давать от 0,1 до 9999999 г');
+                          return;
+                        }
+                        Navigator.pop(ctx, value);
+                      },
+                      child: const Text('Использовать')),
+                ],
+              )),
+    );
+    if (!mounted || count == null) return;
+    setState(() {
+      _isGross = false;
+      _currentInput = (measure.grams * count).toString().replaceAll('.', ',');
+      _isFreshInput = true;
     });
   }
 
@@ -163,7 +235,8 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: isDark ? AppColors.cardDark : AppColors.backgroundLight,
+                  color:
+                      isDark ? AppColors.cardDark : AppColors.backgroundLight,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: AppColors.primary.withOpacity(0.45),
@@ -189,7 +262,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                           ),
                           if (_isGross && hasWaste)
                             Text(
-                              'Съедобная часть: ${CalculationEngine.formatGrams(netGrams)} г (отходы ${widget.product.wastePct.toStringAsFixed(0)}%)',
+                              'Съедобная часть: ${CalculationEngine.formatGrams(netGrams)} г (отходы ${CalculationEngine.formatWastePercent(widget.product.wastePct)}%)',
                               style: AppTypography.bodySmall.copyWith(
                                 color: AppColors.primary,
                                 fontWeight: FontWeight.w600,
@@ -260,19 +333,22 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                 ),
               ),
 
+              if (widget.product.calculationMeasures.isEmpty)
+                const Text(
+                    'Для продукта нет проверенных мер. Введите массу в граммах.'),
               // Меры из базы (если есть)
-              if (widget.product.measures.isNotEmpty) ...[
+              if (widget.product.calculationMeasures.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
-                    children: widget.product.measures.map((m) {
+                    children: widget.product.calculationMeasures.map((m) {
                       return Padding(
                         padding: const EdgeInsets.only(right: 6),
                         child: ActionChip(
                           label: Text(
                               '${m.name} (${CalculationEngine.formatGrams(m.grams)}г)'),
-                          onPressed: () => _setPreset(m.grams),
+                          onPressed: () => _chooseMeasure(m),
                           backgroundColor:
                               isDark ? AppColors.cardDark : Colors.white,
                           labelStyle: AppTypography.bodySmall.copyWith(
@@ -296,7 +372,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                   contentPadding: EdgeInsets.zero,
                   dense: true,
                   title: Text(
-                    'Брутто (с учетом отходов ${widget.product.wastePct.toStringAsFixed(0)}%)',
+                    'Брутто (с учетом отходов ${CalculationEngine.formatWastePercent(widget.product.wastePct)}%)',
                     style: AppTypography.bodyMedium.copyWith(fontSize: 13),
                   ),
                   subtitle: Text(
@@ -307,7 +383,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                   ),
                   value: _isGross,
                   activeColor: AppColors.primary,
-                  onChanged: (val) => setState(() => _isGross = val),
+                  onChanged: _toggleGross,
                 ),
               ],
 
@@ -320,7 +396,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
 
               // Кнопка подтверждения
               ElevatedButton(
-                onPressed: parsedGrams > 0
+                onPressed: parsedGrams >= .1 && parsedGrams <= 9999999
                     ? () {
                         widget.onConfirm(parsedGrams, _isGross);
                         Navigator.pop(context);

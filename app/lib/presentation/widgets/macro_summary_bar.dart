@@ -13,6 +13,8 @@ class MacroSummaryBar extends StatefulWidget {
 
 class _MacroSummaryBarState extends State<MacroSummaryBar> {
   bool _showPer100g = false;
+  double _portionGrams = 200;
+  String? _portionError;
   String m(double value) => CalculationEngine.formatMacro(value);
   String g(double value) => CalculationEngine.formatGrams(value);
   String k(double value) => CalculationEngine.formatKcal(value);
@@ -120,11 +122,40 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                       'Сырье (нетто ${g(r.rawTotalWeight)} г): ${macros(r.rawTotalProtein, r.rawTotalFat, r.rawTotalCarbs)}',
                       style: theme.textTheme.bodyMedium),
                   Text(
-                      'Сохранность Б / Ж / У: ${g(r.retentionProtein * 100)}% / ${g(r.retentionFat * 100)}% / ${g(r.retentionCarbs * 100)}%',
+                      'Сохранность Б / Ж / У: ${CalculationEngine.formatPercent(r.retentionProtein)}% / ${CalculationEngine.formatPercent(r.retentionFat)}% / ${CalculationEngine.formatPercent(r.retentionCarbs)}%',
                       style: theme.textTheme.bodyMedium),
                   Text(
                       'После т.о.: ${k(r.cookedKcal)} ккал на всё блюдо (4Б + 9Ж + 4У)',
                       style: theme.textTheme.bodyMedium),
+                  if (r.yieldGrams > 0) ...[
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      key: const ValueKey('portion-grams'),
+                      initialValue: '200',
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                          labelText: 'Масса порции, г',
+                          errorText: _portionError),
+                      onChanged: (text) {
+                        final v = CalculationEngine.parseInputDouble(text);
+                        setState(() {
+                          if (v == null || v < .1 || v > 9999999) {
+                            _portionError = 'Введите массу от 0,1 до 9999999 г';
+                          } else {
+                            _portionGrams = v;
+                            _portionError = null;
+                          }
+                        });
+                      },
+                    ),
+                    Builder(builder: (_) {
+                      final p = r.portion(_portionGrams);
+                      return Text(
+                          'Порция ${g(_portionGrams)} г: ${macros(p.protein, p.fat, p.carbs)} · ${k(p.kcal)} ккал',
+                          key: const ValueKey('portion-result'));
+                    }),
+                  ],
                   TextButton.icon(
                       onPressed: () => _inspect(context),
                       icon: const Icon(Icons.receipt_long_outlined),
@@ -169,7 +200,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                 Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: Text(
-                        '${row.$1}: ${m(row.$2)} × ${g(row.$3 * 100)}% = ${m(row.$4)} г',
+                        '${row.$1}: ${m(row.$2)} × ${CalculationEngine.formatPercent(row.$3)}% = ${m(row.$4)} г',
                         style: AppTypography.numeric)),
               const SizedBox(height: 16),
               const Text('3. Энергетическая ценность после т.о.'),

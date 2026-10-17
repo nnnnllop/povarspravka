@@ -123,6 +123,10 @@ class Product {
   final double chol;
   final double alcohol;
   final List<ProductMeasure> measures;
+  final bool hasExplicitProtein;
+  final bool hasExplicitFat;
+  final bool hasExplicitCarbs;
+  final bool hasExplicitKcal;
 
   const Product({
     required this.id,
@@ -148,7 +152,73 @@ class Product {
     this.chol = 0.0,
     this.alcohol = 0.0,
     this.measures = const [],
+    this.hasExplicitProtein = true,
+    this.hasExplicitFat = true,
+    this.hasExplicitCarbs = true,
+    this.hasExplicitKcal = true,
   });
+
+  /// Only manually checked Skurikhin measures are exposed: the legacy OCR
+  /// table has merged digits and substring-based assignments to unrelated dishes.
+  /// Page 207: cups 250/200 ml, spoons filled as specified in the book.
+  /// Page 210: edible egg mass; category is explicit, not a universal egg weight.
+  List<ProductMeasure> get calculationMeasures {
+    if (!isSkurikhin) {
+      return measures.where((m) {
+        if (!m.grams.isFinite || m.grams <= 0 || m.grams > 5000) return false;
+        final mLower = m.name.toLowerCase();
+        final pLower = name.toLowerCase();
+        if (mLower.contains('egg') ||
+            pLower.contains('яйц') ||
+            mLower.contains('яйц')) {
+          final isQuail =
+              mLower.contains('quail') || pLower.contains('перепел');
+          if (isQuail) {
+            if (m.grams < 6.0 || m.grams > 25.0) return false;
+          } else {
+            if (m.grams < 25.0 || m.grams > 120.0) return false;
+          }
+        }
+        if (mLower.contains('cup') || mLower.contains('стакан')) {
+          if (m.grams < 50.0 || m.grams > 450.0) return false;
+        }
+        if (mLower.contains('tbsp') || mLower.contains('столовая лож')) {
+          if (m.grams < 3.0 || m.grams > 50.0) return false;
+        }
+        if (mLower.contains('tsp') || mLower.contains('чайная лож')) {
+          if (m.grams < 0.5 || m.grams > 25.0) return false;
+        }
+        return true;
+      }).toList();
+    }
+    final values = switch (name) {
+      'Яйцо куриное' => {'1 шт. (1 категория, нетто)': 47.0},
+      'Яйцо перепелиное' => {'1 шт. (нетто)': 9.0},
+      'Сметана 10,0% жирности' => {
+          'стакан (чайный 250 мл)': 250.0,
+          'стакан (граненый 200 мл)': 200.0,
+          'столовая ложка': 20.0,
+          'чайная ложка': 9.0
+        },
+      'Сметана 30,0% жирности' => {
+          'стакан (чайный 250 мл)': 250.0,
+          'стакан (граненый 200 мл)': 200.0,
+          'столовая ложка': 25.0,
+          'чайная ложка': 11.0
+        },
+      _ => <String, double>{},
+    };
+    return values.entries
+        .toList()
+        .asMap()
+        .entries
+        .map((entry) => ProductMeasure(
+            id: -(entry.key + 1),
+            productId: id,
+            name: entry.value.key,
+            grams: entry.value.value))
+        .toList();
+  }
 
   bool get isSkurikhin => source.toLowerCase() == 'skurikhin';
   bool get isUsda => source.toLowerCase() == 'usda';
@@ -188,6 +258,10 @@ class Product {
       chol: (map['chol'] as num?)?.toDouble() ?? 0.0,
       alcohol: (map['alcohol'] as num?)?.toDouble() ?? 0.0,
       measures: measures,
+      hasExplicitProtein: map.containsKey('protein') && map['protein'] != null,
+      hasExplicitFat: map.containsKey('fat') && map['fat'] != null,
+      hasExplicitCarbs: map.containsKey('carbs') && map['carbs'] != null,
+      hasExplicitKcal: map.containsKey('kcal') && map['kcal'] != null,
     );
   }
 
@@ -200,10 +274,10 @@ class Product {
         'source': source,
         'page_num': pageNum,
         'waste_pct': wastePct,
-        'protein': protein,
-        'fat': fat,
-        'carbs': carbs,
-        'kcal': kcal,
+        if (hasExplicitProtein) 'protein': protein,
+        if (hasExplicitFat) 'fat': fat,
+        if (hasExplicitCarbs) 'carbs': carbs,
+        if (hasExplicitKcal) 'kcal': kcal,
         'water': water,
         'fiber': fiber,
         'ash': ash,
@@ -250,6 +324,10 @@ class Product {
     double? chol,
     double? alcohol,
     List<ProductMeasure>? measures,
+    bool? hasExplicitProtein,
+    bool? hasExplicitFat,
+    bool? hasExplicitCarbs,
+    bool? hasExplicitKcal,
   }) {
     return Product(
       id: id ?? this.id,
@@ -275,6 +353,10 @@ class Product {
       chol: chol ?? this.chol,
       alcohol: alcohol ?? this.alcohol,
       measures: measures ?? this.measures,
+      hasExplicitProtein: hasExplicitProtein ?? this.hasExplicitProtein,
+      hasExplicitFat: hasExplicitFat ?? this.hasExplicitFat,
+      hasExplicitCarbs: hasExplicitCarbs ?? this.hasExplicitCarbs,
+      hasExplicitKcal: hasExplicitKcal ?? this.hasExplicitKcal,
     );
   }
 }

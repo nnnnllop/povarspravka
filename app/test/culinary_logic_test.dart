@@ -121,12 +121,14 @@ void main() {
   });
   test('Mass correction does not change retention or total energy', () {
     final base = CalculationEngine.calculate(fixture(200));
-    for (final mass in [.1, 100.0, 200.0, 99999.0]) {
+    for (final mass in [20.0, 100.0, 200.0, 99999.0]) {
       final r = CalculationEngine.calculate(fixture(200, yieldGrams: mass));
       expect(r.cookedProtein, base.cookedProtein);
       expect(r.cookedKcal, base.cookedKcal);
       expect(r.retentionProtein, .94);
     }
+    expect(() => CalculationEngine.calculate(fixture(200, yieldGrams: 0.1)),
+        throwsArgumentError);
   });
   test('Zero retention and no heating remain independent of yield', () {
     for (final retention in [0.0, 1.0]) {

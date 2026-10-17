@@ -4,6 +4,7 @@ import 'package:flutter/services.dart' show MissingPluginException;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../../core/calculation/models/dish.dart';
+import '../../core/calculation/calculation_validation.dart';
 
 class DishStorageData {
   final Dish? activeDraft;
@@ -50,11 +51,17 @@ class DishStorageRepository {
       throw const FormatException('Invalid dishes document');
     }
     final saved = <Dish>[];
+    final dishIds = <String>{};
     for (final item in raw['savedDishes'] as List) {
       if (item is! Map<String, dynamic>) {
         throw const FormatException('Invalid saved dish');
       }
-      saved.add(_decodeDish(item));
+      final decoded = _decodeDish(item);
+      if (dishIds.contains(decoded.id)) {
+        throw const FormatException('Duplicate dish ID in saved dishes');
+      }
+      dishIds.add(decoded.id);
+      saved.add(decoded);
     }
     return DishStorageData(
       activeDraft: raw['activeDraft'] == null
@@ -72,11 +79,26 @@ class DishStorageRepository {
     }
     for (final item in raw['ingredients'] as List) {
       if (item is! Map<String, dynamic> ||
+          item['id'] is! String ||
+          (item['id'] as String).isEmpty ||
+          item['weightGrams'] is! num ||
+          !(item['weightGrams'] as num).toDouble().isFinite ||
+          (item['weightGrams'] as num).toDouble() <= 0 ||
           item['product'] is! Map<String, dynamic>) {
         throw const FormatException('Invalid ingredient structure');
       }
     }
-    return Dish.fromJson(raw);
+    final dish = Dish.fromJson(raw);
+    try {
+      CalculationValidation.dish(dish);
+    } on ArgumentError {
+      throw const FormatException('Invalid calculation values in dish');
+    }
+    final ids = dish.ingredients.map((i) => i.id).toSet();
+    if (ids.contains('') || ids.length != dish.ingredients.length) {
+      throw const FormatException('Missing or duplicate ingredient ID');
+    }
+    return dish;
   }
 
   Future<Map<String, dynamic>?> _readValid(File file) async {
@@ -129,6 +151,7 @@ class DishStorageRepository {
       'activeDraft': activeDraft?.toJson(),
       'savedDishes': savedDishes.map((d) => d.toJson()).toList(),
     };
+    _decode(payload);
     final encoded = jsonEncode(payload);
     return _serialized(() async {
       final file = await _getStorageFile();

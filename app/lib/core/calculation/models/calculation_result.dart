@@ -1,4 +1,6 @@
 import 'blank_mode.dart';
+import '../calculation_math.dart';
+import '../calculation_validation.dart';
 
 class CalculationResult {
   final BlankMode blankMode;
@@ -9,12 +11,13 @@ class CalculationResult {
   final double rawTotalProtein;
   final double rawTotalFat;
   final double rawTotalCarbs;
-  final double? rawTotalKcal; // null в режиме photoCross (на строке "ИТОГО" стоит прочерк/крест)
+  final double?
+      rawTotalKcal; // null в режиме photoCross (на строке "ИТОГО" стоит прочерк/крест)
 
   // После тепловой обработки
   final double retentionProtein; // например 0.94
-  final double retentionFat;     // например 0.88
-  final double retentionCarbs;   // например 0.91
+  final double retentionFat; // например 0.88
+  final double retentionCarbs; // например 0.91
 
   final double cookedProtein;
   final double cookedFat;
@@ -26,6 +29,23 @@ class CalculationResult {
   final double per100gFat;
   final double per100gCarbs;
   final double per100gKcal;
+
+  ({double protein, double fat, double carbs, double kcal}) portion(
+      double grams) {
+    CalculationValidation.range(grams, .1, 9999999, 'portionGrams');
+    if (yieldGrams <= 0)
+      throw StateError('A portion requires positive dish yield');
+    return (
+      protein: CalculationMath.ratioRounded(cookedProtein, yieldGrams, 2,
+          multiplier: grams),
+      fat: CalculationMath.ratioRounded(cookedFat, yieldGrams, 2,
+          multiplier: grams),
+      carbs: CalculationMath.ratioRounded(cookedCarbs, yieldGrams, 2,
+          multiplier: grams),
+      kcal: CalculationMath.ratioRounded(cookedKcal, yieldGrams, 1,
+          multiplier: grams),
+    );
+  }
 
   const CalculationResult({
     required this.blankMode,

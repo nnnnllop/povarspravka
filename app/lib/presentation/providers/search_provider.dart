@@ -34,6 +34,7 @@ class SearchState {
   final String? selectedSource; // 'skurikhin' or 'usda' or null
   final List<Product> results;
   final bool isLoading;
+  final Object? error;
 
   const SearchState({
     this.query = '',
@@ -41,7 +42,10 @@ class SearchState {
     this.selectedSource,
     this.results = const [],
     this.isLoading = false,
+    this.error,
   });
+
+  bool get hasError => error != null;
 
   SearchState copyWith({
     String? query,
@@ -51,6 +55,8 @@ class SearchState {
     bool clearSource = false,
     List<Product>? results,
     bool? isLoading,
+    Object? error,
+    bool clearError = false,
   }) {
     return SearchState(
       query: query ?? this.query,
@@ -60,11 +66,13 @@ class SearchState {
           clearSource ? null : (selectedSource ?? this.selectedSource),
       results: results ?? this.results,
       isLoading: isLoading ?? this.isLoading,
+      error: clearError ? null : (error ?? this.error),
     );
   }
 }
 
-final searchProvider = StateNotifierProvider<SearchNotifier, SearchState>((ref) {
+final searchProvider =
+    StateNotifierProvider<SearchNotifier, SearchState>((ref) {
   final repo = ref.watch(productRepositoryProvider);
   return SearchNotifier(repo);
 });
@@ -72,6 +80,7 @@ final searchProvider = StateNotifierProvider<SearchNotifier, SearchState>((ref) 
 class SearchNotifier extends StateNotifier<SearchState> {
   final ProductRepository _repo;
   Timer? _debounceTimer;
+  Completer<void>? _pendingSearch;
   int _requestId = 0;
 
   SearchNotifier(this._repo) : super(const SearchState()) {
@@ -81,11 +90,19 @@ class SearchNotifier extends StateNotifier<SearchState> {
   @override
   void dispose() {
     _debounceTimer?.cancel();
+    if (_pendingSearch != null && !_pendingSearch!.isCompleted) {
+      _pendingSearch!.complete();
+    }
+    _pendingSearch = null;
     super.dispose();
   }
 
   Future<void> search(String query, {bool immediate = false}) async {
     _debounceTimer?.cancel();
+    if (_pendingSearch != null && !_pendingSearch!.isCompleted) {
+      _pendingSearch!.complete();
+    }
+    _pendingSearch = null;
     final reqId = ++_requestId;
     state = state.copyWith(query: query, isLoading: true);
 
@@ -93,6 +110,7 @@ class SearchNotifier extends StateNotifier<SearchState> {
       await _executeSearch(query, reqId);
     } else {
       final completer = Completer<void>();
+      _pendingSearch = completer;
       _debounceTimer = Timer(const Duration(milliseconds: 150), () async {
         await _executeSearch(query, reqId);
         if (!completer.isCompleted) {
@@ -112,10 +130,11 @@ class SearchNotifier extends StateNotifier<SearchState> {
         limit: 60,
       );
       if (!mounted || reqId != _requestId) return;
-      state = state.copyWith(results: results, isLoading: false);
-    } catch (_) {
+      state =
+          state.copyWith(results: results, isLoading: false, clearError: true);
+    } catch (e) {
       if (!mounted || reqId != _requestId) return;
-      state = state.copyWith(results: const [], isLoading: false);
+      state = state.copyWith(results: const [], isLoading: false, error: e);
     }
   }
 
@@ -133,7 +152,8 @@ class SearchNotifier extends StateNotifier<SearchState> {
     bool shouldClearGroup = false;
     final currentGroup = state.selectedGroupId;
     if (currentGroup != null) {
-      if (nextSource == 'skurikhin' && (currentGroup < 1 || currentGroup > 12)) {
+      if (nextSource == 'skurikhin' &&
+          (currentGroup < 1 || currentGroup > 12)) {
         shouldClearGroup = true;
       } else if (nextSource == 'usda' &&
           (currentGroup < 101 || currentGroup > 128)) {

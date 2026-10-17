@@ -154,11 +154,19 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
               FilledButton(onPressed: _openBlank, child: const Text('Бланк'))),
       PopupMenuButton<String>(
         tooltip: 'Другие действия',
-        onSelected: (value) {
+        onSelected: (value) async {
           if (value == 'save') {
-            ref.read(dishProvider.notifier).saveCurrentToLibrary();
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('Блюдо сохранено в список рецептов')));
+            try {
+              await ref.read(dishProvider.notifier).saveCurrentToLibrary();
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content: Text('Блюдо сохранено в список рецептов')));
+            } catch (_) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content:
+                      Text('Не удалось сохранить блюдо. Повторите попытку.')));
+            }
           } else if (value == 'clear') {
             _showClearConfirmation(context);
           }
@@ -267,7 +275,10 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
               errorText: _yieldError),
           onChanged: (value) {
             final parsed = CalculationEngine.parseInputDouble(value);
-            if (parsed == null || !parsed.isFinite || parsed < 0.1) {
+            if (parsed == null ||
+                !parsed.isFinite ||
+                parsed < 0.1 ||
+                parsed > 9999999) {
               setState(() => _yieldError =
                   'Введите выход не менее 0,1 г. Сохранён прежний выход.');
             } else {
@@ -371,15 +382,16 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
 
   void _showRetentionSettingsDialog(BuildContext context, Dish dish) {
     final pCtrl = TextEditingController(
-      text: (dish.retentionProtein * 100).round().toString(),
+      text: CalculationEngine.formatPercent(dish.retentionProtein),
     );
     final fCtrl = TextEditingController(
-      text: (dish.retentionFat * 100).round().toString(),
+      text: CalculationEngine.formatPercent(dish.retentionFat),
     );
     final cCtrl = TextEditingController(
-      text: (dish.retentionCarbs * 100).round().toString(),
+      text: CalculationEngine.formatPercent(dish.retentionCarbs),
     );
     bool showPer100g = dish.showPer100gRowInExport;
+    String? retentionError;
 
     showDialog(
       context: context,
@@ -403,7 +415,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                     runSpacing: 6,
                     children: [
                       ActionChip(
-                        label: const Text('Стандарт (94 / 88 / 91%)'),
+                        label: const Text('По умолчанию (94 / 88 / 91%)'),
                         onPressed: () {
                           setDialogState(() {
                             pCtrl.text = '94';
@@ -461,6 +473,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                       ),
                     ],
                   ),
+                  if (retentionError != null) Text(retentionError!),
                   const SizedBox(height: 14),
                   SwitchListTile.adaptive(
                     contentPadding: EdgeInsets.zero,
@@ -485,18 +498,17 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
               ),
               ElevatedButton(
                 onPressed: () {
-                  final pVal =
-                      (CalculationEngine.parseInputDouble(pCtrl.text) ?? 94.0)
-                              .clamp(1.0, 100.0) /
-                          100.0;
-                  final fVal =
-                      (CalculationEngine.parseInputDouble(fCtrl.text) ?? 88.0)
-                              .clamp(1.0, 100.0) /
-                          100.0;
-                  final cVal =
-                      (CalculationEngine.parseInputDouble(cCtrl.text) ?? 91.0)
-                              .clamp(1.0, 100.0) /
-                          100.0;
+                  final values = [pCtrl.text, fCtrl.text, cCtrl.text]
+                      .map(CalculationEngine.parseInputDouble)
+                      .toList();
+                  if (values.any((v) => v == null || v < 0 || v > 100)) {
+                    setDialogState(() =>
+                        retentionError = 'Введите каждый процент от 0 до 100.');
+                    return;
+                  }
+                  final pVal = values[0]! / 100;
+                  final fVal = values[1]! / 100;
+                  final cVal = values[2]! / 100;
                   final notifier = ref.read(dishProvider.notifier);
                   notifier.setRetention(
                     protein: pVal,

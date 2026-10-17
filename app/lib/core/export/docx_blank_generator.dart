@@ -13,7 +13,8 @@ class DocxBlankGenerator {
     final archive = Archive();
 
     // 1. [Content_Types].xml
-    const contentTypesXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    const contentTypesXml =
+        '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
@@ -133,7 +134,8 @@ class DocxBlankGenerator {
         dish.ingredients.length < minRows ? minRows : dish.ingredients.length;
 
     for (int i = 0; i < totalRows; i++) {
-      final crossVMerge = isCrossMode ? (i == 0 ? 'restart' : 'continue') : null;
+      final crossVMerge =
+          isCrossMode ? (i == 0 ? 'restart' : 'continue') : null;
       final crossShape =
           (isCrossMode && i == 0) ? _crossShapeXml(totalRows) : null;
       if (i < dish.ingredients.length) {
@@ -196,9 +198,9 @@ class DocxBlankGenerator {
 ''');
 
     // Сохранность,%
-    final pPct = (calc.retentionProtein * 100).round();
-    final fPct = (calc.retentionFat * 100).round();
-    final cPct = (calc.retentionCarbs * 100).round();
+    final pPct = CalculationEngine.formatPercent(calc.retentionProtein);
+    final fPct = CalculationEngine.formatPercent(calc.retentionFat);
+    final cPct = CalculationEngine.formatPercent(calc.retentionCarbs);
 
     docSb.write('''
       <w:tr>
@@ -217,7 +219,7 @@ class DocxBlankGenerator {
       <w:tr>
         <w:trPr><w:trHeight w:val="260" w:hRule="exact"/></w:trPr>
         ${_cellXml('После тепловой обработки', bold: true, align: 'left', gridSpan: 2)}
-        ${_cellXml('')}
+        ${_cellXml(CalculationEngine.formatGrams(calc.yieldGrams), bold: true)}
         ${_cellXml(CalculationEngine.formatMacro(calc.cookedProtein), bold: true, gridSpan: 2)}
         ${_cellXml(CalculationEngine.formatMacro(calc.cookedFat), bold: true, gridSpan: 2)}
         ${_cellXml(CalculationEngine.formatMacro(calc.cookedCarbs), bold: true, gridSpan: 2)}
@@ -438,7 +440,8 @@ class DocxBlankGenerator {
       </w:tc>''';
   }
 
-  static String _formulaParagraph(String text, {bool bold = false, int spaceBefore = 0}) {
+  static String _formulaParagraph(String text,
+      {bool bold = false, int spaceBefore = 0}) {
     final bTag = bold ? '<w:b/>' : '';
     return '''
     <w:p>

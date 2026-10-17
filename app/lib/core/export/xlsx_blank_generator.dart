@@ -67,6 +67,7 @@ class XlsxBlankGenerator {
     // 7: формула под таблицей без рамки
     const stylesXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <numFmts count="2"><numFmt numFmtId="164" formatCode="[\$-419]0.0"/><numFmt numFmtId="165" formatCode="[\$-419]0.00"/></numFmts>
   <fonts count="3">
     <font><name val="Times New Roman"/><sz val="10"/></font>
     <font><b/><name val="Times New Roman"/><sz val="10"/></font>
@@ -94,15 +95,19 @@ class XlsxBlankGenerator {
     </border>
   </borders>
   <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-  <cellXfs count="8">
+  <cellXfs count="12">
     <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
     <xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
     <xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
-    <xf numFmtId="2" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
     <xf numFmtId="0" fontId="0" fillId="0" borderId="2" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
     <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf>
     <xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf>
     <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf>
+    <xf numFmtId="165" fontId="1" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="164" fontId="1" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="164" fontId="1" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
   </cellXfs>
 </styleSheet>''';
     _addFile(archive, 'xl/styles.xml', stylesXml);
@@ -220,13 +225,13 @@ class XlsxBlankGenerator {
 
         final kcalCell = isCrossMode
             ? '<c r="J$r" s="4"/>'
-            : '<c r="J$r" s="3"><f>ROUND(E$r*4+G$r*9+I$r*4,1)</f><v>${kcalDish.toStringAsFixed(1)}</v></c>';
+            : '<c r="J$r" s="10"><f>ROUND(E$r*4+G$r*9+I$r*4,1)</f><v>${kcalDish.toStringAsFixed(1)}</v></c>';
 
         sheetSb.write('''
     <row r="$r" ht="16" customHeight="1">
       <c r="A$r" s="0"><v>${i + 1}</v></c>
       <c r="B$r" s="5" t="inlineStr"><is><t>${_escape(ing.product.name)}</t></is></c>
-      <c r="C$r" s="0"><v>${netW.toStringAsFixed(1)}</v></c>
+      <c r="C$r" s="10"><v>${netW.toStringAsFixed(1)}</v></c>
       <c r="D$r" s="3"><v>${p100.toStringAsFixed(2)}</v></c>
       <c r="E$r" s="3"><f>ROUND(C$r*D$r/100,2)</f><v>${pDish.toStringAsFixed(2)}</v></c>
       <c r="F$r" s="3"><v>${f100.toStringAsFixed(2)}</v></c>
@@ -261,8 +266,11 @@ class XlsxBlankGenerator {
     totalF = calc.rawTotalFat;
     totalC = calc.rawTotalCarbs;
     final pPct = _productRounded(dish.retentionProtein, 100, 10);
+    final pPctText = CalculationEngine.formatPercent(dish.retentionProtein);
     final fPct = _productRounded(dish.retentionFat, 100, 10);
+    final fPctText = CalculationEngine.formatPercent(dish.retentionFat);
     final cPct = _productRounded(dish.retentionCarbs, 100, 10);
+    final cPctText = CalculationEngine.formatPercent(dish.retentionCarbs);
     final cookedP = calc.cookedProtein;
     final cookedF = calc.cookedFat;
     final cookedC = calc.cookedCarbs;
@@ -271,20 +279,20 @@ class XlsxBlankGenerator {
     // Строка 1: Итого (сумма по столбцам)
     final totalRow = rowIdx;
     final rawKcalCell = (!isCrossMode && calc.rawTotalKcal != null)
-        ? '<c r="J$totalRow" s="1"><f>SUM(J$firstDataRow:J$lastDataRow)</f><v>${totalKcal.toStringAsFixed(1)}</v></c>'
+        ? '<c r="J$totalRow" s="9"><f>SUM(J$firstDataRow:J$lastDataRow)</f><v>${totalKcal.toStringAsFixed(1)}</v></c>'
         : '<c r="J$totalRow" s="4"/>';
 
     sheetSb.write('''
     <row r="$totalRow" ht="18" customHeight="1">
       <c r="A$totalRow" s="6" t="inlineStr"><is><t>Итого (сумма по столбцам)</t></is></c>
       <c r="B$totalRow" s="6"/>
-      <c r="C$totalRow" s="1"><f>SUM(C$firstDataRow:C$lastDataRow)</f><v>${totalW.toStringAsFixed(1)}</v></c>
+      <c r="C$totalRow" s="11"><f>SUM(C$firstDataRow:C$lastDataRow)</f><v>${totalW.toStringAsFixed(1)}</v></c>
       <c r="D$totalRow" s="1"/>
-      <c r="E$totalRow" s="1"><f>SUM(E$firstDataRow:E$lastDataRow)</f><v>${totalP.toStringAsFixed(2)}</v></c>
+      <c r="E$totalRow" s="8"><f>SUM(E$firstDataRow:E$lastDataRow)</f><v>${totalP.toStringAsFixed(2)}</v></c>
       <c r="F$totalRow" s="1"/>
-      <c r="G$totalRow" s="1"><f>SUM(G$firstDataRow:G$lastDataRow)</f><v>${totalF.toStringAsFixed(2)}</v></c>
+      <c r="G$totalRow" s="8"><f>SUM(G$firstDataRow:G$lastDataRow)</f><v>${totalF.toStringAsFixed(2)}</v></c>
       <c r="H$totalRow" s="1"/>
-      <c r="I$totalRow" s="1"><f>SUM(I$firstDataRow:I$lastDataRow)</f><v>${totalC.toStringAsFixed(2)}</v></c>
+      <c r="I$totalRow" s="8"><f>SUM(I$firstDataRow:I$lastDataRow)</f><v>${totalC.toStringAsFixed(2)}</v></c>
       $rawKcalCell
     </row>
 ''');
@@ -329,14 +337,14 @@ class XlsxBlankGenerator {
     <row r="$cookedRow" ht="18" customHeight="1">
       <c r="A$cookedRow" s="6" t="inlineStr"><is><t>После тепловой обработки</t></is></c>
       <c r="B$cookedRow" s="6"/>
-      <c r="C$cookedRow" s="1"/>
-      <c r="D$cookedRow" s="1"><f>ROUND(E$totalRow*D$retRow/100,2)</f><v>${cookedP.toStringAsFixed(2)}</v></c>
+      <c r="C$cookedRow" s="11">${dish.customYieldGrams == null ? '<f>SUM(C$firstDataRow:C$lastDataRow)</f>' : ''}<v>${calc.yieldGrams.toStringAsFixed(1)}</v></c>
+      <c r="D$cookedRow" s="8"><f>ROUND(E$totalRow*D$retRow/100,2)</f><v>${cookedP.toStringAsFixed(2)}</v></c>
       <c r="E$cookedRow" s="1"/>
-      <c r="F$cookedRow" s="1"><f>ROUND(G$totalRow*F$retRow/100,2)</f><v>${cookedF.toStringAsFixed(2)}</v></c>
+      <c r="F$cookedRow" s="8"><f>ROUND(G$totalRow*F$retRow/100,2)</f><v>${cookedF.toStringAsFixed(2)}</v></c>
       <c r="G$cookedRow" s="1"/>
-      <c r="H$cookedRow" s="1"><f>ROUND(I$totalRow*H$retRow/100,2)</f><v>${cookedC.toStringAsFixed(2)}</v></c>
+      <c r="H$cookedRow" s="8"><f>ROUND(I$totalRow*H$retRow/100,2)</f><v>${cookedC.toStringAsFixed(2)}</v></c>
       <c r="I$cookedRow" s="1"/>
-      <c r="J$cookedRow" s="1"><f>ROUND(D$cookedRow*4+F$cookedRow*9+H$cookedRow*4,1)</f><v>${cookedKcal.toStringAsFixed(1)}</v></c>
+      <c r="J$cookedRow" s="9"><f>ROUND(D$cookedRow*4+F$cookedRow*9+H$cookedRow*4,1)</f><v>${cookedKcal.toStringAsFixed(1)}</v></c>
     </row>
 ''');
     merges.addAll([
@@ -355,13 +363,13 @@ class XlsxBlankGenerator {
       <c r="A$per100Row" s="6" t="inlineStr"><is><t>В 100 г блюда</t></is></c>
       <c r="B$per100Row" s="6"/>
       <c r="C$per100Row" s="1"><v>100</v></c>
-      <c r="D$per100Row" s="1"><v>${calc.per100gProtein.toStringAsFixed(2)}</v></c>
+      <c r="D$per100Row" s="8"><f>IF(C$cookedRow&gt;0,ROUND(D$cookedRow*100/C$cookedRow,2),0)</f><v>${calc.per100gProtein.toStringAsFixed(2)}</v></c>
       <c r="E$per100Row" s="1"/>
-      <c r="F$per100Row" s="1"><v>${calc.per100gFat.toStringAsFixed(2)}</v></c>
+      <c r="F$per100Row" s="8"><f>IF(C$cookedRow&gt;0,ROUND(F$cookedRow*100/C$cookedRow,2),0)</f><v>${calc.per100gFat.toStringAsFixed(2)}</v></c>
       <c r="G$per100Row" s="1"/>
-      <c r="H$per100Row" s="1"><v>${calc.per100gCarbs.toStringAsFixed(2)}</v></c>
+      <c r="H$per100Row" s="8"><f>IF(C$cookedRow&gt;0,ROUND(H$cookedRow*100/C$cookedRow,2),0)</f><v>${calc.per100gCarbs.toStringAsFixed(2)}</v></c>
       <c r="I$per100Row" s="1"/>
-      <c r="J$per100Row" s="1"><v>${calc.per100gKcal.toStringAsFixed(1)}</v></c>
+      <c r="J$per100Row" s="9"><f>IF(C$cookedRow&gt;0,ROUND(J$cookedRow*100/C$cookedRow,1),0)</f><v>${calc.per100gKcal.toStringAsFixed(1)}</v></c>
     </row>
 ''');
       merges.addAll([
@@ -375,23 +383,14 @@ class XlsxBlankGenerator {
 
     rowIdx++; // Пустая строка перед формулами
 
-    // 6-строчный блок формул под таблицей
-    final hasItems = dish.ingredients.isNotEmpty;
+    // 6-строчный блок формул под таблицей (чистые символические формулы бланка 1:1)
     final formulaLines = [
       'Сохранность после тепловой обработки:',
-      hasItems
-          ? '= Сумма белков *$pPct /100 = ${CalculationEngine.formatMacro(totalP)} * $pPct / 100 = ${CalculationEngine.formatMacro(cookedP)} г'
-          : '= Сумма белков *$pPct /100',
-      hasItems
-          ? '= Сумма жиров *$fPct/100 = ${CalculationEngine.formatMacro(totalF)} * $fPct / 100 = ${CalculationEngine.formatMacro(cookedF)} г'
-          : '= Сумма жиров *$fPct/100',
-      hasItems
-          ? '= Сумма углеводов *$cPct/100 = ${CalculationEngine.formatMacro(totalC)} * $cPct / 100 = ${CalculationEngine.formatMacro(cookedC)} г'
-          : '= Сумма углеводов *$cPct/100',
+      '= Сумма белков *$pPctText /100',
+      '= Сумма жиров *$fPctText/100',
+      '= Сумма углеводов *$cPctText/100',
       'Энергетическая ценность:',
-      hasItems
-          ? 'Белки (после т.о) х 4 + Жиры (после т.о) х 9 + Углеводы (после т.о) х 4 = ${CalculationEngine.formatMacro(cookedP)} х 4 + ${CalculationEngine.formatMacro(cookedF)} х 9 + ${CalculationEngine.formatMacro(cookedC)} х 4 = ${CalculationEngine.formatKcal(cookedKcal)} ккал'
-          : 'Белки (после т.о) х 4 + Жиры (после т.о) х 9 + Углеводы (после т.о) х 4',
+      'Белки (после т.о) х 4 + Жиры (после т.о) х 9 + Углеводы (после т.о) х 4',
     ];
 
     for (final line in formulaLines) {
@@ -414,7 +413,8 @@ class XlsxBlankGenerator {
 
     // Параметры печати (A4 альбомная, вписать на 1 страницу для стандартных бланков)
     final fitHeight = dish.ingredients.length <= 25 ? 1 : 0;
-    sheetSb.write('  <pageMargins left="0.5" right="0.5" top="0.5" bottom="0.5" header="0.3" footer="0.3"/>\n');
+    sheetSb.write(
+        '  <pageMargins left="0.5" right="0.5" top="0.5" bottom="0.5" header="0.3" footer="0.3"/>\n');
     sheetSb.write(
       '  <pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="$fitHeight"/>\n',
     );

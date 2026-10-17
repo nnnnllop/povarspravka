@@ -10,7 +10,7 @@ enum BlankMode {
   String get displayName {
     switch (this) {
       case BlankMode.photoCross:
-        return 'Бланк с крестом (ГОСТ)';
+        return 'Бланк с крестом (учебный)';
       case BlankMode.detailed:
         return 'Подробный расчёт (ккал по каждому продукту)';
     }
@@ -19,7 +19,7 @@ enum BlankMode {
   String get shortName {
     switch (this) {
       case BlankMode.photoCross:
-        return 'Бланк с крестом (ГОСТ)';
+        return 'Бланк с крестом (учебный)';
       case BlankMode.detailed:
         return 'Подробный расчёт';
     }

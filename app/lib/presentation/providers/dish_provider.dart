@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/calculation/calculation_engine.dart';
+import '../../core/calculation/calculation_validation.dart';
 import '../../core/calculation/models/blank_mode.dart';
 import '../../core/calculation/models/calculation_result.dart';
 import '../../core/calculation/models/dish.dart';
@@ -29,6 +30,10 @@ final calculationResultProvider = Provider<CalculationResult>((ref) {
   return CalculationEngine.calculate(dish);
 });
 
+int _idSequence = 0;
+String _newId() => '${DateTime.now().microsecondsSinceEpoch}_${_idSequence++}';
+Dish _snapshot(Dish dish) => Dish.fromJson(dish.toJson());
+
 class SavedDishesNotifier extends StateNotifier<List<Dish>> {
   final DishStorageRepository _storage;
   Dish? _latestDraft;
@@ -42,17 +47,11 @@ class SavedDishesNotifier extends StateNotifier<List<Dish>> {
 
   Future<void> updateDraftReference(Dish draft) async {
     _latestDraft = draft;
-    final idx = state.indexWhere((d) => d.id == draft.id);
-    if (idx >= 0) {
-      final updated = List<Dish>.from(state);
-      updated[idx] = draft;
-      state = updated;
-    }
     await _storage.saveAll(activeDraft: _latestDraft, savedDishes: state);
   }
 
-  void saveDish(Dish dish) {
-    _latestDraft = dish;
+  Future<void> saveDish(Dish dish) async {
+    dish = _snapshot(dish);
     final existingIdx = state.indexWhere((d) => d.id == dish.id);
     final updated = List<Dish>.from(state);
     if (existingIdx >= 0) {
@@ -60,40 +59,33 @@ class SavedDishesNotifier extends StateNotifier<List<Dish>> {
     } else {
       updated.insert(0, dish);
     }
+    await _storage.saveAll(activeDraft: _latestDraft, savedDishes: updated);
     state = updated;
-    _storage.saveAll(activeDraft: _latestDraft, savedDishes: state).catchError(
-      (Object error, StackTrace stack) {
-        debugPrint('Failed to save library: $error');
-      },
-    );
   }
 
-  void deleteDish(String id) {
-    state = state.where((d) => d.id != id).toList();
-    _storage.saveAll(activeDraft: _latestDraft, savedDishes: state).catchError(
-      (Object error, StackTrace stack) {
-        debugPrint('Failed to save library: $error');
-      },
-    );
+  Future<void> deleteDish(String id) async {
+    final updated = state.where((d) => d.id != id).toList();
+    await _storage.saveAll(activeDraft: _latestDraft, savedDishes: updated);
+    state = updated;
   }
 
-  Dish duplicateDish(Dish dish) {
+  Future<Dish> duplicateDish(Dish dish) async {
     final now = DateTime.now();
     final copyTitle =
         dish.title.trim().isEmpty ? 'Блюдо (копия)' : '${dish.title} (копия)';
     final duplicated = dish.copyWith(
-      id: '${now.millisecondsSinceEpoch}_copy',
+      id: _newId(),
+      ingredients: dish.ingredients
+          .map((i) => i.copyWith(
+              id: _newId(), product: Product.fromJson(i.product.toJson())))
+          .toList(),
       title: copyTitle,
       createdAt: now,
       updatedAt: now,
     );
     final updated = [duplicated, ...state];
+    await _storage.saveAll(activeDraft: _latestDraft, savedDishes: updated);
     state = updated;
-    _storage.saveAll(activeDraft: _latestDraft, savedDishes: state).catchError(
-      (Object error, StackTrace stack) {
-        debugPrint('Failed to save library: $error');
-      },
-    );
     return duplicated;
   }
 }
@@ -107,6 +99,7 @@ class DishNotifier extends StateNotifier<Dish> {
   Object? lastPersistenceError;
 
   Future<void> flushPendingSaves() async {
+    await _ready;
     await _saveQueue;
     if (lastPersistenceError != null) throw lastPersistenceError!;
   }
@@ -118,7 +111,7 @@ class DishNotifier extends StateNotifier<Dish> {
         _savedDishesNotifier = savedDishesNotifier,
         super(
           Dish(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            id: _newId(),
             createdAt: DateTime.now(),
             updatedAt: DateTime.now(),
           ),
@@ -187,8 +180,8 @@ class DishNotifier extends StateNotifier<Dish> {
   }
 
   void setCustomYield(double? yieldGrams) {
-    if (yieldGrams != null && (!yieldGrams.isFinite || yieldGrams < 0.1))
-      return;
+    if (yieldGrams != null &&
+        !CalculationValidation.inRange(yieldGrams, .1, 9999999)) return;
     final shouldClear = yieldGrams == null;
     state = state.copyWith(
       customYieldGrams: shouldClear ? null : yieldGrams,
@@ -199,6 +192,9 @@ class DishNotifier extends StateNotifier<Dish> {
   }
 
   void setRetention({double? protein, double? fat, double? carbs}) {
+    for (final value in [protein, fat, carbs]) {
+      if (value != null && !CalculationValidation.inRange(value, 0, 1)) return;
+    }
     state = state.copyWith(
       retentionProtein: protein ?? state.retentionProtein,
       retentionFat: fat ?? state.retentionFat,
@@ -217,8 +213,10 @@ class DishNotifier extends StateNotifier<Dish> {
   }
 
   void addIngredient(Product product, double grams, {bool isGross = false}) {
+    if (!CalculationValidation.inRange(grams, .1, 9999999)) return;
+    CalculationValidation.product(product);
     final newIngredient = Ingredient(
-      id: '${product.id}_${DateTime.now().microsecondsSinceEpoch}',
+      id: _newId(),
       product: product,
       weightGrams: grams,
       isGross: isGross,
@@ -232,6 +230,7 @@ class DishNotifier extends StateNotifier<Dish> {
   }
 
   void updateIngredient(String id, double grams, {bool? isGross}) {
+    if (!CalculationValidation.inRange(grams, .1, 9999999)) return;
     final updatedList = state.ingredients.map((ing) {
       if (ing.id == id) {
         return ing.copyWith(
@@ -281,25 +280,28 @@ class DishNotifier extends StateNotifier<Dish> {
     _persist();
   }
 
-  void saveCurrentToLibrary() {
+  Future<void> saveCurrentToLibrary() {
     final snapshot = state;
     _saveQueue = _saveQueue.then((_) async {
       await _ready;
-      _savedDishesNotifier?.saveDish(snapshot);
+      await _savedDishesNotifier?.saveDish(snapshot);
+      lastPersistenceError = null;
     }).catchError((Object error, StackTrace stack) {
       lastPersistenceError = error;
       debugPrint('Failed to save current dish: $error');
     });
+    return flushPendingSaves();
   }
 
   void loadDish(Dish dish) {
-    state = dish;
+    CalculationValidation.dish(dish);
+    state = _snapshot(dish);
     _persist();
   }
 
   void createNewDish() {
     state = Dish(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: _newId(),
       blankMode: state.blankMode,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),

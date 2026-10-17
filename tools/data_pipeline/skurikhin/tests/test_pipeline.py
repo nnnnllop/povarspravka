@@ -90,9 +90,11 @@ class TestAppendicesParser(unittest.TestCase):
 
     def test_known_measures(self):
         meas = get_measures_for_product("Картофель", self.m_map, self.p_map)
-        self.assertGreater(len(meas), 0)
-        meas_dict = dict(meas)
-        self.assertTrue(any("стакан" in k for k in meas_dict))
+        # Whole potatoes must not inherit cups from "крахмал картофельный".
+        self.assertFalse(any("стакан" in name for name, _ in meas))
+        starch = dict(get_measures_for_product(
+            "Крахмал картофельный", self.m_map, self.p_map))
+        self.assertEqual(starch["стакан (чайный 250 мл)"], 200.0)
 
 
 class TestTableExtractor(unittest.TestCase):

@@ -204,27 +204,13 @@ def get_measures_for_product(product_name: str,
     p_lower = product_name.lower()
     res: List[Tuple[str, float]] = []
 
-    # Check piece weights (шт)
-    matched_piece = None
-    if p_lower in pieces_map:
-        matched_piece = pieces_map[p_lower]
-    else:
-        for k, v in pieces_map.items():
-            if len(k) > 4 and (k in p_lower or p_lower in k):
-                matched_piece = v
-                break
+    # No fuzzy matching: a compound dish must never inherit measures of one
+    # component (e.g. egg with mayonnaise != mayonnaise).
+    matched_piece = pieces_map.get(p_lower)
     if matched_piece:
         res.append(("1 шт.", matched_piece))
 
-    # Check volume measures
-    matched_vol = None
-    if p_lower in measures_map:
-        matched_vol = measures_map[p_lower]
-    else:
-        for k, v in measures_map.items():
-            if len(k) > 4 and (k in p_lower or p_lower in k):
-                matched_vol = v
-                break
+    matched_vol = measures_map.get(p_lower)
 
     if matched_vol:
         for m_name, grams in matched_vol.items():

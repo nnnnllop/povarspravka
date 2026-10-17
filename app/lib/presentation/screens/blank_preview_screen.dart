@@ -13,15 +13,15 @@ class BlankPreviewScreen extends ConsumerWidget {
   const BlankPreviewScreen({super.key});
 
   // Фиксированные ширины колонок для 1:1 совпадения объединенных ячеек
-  static const double _w0 = 32.0;  // №
+  static const double _w0 = 32.0; // №
   static const double _w1 = 230.0; // Наименование сырья
-  static const double _w2 = 72.0;  // Количество, г
-  static const double _w3 = 62.0;  // Белки В 100 г
-  static const double _w4 = 62.0;  // Белки В блюде
-  static const double _w5 = 62.0;  // Жиры В 100 г
-  static const double _w6 = 62.0;  // Жиры В блюде
-  static const double _w7 = 62.0;  // Углеводы В 100 г
-  static const double _w8 = 62.0;  // Углеводы В блюде
+  static const double _w2 = 72.0; // Количество, г
+  static const double _w3 = 62.0; // Белки В 100 г
+  static const double _w4 = 62.0; // Белки В блюде
+  static const double _w5 = 62.0; // Жиры В 100 г
+  static const double _w6 = 62.0; // Жиры В блюде
+  static const double _w7 = 62.0; // Углеводы В 100 г
+  static const double _w8 = 62.0; // Углеводы В блюде
   static const double _w9 = 114.0; // Энергетическая ценность, ккал
 
   static const double _w01 = _w0 + _w1;
@@ -45,12 +45,32 @@ class BlankPreviewScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.print_rounded),
             tooltip: 'Печать бланка',
-            onPressed: () => ExportService.printPdf(dish),
+            onPressed: () async {
+              try {
+                await ExportService.printPdf(dish);
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Ошибка при печати: $e')),
+                  );
+                }
+              }
+            },
           ),
           PopupMenuButton<ExportType>(
             icon: const Icon(Icons.share_rounded),
             tooltip: 'Поделиться файлом',
-            onSelected: (type) => ExportService.shareFile(dish, type),
+            onSelected: (type) async {
+              try {
+                await ExportService.shareFile(dish, type);
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Ошибка при экспорте: $e')),
+                  );
+                }
+              }
+            },
             itemBuilder: (context) => [
               const PopupMenuItem(
                 value: ExportType.pdf,
@@ -202,7 +222,8 @@ class BlankPreviewScreen extends ConsumerWidget {
                 color: isDark ? AppColors.surfaceDark : Colors.white,
                 border: Border(
                   top: BorderSide(
-                    color: isDark ? AppColors.borderDark : AppColors.borderLight,
+                    color:
+                        isDark ? AppColors.borderDark : AppColors.borderLight,
                   ),
                 ),
               ),
@@ -256,9 +277,9 @@ class BlankPreviewScreen extends ConsumerWidget {
     final isCrossMode = dish.blankMode == BlankMode.photoCross;
     const double rowH = 22.0;
 
-    final pPct = (calc.retentionProtein * 100).round();
-    final fPct = (calc.retentionFat * 100).round();
-    final cPct = (calc.retentionCarbs * 100).round();
+    final pPct = CalculationEngine.formatPercent(calc.retentionProtein);
+    final fPct = CalculationEngine.formatPercent(calc.retentionFat);
+    final cPct = CalculationEngine.formatPercent(calc.retentionCarbs);
 
     final leftNineRows = <Widget>[];
     for (int i = 0; i < totalRows; i++) {
@@ -269,10 +290,12 @@ class BlankPreviewScreen extends ConsumerWidget {
             children: [
               _cell('${i + 1}', _w0, rowH),
               _cell(ing.product.name, _w1, rowH, align: Alignment.centerLeft),
-              _cell(CalculationEngine.formatGrams(ing.netGramsRounded), _w2, rowH),
+              _cell(CalculationEngine.formatGrams(ing.netGramsRounded), _w2,
+                  rowH),
               _cell(CalculationEngine.formatMacro(ing.product.protein), _w3,
                   rowH),
-              _cell(CalculationEngine.formatMacro(ing.proteinInDish), _w4, rowH),
+              _cell(
+                  CalculationEngine.formatMacro(ing.proteinInDish), _w4, rowH),
               _cell(CalculationEngine.formatMacro(ing.product.fat), _w5, rowH),
               _cell(CalculationEngine.formatMacro(ing.fatInDish), _w6, rowH),
               _cell(
@@ -404,18 +427,19 @@ class BlankPreviewScreen extends ConsumerWidget {
             children: [
               _cell('После тепловой обработки', _w01, rowH + 2,
                   bold: true, align: Alignment.centerLeft),
-              _cell('', _w2, rowH + 2),
+              _cell(CalculationEngine.formatGrams(calc.yieldGrams), _w2,
+                  rowH + 2),
               _cell(CalculationEngine.formatMacro(calc.cookedProtein), _w34,
                   rowH + 2,
                   bold: true),
-              _cell(CalculationEngine.formatMacro(calc.cookedFat), _w56,
-                  rowH + 2,
+              _cell(
+                  CalculationEngine.formatMacro(calc.cookedFat), _w56, rowH + 2,
                   bold: true),
               _cell(CalculationEngine.formatMacro(calc.cookedCarbs), _w78,
                   rowH + 2,
                   bold: true),
-              _cell(CalculationEngine.formatKcal(calc.cookedKcal), _w9,
-                  rowH + 2,
+              _cell(
+                  CalculationEngine.formatKcal(calc.cookedKcal), _w9, rowH + 2,
                   bold: true),
             ],
           ),
@@ -429,14 +453,13 @@ class BlankPreviewScreen extends ConsumerWidget {
                 _cell(CalculationEngine.formatMacro(calc.per100gProtein), _w34,
                     rowH,
                     bold: true),
-                _cell(CalculationEngine.formatMacro(calc.per100gFat), _w56,
-                    rowH,
+                _cell(
+                    CalculationEngine.formatMacro(calc.per100gFat), _w56, rowH,
                     bold: true),
                 _cell(CalculationEngine.formatMacro(calc.per100gCarbs), _w78,
                     rowH,
                     bold: true),
-                _cell(CalculationEngine.formatKcal(calc.per100gKcal), _w9,
-                    rowH,
+                _cell(CalculationEngine.formatKcal(calc.per100gKcal), _w9, rowH,
                     bold: true),
               ],
             ),
@@ -585,9 +608,9 @@ class BlankPreviewScreen extends ConsumerWidget {
   }
 
   Widget _buildFormulaBlock(Dish dish, CalculationResult calc) {
-    final pPct = (calc.retentionProtein * 100).round();
-    final fPct = (calc.retentionFat * 100).round();
-    final cPct = (calc.retentionCarbs * 100).round();
+    final pPct = CalculationEngine.formatPercent(calc.retentionProtein);
+    final fPct = CalculationEngine.formatPercent(calc.retentionFat);
+    final cPct = CalculationEngine.formatPercent(calc.retentionCarbs);
     final hasItems = dish.ingredients.isNotEmpty;
 
     final pLine = hasItems

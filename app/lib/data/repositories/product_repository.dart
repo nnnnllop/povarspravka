@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:archive/archive.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -28,11 +29,17 @@ class FoodGroup {
 class ProductRepository {
   static const String _schemaVersionPrefix = 'v3';
   Database? _db;
+  Future<Database>? _opening;
 
   Future<Database> get database async {
     if (_db != null && _db!.isOpen) return _db!;
-    _db = await _initDatabase();
-    return _db!;
+    final pending = _opening ??= _initDatabase();
+    try {
+      _db = await pending;
+      return _db!;
+    } finally {
+      if (identical(_opening, pending)) _opening = null;
+    }
   }
 
   Future<Database> _initDatabase() async {
@@ -45,7 +52,13 @@ class ProductRepository {
 
     final byteData = await rootBundle.load('assets/db/reference.db');
     final assetLength = byteData.lengthInBytes;
-    final expectedMarker = '${_schemaVersionPrefix}_$assetLength';
+    final bytes = byteData.buffer.asUint8List(
+      byteData.offsetInBytes,
+      byteData.lengthInBytes,
+    );
+    final crc = getCrc32(bytes);
+    final expectedMarker =
+        '${_schemaVersionPrefix}_${assetLength}_${crc.toRadixString(16)}';
 
     bool needsCopy = !await file.exists();
     if (!needsCopy) {
@@ -65,11 +78,10 @@ class ProductRepository {
       if (await walFile.exists()) await walFile.delete();
       if (await shmFile.exists()) await shmFile.delete();
 
-      final bytes = byteData.buffer.asUint8List(
-        byteData.offsetInBytes,
-        byteData.lengthInBytes,
-      );
-      await file.writeAsBytes(bytes, flush: true);
+      final tempFile = File('$dbPath.tmp');
+      await tempFile.writeAsBytes(bytes, flush: true);
+      if (await file.exists()) await file.delete();
+      await tempFile.rename(dbPath);
       await versionFile.writeAsString(expectedMarker, flush: true);
     }
 
