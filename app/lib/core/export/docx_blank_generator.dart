@@ -1,3 +1,4 @@
+import 'openxml_text.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:archive/archive.dart';
@@ -458,12 +459,5 @@ class DocxBlankGenerator {
     archive.addFile(ArchiveFile(filename, bytes.length, bytes));
   }
 
-  static String _escape(String text) {
-    return text
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&apos;');
-  }
+  static String _escape(String text) => OpenXmlText.escape(text);
 }

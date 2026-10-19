@@ -1,3 +1,4 @@
+import 'openxml_text.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:archive/archive.dart';
@@ -7,6 +8,16 @@ import '../calculation/models/blank_mode.dart';
 import '../calculation/models/dish.dart';
 
 class XlsxBlankGenerator {
+  static String _titleText(String title) =>
+      title.trim().replaceAll(RegExp(r'\s+'), ' ');
+
+  // Merged rows do not support Excel AutoFit. Reserve conservative line height
+  // for the full title (including 500-codepoint stress titles), not a fixed 18pt.
+  static int _titleHeight(String title) =>
+      (18 * ((_titleText(title).runes.length + 59) ~/ 60))
+          .clamp(18, 409)
+          .toInt();
+
   static double _round2(double v) => CalculationMath.round2(v);
   static double _productRounded(double a, double b, int digits,
           {bool divideBy100 = false}) =>
@@ -98,7 +109,7 @@ class XlsxBlankGenerator {
   <cellXfs count="12">
     <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
     <xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
-    <xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
     <xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
     <xf numFmtId="0" fontId="0" fillId="0" borderId="2" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
     <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf>
@@ -109,6 +120,7 @@ class XlsxBlankGenerator {
     <xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
     <xf numFmtId="164" fontId="1" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
   </cellXfs>
+  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
 </styleSheet>''';
     _addFile(archive, 'xl/styles.xml', stylesXml);
 
@@ -150,8 +162,8 @@ class XlsxBlankGenerator {
     // Подзаголовок с названием блюда (если включено)
     if (dish.showTitleInExport && dish.title.trim().isNotEmpty) {
       sheetSb.write('''
-    <row r="$rowIdx" ht="18" customHeight="1">
-      <c r="A$rowIdx" s="2" t="inlineStr"><is><t>${_escape(dish.title.trim())}</t></is></c>
+    <row r="$rowIdx" ht="${_titleHeight(dish.title)}" customHeight="1">
+      <c r="A$rowIdx" s="2" t="inlineStr"><is><t>${_escape(_titleText(dish.title))}</t></is></c>
     </row>
 ''');
       merges.add('A$rowIdx:J$rowIdx');
@@ -395,10 +407,15 @@ class XlsxBlankGenerator {
 
     for (var lineIndex = 0; lineIndex < formulaLines.length; lineIndex++) {
       final line = formulaLines[lineIndex];
-      final nutrient = switch (lineIndex) {1 => ('белков', 'D'), 2 => ('жиров', 'F'), 3 => ('углеводов', 'H'), _ => null};
+      final nutrient = switch (lineIndex) {
+        1 => ('белков', 'D'),
+        2 => ('жиров', 'F'),
+        3 => ('углеводов', 'H'),
+        _ => null
+      };
       final explanationCell = nutrient == null
           ? '<c r="B$rowIdx" s="7" t="inlineStr"><is><t>${_escape(line)}</t></is></c>'
-          : '<c r="B$rowIdx" s="7" t="str"><f>${_escape('"= Сумма ${nutrient.$1} *"&TEXT(${nutrient.$2}$retRow,"0.##########")&"/100"')}</f><v>${_escape(line)}</v></c>';
+          : '<c r="B$rowIdx" s="7" t="str"><f>${_escape('"= Сумма ${nutrient.$1} *"&${nutrient.$2}$retRow&"/100"')}</f><v>${_escape(line)}</v></c>';
       sheetSb.write('''
     <row r="$rowIdx" ht="16" customHeight="1">
       $explanationCell
@@ -437,12 +454,6 @@ class XlsxBlankGenerator {
     archive.addFile(ArchiveFile(filename, bytes.length, bytes));
   }
 
-  static String _escape(String text) {
-    return text
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&apos;');
-  }
+  static String _escape(String text) =>
+      OpenXmlText.escape(text, spreadsheet: true);
 }

@@ -43,6 +43,8 @@ flutter:
     - assets/db/reference.db
     - assets/fonts/arial.ttf
     - assets/fonts/arialbd.ttf
+    - assets/fonts/NotoEmoji-Regular.ttf
+    - assets/fonts/NotoEmoji-OFL.txt
 
   fonts:
     - family: Arial

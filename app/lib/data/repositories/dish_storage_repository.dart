@@ -101,14 +101,51 @@ class DishStorageRepository {
     return dish;
   }
 
+  // CRC-32 detects accidental bit corruption; it is not authentication.
+  static int _crc32(List<int> bytes) {
+    var crc = 0xffffffff;
+    for (final byte in bytes) {
+      crc ^= byte;
+      for (var bit = 0; bit < 8; bit++) {
+        crc = (crc >> 1) ^ ((crc & 1) != 0 ? 0xedb88320 : 0);
+      }
+    }
+    return (crc ^ 0xffffffff) & 0xffffffff;
+  }
+
+  String _encode(Map<String, dynamic> raw) {
+    final payload = jsonEncode(raw);
+    return jsonEncode({
+      ...raw,
+      'storageVersion': 1,
+      'crc32': _crc32(utf8.encode(payload)),
+    });
+  }
+
   Future<Map<String, dynamic>?> _readValid(File file) async {
-    if (!await file.exists()) return null;
     try {
-      final text = await file.readAsString();
-      final raw = jsonDecode(text);
+      // Decode explicitly: readAsString wraps malformed UTF-8 in an I/O error,
+      // which must not be confused with an actual permission/disk failure.
+      final text = utf8.decode(await file.readAsBytes());
+      var raw = jsonDecode(text);
       if (raw is! Map<String, dynamic>) return null;
+      if (raw.containsKey('storageVersion') || raw.containsKey('crc32')) {
+        final version = raw.remove('storageVersion');
+        final checksum = raw.remove('crc32');
+        if (version != 1 || checksum != _crc32(utf8.encode(jsonEncode(raw))))
+          return null;
+      }
+      // Legacy documents remain readable; new writes and recovered files carry CRC.
       _decode(raw); // Validate the complete payload, not just its JSON syntax.
       return raw;
+    } on PathNotFoundException {
+      // Only a genuinely absent path is an empty/missing document.
+      // exists() also returns false for wrong types and some inaccessible paths.
+      return null;
+    } on JsonUnsupportedObjectError {
+      // Valid JSON grammar may overflow a Dart double (e.g. 1e309).
+      // Such data cannot be canonicalized for CRC and must use the backup.
+      return null;
     } on FormatException {
       return null;
     } on TypeError {
@@ -129,7 +166,7 @@ class DishStorageRepository {
           raw = await _readValid(backup);
           if (raw != null) {
             final temp = File('${file.path}.tmp');
-            await temp.writeAsString(jsonEncode(raw), flush: true);
+            await temp.writeAsString(_encode(raw), flush: true);
             // Never replace the good backup with the damaged main document.
             await temp.rename(file.path);
           } else if (await file.exists() || await backup.exists()) {
@@ -152,7 +189,7 @@ class DishStorageRepository {
       'savedDishes': savedDishes.map((d) => d.toJson()).toList(),
     };
     _decode(payload);
-    final encoded = jsonEncode(payload);
+    final encoded = _encode(payload);
     return _serialized(() async {
       final file = await _getStorageFile();
       if (file == null) {

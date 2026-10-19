@@ -5,7 +5,6 @@ import 'package:povarspravka/core/calculation/calculation_engine.dart';
 import 'package:povarspravka/core/calculation/calculation_validation.dart';
 import 'package:povarspravka/core/calculation/models/dish.dart';
 import 'package:povarspravka/core/calculation/models/ingredient.dart';
-import 'package:povarspravka/core/calculation/models/product.dart';
 import 'package:povarspravka/data/repositories/dish_storage_repository.dart';
 import 'package:povarspravka/presentation/providers/dish_provider.dart';
 import 'culinary_logic_test.dart' show beet, fixture;

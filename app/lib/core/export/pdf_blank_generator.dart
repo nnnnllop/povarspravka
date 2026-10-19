@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'unicode_pdf_font.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../calculation/calculation_engine.dart';
@@ -43,6 +44,8 @@ class PdfBlankGenerator {
       fontBold = pw.Font.helveticaBold();
     }
 
+    final emojiFont = UnicodePdfFont(
+        await rootBundle.load('assets/fonts/NotoEmoji-Regular.ttf'));
     final calcResult = CalculationEngine.calculate(dish);
 
     const rowsPerPage = 18;
@@ -58,7 +61,8 @@ class PdfBlankGenerator {
       pdf.addPage(pw.Page(
         pageFormat: PdfPageFormat.a4.landscape,
         margin: const pw.EdgeInsets.symmetric(horizontal: 28, vertical: 18),
-        theme: pw.ThemeData.withFont(base: fontRegular, bold: fontBold),
+        theme: pw.ThemeData.withFont(
+            base: fontRegular, bold: fontBold, fontFallback: [emojiFont]),
         build: (context) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
@@ -108,13 +112,24 @@ class PdfBlankGenerator {
           ),
           if (dish.showTitleInExport && dish.title.trim().isNotEmpty) ...[
             pw.SizedBox(height: 2),
-            pw.Text(
-              dish.title.trim(),
-              textAlign: pw.TextAlign.center,
-              style: pw.TextStyle(
-                font: fontBold,
-                fontSize: 10,
-                fontWeight: pw.FontWeight.bold,
+            // User newlines must not consume the fixed table's page budget.
+            // Wrap the complete title and scale it down within a bounded area.
+            pw.Container(
+              constraints: const pw.BoxConstraints(maxHeight: 48),
+              child: pw.FittedBox(
+                fit: pw.BoxFit.scaleDown,
+                child: pw.SizedBox(
+                  width: _totalWidth,
+                  child: pw.Text(
+                    dish.title.trim().replaceAll(RegExp(r'\s+'), ' '),
+                    textAlign: pw.TextAlign.center,
+                    style: pw.TextStyle(
+                      font: fontBold,
+                      fontSize: 10,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                ),
               ),
             ),
           ],
