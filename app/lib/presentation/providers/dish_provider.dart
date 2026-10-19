@@ -40,6 +40,7 @@ String _newId() {
   final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20, 32)}';
 }
+
 Dish _snapshot(Dish dish) => Dish.fromJson(dish.toJson());
 
 class SavedDishesNotifier extends StateNotifier<List<Dish>> {
@@ -50,7 +51,8 @@ class SavedDishesNotifier extends StateNotifier<List<Dish>> {
   // Serialize read-modify-write, not merely the final disk writes.
   Future<T> _serialized<T>(Future<T> Function() operation) {
     final result = _operationTail.then((_) => operation());
-    _operationTail = result.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    _operationTail =
+        result.then<void>((_) {}, onError: (Object _, StackTrace __) {});
     return result;
   }
 
@@ -62,48 +64,49 @@ class SavedDishesNotifier extends StateNotifier<List<Dish>> {
   }
 
   Future<void> updateDraftReference(Dish draft) => _serialized(() async {
-    await _storage.saveAll(activeDraft: draft, savedDishes: state);
-    _latestDraft = draft;
-  });
+        await _storage.saveAll(activeDraft: draft, savedDishes: state);
+        _latestDraft = draft;
+      });
 
   Future<void> saveDish(Dish dish) => _serialized(() async {
-    dish = _snapshot(dish);
-    final existingIdx = state.indexWhere((d) => d.id == dish.id);
-    final updated = List<Dish>.from(state);
-    if (existingIdx >= 0) {
-      updated[existingIdx] = dish;
-    } else {
-      updated.insert(0, dish);
-    }
-    await _storage.saveAll(activeDraft: _latestDraft, savedDishes: updated);
-    state = updated;
-  });
+        dish = _snapshot(dish);
+        final existingIdx = state.indexWhere((d) => d.id == dish.id);
+        final updated = List<Dish>.from(state);
+        if (existingIdx >= 0) {
+          updated[existingIdx] = dish;
+        } else {
+          updated.insert(0, dish);
+        }
+        await _storage.saveAll(activeDraft: _latestDraft, savedDishes: updated);
+        state = updated;
+      });
 
   Future<void> deleteDish(String id) => _serialized(() async {
-    final updated = state.where((d) => d.id != id).toList();
-    await _storage.saveAll(activeDraft: _latestDraft, savedDishes: updated);
-    state = updated;
-  });
+        final updated = state.where((d) => d.id != id).toList();
+        await _storage.saveAll(activeDraft: _latestDraft, savedDishes: updated);
+        state = updated;
+      });
 
   Future<Dish> duplicateDish(Dish dish) => _serialized(() async {
-    final now = DateTime.now();
-    final copyTitle =
-        dish.title.trim().isEmpty ? 'Блюдо (копия)' : '${dish.title} (копия)';
-    final duplicated = dish.copyWith(
-      id: _newId(),
-      ingredients: dish.ingredients
-          .map((i) => i.copyWith(
-              id: _newId(), product: Product.fromJson(i.product.toJson())))
-          .toList(),
-      title: copyTitle,
-      createdAt: now,
-      updatedAt: now,
-    );
-    final updated = [duplicated, ...state];
-    await _storage.saveAll(activeDraft: _latestDraft, savedDishes: updated);
-    state = updated;
-    return duplicated;
-  });
+        final now = DateTime.now();
+        final copyTitle = dish.title.trim().isEmpty
+            ? 'Блюдо (копия)'
+            : '${dish.title} (копия)';
+        final duplicated = dish.copyWith(
+          id: _newId(),
+          ingredients: dish.ingredients
+              .map((i) => i.copyWith(
+                  id: _newId(), product: Product.fromJson(i.product.toJson())))
+              .toList(),
+          title: copyTitle,
+          createdAt: now,
+          updatedAt: now,
+        );
+        final updated = [duplicated, ...state];
+        await _storage.saveAll(activeDraft: _latestDraft, savedDishes: updated);
+        state = updated;
+        return duplicated;
+      });
 }
 
 class DishNotifier extends StateNotifier<Dish> {
@@ -274,6 +277,9 @@ class DishNotifier extends StateNotifier<Dish> {
   }
 
   void restoreIngredient(Ingredient ingredient, int index) {
+    CalculationValidation.product(ingredient.product);
+    CalculationValidation.range(
+        ingredient.weightGrams, 0, 9999999, 'weightGrams');
     if (state.ingredients.any((item) => item.id == ingredient.id)) return;
     final items = List<Ingredient>.from(state.ingredients);
     items.insert(index.clamp(0, items.length), ingredient);

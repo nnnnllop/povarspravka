@@ -19,6 +19,7 @@ class HomeScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        toolbarHeight: 56 * MediaQuery.textScalerOf(context).scale(1),
         title: Row(
           children: [
             Container(
@@ -34,7 +35,7 @@ class HomeScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(width: 10),
-            const Text('Поварская справка'),
+            const Expanded(child: Text('Поварская справка')),
           ],
         ),
       ),
@@ -64,7 +65,10 @@ class HomeScreen extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -347,7 +351,9 @@ class HomeScreen extends ConsumerWidget {
               tooltip: 'Дублировать блюдо',
               onPressed: () async {
                 try {
-                  await ref.read(savedDishesProvider.notifier).duplicateDish(dish);
+                  await ref
+                      .read(savedDishesProvider.notifier)
+                      .duplicateDish(dish);
                 } catch (e) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -363,7 +369,9 @@ class HomeScreen extends ConsumerWidget {
               tooltip: 'Удалить',
               onPressed: () async {
                 try {
-                  await ref.read(savedDishesProvider.notifier).deleteDish(dish.id);
+                  await ref
+                      .read(savedDishesProvider.notifier)
+                      .deleteDish(dish.id);
                 } catch (e) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(

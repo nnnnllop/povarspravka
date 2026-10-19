@@ -296,7 +296,7 @@ class XlsxBlankGenerator {
 
     sheetSb.write('''
     <row r="$totalRow" ht="18" customHeight="1">
-      <c r="A$totalRow" s="6" t="inlineStr"><is><t>Итого (сумма по столбцам)</t></is></c>
+      <c r="A$totalRow" s="6" t="inlineStr"><is><r><rPr><b/></rPr><t xml:space="preserve">Итого </t></r><r><rPr><b val="0"/><i/></rPr><t>(сумма по столбцам)</t></r></is></c>
       <c r="B$totalRow" s="6"/>
       <c r="C$totalRow" s="11"><f>SUM(C$firstDataRow:C$lastDataRow)</f><v>${totalW.toStringAsFixed(1)}</v></c>
       <c r="D$totalRow" s="1"/>

@@ -93,12 +93,12 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Text(
+                    Expanded(
+                        child: Text(
                       isCatalog ? 'Справочник продуктов' : 'Поиск продуктов',
                       style: AppTypography.titleLarge
                           .copyWith(fontWeight: FontWeight.w700),
-                    ),
-                    const Spacer(),
+                    )),
                     IconButton(
                       icon: const Icon(Icons.close_rounded),
                       onPressed: () => Navigator.pop(context),
@@ -136,7 +136,9 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                 const SizedBox(height: 8),
 
                 // Фильтры по источнику (Все / Скурихин / USDA)
-                Row(
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
                   children: [
                     _buildSourceChip(null, 'Все источники', isDark),
                     const SizedBox(width: 6),
@@ -150,7 +152,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                 // Категории продуктов (горизонтальный скролл с фильтрацией по источнику)
                 groupsAsync.when(
                   data: (groups) => SizedBox(
-                    height: 32,
+                    height: 32 * MediaQuery.textScalerOf(context).scale(1),
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
                       itemCount: groups.length,
@@ -748,8 +750,8 @@ class ProductInfoCardSheet extends ConsumerWidget {
                       },
                       loading: () => const Padding(
                         padding: EdgeInsets.all(16),
-                        child: Center(
-                            child: CircularProgressIndicator.adaptive()),
+                        child:
+                            Center(child: CircularProgressIndicator.adaptive()),
                       ),
                       error: (_, __) => const SizedBox.shrink(),
                     ),
@@ -808,8 +810,7 @@ class ProductInfoCardSheet extends ConsumerWidget {
     );
   }
 
-  Widget _buildMacroTile(
-      String label, String value, Color color, bool isDark) {
+  Widget _buildMacroTile(String label, String value, Color color, bool isDark) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),

@@ -12,26 +12,6 @@ import '../providers/dish_provider.dart';
 class BlankPreviewScreen extends ConsumerWidget {
   const BlankPreviewScreen({super.key});
 
-  // Фиксированные ширины колонок для 1:1 совпадения объединенных ячеек
-  static const double _w0 = 32.0; // №
-  static const double _w1 = 230.0; // Наименование сырья
-  static const double _w2 = 72.0; // Количество, г
-  static const double _w3 = 62.0; // Белки В 100 г
-  static const double _w4 = 62.0; // Белки В блюде
-  static const double _w5 = 62.0; // Жиры В 100 г
-  static const double _w6 = 62.0; // Жиры В блюде
-  static const double _w7 = 62.0; // Углеводы В 100 г
-  static const double _w8 = 62.0; // Углеводы В блюде
-  static const double _w9 = 114.0; // Энергетическая ценность, ккал
-
-  static const double _w01 = _w0 + _w1;
-  static const double _w34 = _w3 + _w4;
-  static const double _w56 = _w5 + _w6;
-  static const double _w78 = _w7 + _w8;
-  static const double _wLeft9 =
-      _w0 + _w1 + _w2 + _w3 + _w4 + _w5 + _w6 + _w7 + _w8;
-  static const double _totalWidth = _wLeft9 + _w9;
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final dish = ref.watch(dishProvider);
@@ -40,7 +20,12 @@ class BlankPreviewScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Бланк расчета КБЖУ'),
+        toolbarHeight: 64 * MediaQuery.textScalerOf(context).scale(14) / 14,
+        title: const Text('Бланк расчета КБЖУ',
+            softWrap: true,
+            maxLines: 3,
+            overflow: TextOverflow.visible,
+            style: TextStyle(fontSize: 18, height: 1.1)),
         actions: [
           IconButton(
             icon: const Icon(Icons.print_rounded),
@@ -132,7 +117,6 @@ class BlankPreviewScreen extends ConsumerWidget {
                       fontWeight: FontWeight.w600,
                       color: AppColors.primary,
                     ),
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -150,65 +134,10 @@ class BlankPreviewScreen extends ConsumerWidget {
               padding: const EdgeInsets.all(12),
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(color: Colors.black26, width: 1),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.06),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Постоянный заголовок бланка
-                      SizedBox(
-                        width: _totalWidth,
-                        child: Column(
-                          children: [
-                            const Text(
-                              'Расчет энергетической и пищевой ценности блюда',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Colors.black,
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            if (dish.showTitleInExport &&
-                                dish.title.trim().isNotEmpty) ...[
-                              const SizedBox(height: 3),
-                              Text(
-                                dish.title.trim(),
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  color: Colors.black,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-
-                      // Таблица бланка 1:1
-                      _buildPreviewTable(dish, calc),
-
-                      const SizedBox(height: 12),
-
-                      // Подвал с 6 строками формулы 1:1 как на фото
-                      _buildFormulaBlock(dish, calc),
-                    ],
-                  ),
-                ),
+                child: _BlankPreviewDocument(
+                    dish: dish,
+                    calc: calc,
+                    scale: MediaQuery.textScalerOf(context).scale(9.5) / 9.5),
               ),
             ),
           ),
@@ -269,13 +198,137 @@ class BlankPreviewScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _BlankPreviewDocument extends StatelessWidget {
+  const _BlankPreviewDocument(
+      {required this.dish, required this.calc, required this.scale});
+  final Dish dish;
+  final CalculationResult calc;
+  final double scale;
+  // Фиксированные ширины колонок для 1:1 совпадения объединенных ячеек
+  double get _w0 => 32.0 * scale; // №
+  double get _w1 => 230.0 * scale; // Наименование сырья
+  double get _w2 => 72.0 * scale; // Количество, г
+  double get _w3 => 62.0 * scale; // Белки В 100 г
+  double get _w4 => 62.0 * scale; // Белки В блюде
+  double get _w5 => 62.0 * scale; // Жиры В 100 г
+  double get _w6 => 62.0 * scale; // Жиры В блюде
+  double get _w7 => 62.0 * scale; // Углеводы В 100 г
+  double get _w8 => 62.0 * scale; // Углеводы В блюде
+  double get _w9 => 114.0 * scale; // Энергетическая ценность, ккал
+
+  double get _w01 => _w0 + _w1;
+  double get _w34 => _w3 + _w4;
+  double get _w56 => _w5 + _w6;
+  double get _w78 => _w7 + _w8;
+  double get _wLeft9 => _w0 + _w1 + _w2 + _w3 + _w4 + _w5 + _w6 + _w7 + _w8;
+  double get _totalWidth => _wLeft9 + _w9;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Colors.black26, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Постоянный заголовок бланка
+          SizedBox(
+            width: _totalWidth,
+            child: Column(
+              children: [
+                const Text(
+                  'Расчет энергетической и пищевой ценности блюда',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (dish.showTitleInExport && dish.title.trim().isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    dish.title.trim(),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Таблица бланка 1:1
+          _buildPreviewTable(dish, calc),
+
+          const SizedBox(height: 12),
+
+          // Подвал с 6 строками формулы 1:1 как на фото
+          _buildFormulaBlock(dish, calc),
+        ],
+      ),
+    );
+  }
+
+  double _contentHeight(String text, double width) {
+    final painter = TextPainter(
+      text: TextSpan(
+          text: text,
+          style:
+              const TextStyle(fontFamily: 'Arial', fontSize: 9.5, height: 1.2)),
+      textDirection: TextDirection.ltr,
+      textScaler: TextScaler.linear(scale),
+    )..layout(maxWidth: width - 10);
+    final height = painter.height + 4;
+    painter.dispose();
+    return height;
+  }
 
   Widget _buildPreviewTable(Dish dish, CalculationResult calc) {
     const minRows = 18;
     final totalRows =
         dish.ingredients.length < minRows ? minRows : dish.ingredients.length;
     final isCrossMode = dish.blankMode == BlankMode.photoCross;
-    const double rowH = 22.0;
+    final double rowH = 22.0 * scale;
+    final rawHeights = List<double>.generate(totalRows, (i) {
+      if (i >= dish.ingredients.length) return rowH;
+      final ing = dish.ingredients[i];
+      final labels = [
+        '${i + 1}',
+        ing.product.name,
+        CalculationEngine.formatGrams(ing.netGramsRounded),
+        CalculationEngine.formatMacro(ing.product.protein),
+        CalculationEngine.formatMacro(ing.proteinInDish),
+        CalculationEngine.formatMacro(ing.product.fat),
+        CalculationEngine.formatMacro(ing.fatInDish),
+        CalculationEngine.formatMacro(ing.product.carbs),
+        CalculationEngine.formatMacro(ing.carbsInDish),
+        CalculationEngine.formatKcal(ing.blankKcalInDish)
+      ];
+      final widths = [_w0, _w1, _w2, _w3, _w4, _w5, _w6, _w7, _w8, _w9];
+      var height = rowH;
+      for (var j = 0; j < labels.length; j++) {
+        final needed = _contentHeight(labels[j], widths[j]);
+        if (needed > height) height = needed;
+      }
+      return height;
+    });
 
     final pPct = CalculationEngine.formatPercent(calc.retentionProtein);
     final fPct = CalculationEngine.formatPercent(calc.retentionFat);
@@ -285,22 +338,27 @@ class BlankPreviewScreen extends ConsumerWidget {
     for (int i = 0; i < totalRows; i++) {
       if (i < dish.ingredients.length) {
         final ing = dish.ingredients[i];
+        final ingredientHeight = rawHeights[i];
         leftNineRows.add(
           Row(
             children: [
-              _cell('${i + 1}', _w0, rowH),
-              _cell(ing.product.name, _w1, rowH, align: Alignment.centerLeft),
+              _cell('${i + 1}', _w0, ingredientHeight),
+              _cell(ing.product.name, _w1, ingredientHeight,
+                  align: Alignment.centerLeft),
               _cell(CalculationEngine.formatGrams(ing.netGramsRounded), _w2,
-                  rowH),
+                  ingredientHeight),
               _cell(CalculationEngine.formatMacro(ing.product.protein), _w3,
-                  rowH),
-              _cell(
-                  CalculationEngine.formatMacro(ing.proteinInDish), _w4, rowH),
-              _cell(CalculationEngine.formatMacro(ing.product.fat), _w5, rowH),
-              _cell(CalculationEngine.formatMacro(ing.fatInDish), _w6, rowH),
-              _cell(
-                  CalculationEngine.formatMacro(ing.product.carbs), _w7, rowH),
-              _cell(CalculationEngine.formatMacro(ing.carbsInDish), _w8, rowH),
+                  ingredientHeight),
+              _cell(CalculationEngine.formatMacro(ing.proteinInDish), _w4,
+                  ingredientHeight),
+              _cell(CalculationEngine.formatMacro(ing.product.fat), _w5,
+                  ingredientHeight),
+              _cell(CalculationEngine.formatMacro(ing.fatInDish), _w6,
+                  ingredientHeight),
+              _cell(CalculationEngine.formatMacro(ing.product.carbs), _w7,
+                  ingredientHeight),
+              _cell(CalculationEngine.formatMacro(ing.carbsInDish), _w8,
+                  ingredientHeight),
             ],
           ),
         );
@@ -361,7 +419,8 @@ class BlankPreviewScreen extends ConsumerWidget {
     // Колонка 10 для области сырья + Итого + Сохранность,%
     Widget col10Middle;
     if (isCrossMode) {
-      final crossHeight = (totalRows + 2) * rowH;
+      final crossHeight =
+          rawHeights.fold<double>(0, (sum, h) => sum + h) + 2 * rowH;
       col10Middle = Container(
         width: _w9,
         height: crossHeight,
@@ -382,7 +441,7 @@ class BlankPreviewScreen extends ConsumerWidget {
             _cell(
               CalculationEngine.formatKcal(ing.blankKcalInDish),
               _w9,
-              rowH,
+              rawHeights[i],
             ),
           );
         } else {
@@ -405,7 +464,7 @@ class BlankPreviewScreen extends ConsumerWidget {
 
     return Container(
       width: _totalWidth,
-      decoration: BoxDecoration(
+      foregroundDecoration: BoxDecoration(
         border: Border.all(color: Colors.black, width: 0.8),
       ),
       child: Column(
@@ -469,9 +528,9 @@ class BlankPreviewScreen extends ConsumerWidget {
   }
 
   Widget _buildTwoLevelHeader() {
-    const double h1 = 24.0;
-    const double h2 = 30.0;
-    const double hTotal = h1 + h2;
+    final double h1 = 24.0 * scale;
+    final double h2 = 30.0 * scale;
+    final double hTotal = h1 + h2;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -555,6 +614,7 @@ class BlankPreviewScreen extends ConsumerWidget {
         border: Border.all(color: Colors.black, width: 0.6),
       ),
       child: RichText(
+        textScaler: TextScaler.linear(scale),
         text: const TextSpan(
           children: [
             TextSpan(
@@ -596,11 +656,11 @@ class BlankPreviewScreen extends ConsumerWidget {
       ),
       child: Text(
         text,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
         style: TextStyle(
           color: Colors.black,
           fontSize: 9.5,
+          fontFamily: 'Arial',
+          height: 1.2,
           fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
         ),
       ),

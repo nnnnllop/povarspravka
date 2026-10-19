@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xml/xml.dart';
 import 'package:povarspravka/core/calculation/models/dish.dart';
@@ -48,7 +49,16 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(shareChannel, (call) async {
       if (call.method == 'shareFiles') {
-        paths.addAll(((call.arguments as Map)['paths'] as List).cast<String>());
+        final handedOff =
+            ((call.arguments as Map)['paths'] as List).cast<String>();
+        for (final path in handedOff) {
+          // Input must exist while the native plugin copies it, not after GC.
+          expect(await File(path).exists(), isTrue);
+          expect(await File(path).length(), greaterThan(0));
+          expect(utf8.encode(File(path).uri.pathSegments.last).length,
+              lessThanOrEqualTo(100));
+        }
+        paths.addAll(handedOff);
       }
       return 'ok';
     });
@@ -59,7 +69,8 @@ void main() {
       expect(paths.length, 5);
       expect(paths.toSet().length, 5);
       for (final path in paths) {
-        expect(await File(path).exists(), isTrue);
+        expect(await File(path).exists(),
+            defaultTargetPlatform != TargetPlatform.android);
         expect(utf8.encode(File(path).uri.pathSegments.last).length,
             lessThanOrEqualTo(100));
       }
