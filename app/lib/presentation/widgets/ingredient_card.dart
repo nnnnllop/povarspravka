@@ -53,9 +53,21 @@ class IngredientCard extends StatelessWidget {
                           '${CalculationEngine.formatGrams(ing.netGramsRounded)} г',
                           style: AppTypography.numeric
                               .copyWith(color: theme.colorScheme.primary))),
-                  if (ing.isGross)
+                  if (ing.isGross) ...[
                     Text(
                         'Брутто ${CalculationEngine.formatGrams(ing.weightGrams)} г'),
+                    if (ing.product.wastePct <= 0)
+                      Text(
+                        ' (отходы не заданы, принято 0 %)',
+                        style: TextStyle(
+                          color: theme.brightness == Brightness.dark
+                              ? Colors.orange[300]
+                              : Colors.orange[800],
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                  ],
                 ]),
             const SizedBox(height: 8),
             Text(

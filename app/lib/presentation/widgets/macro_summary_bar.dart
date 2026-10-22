@@ -122,7 +122,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                       'Сырье (нетто ${g(r.rawTotalWeight)} г): ${macros(r.rawTotalProtein, r.rawTotalFat, r.rawTotalCarbs)}',
                       style: theme.textTheme.bodyMedium),
                   Text(
-                      'Сохранность Б / Ж / У: ${CalculationEngine.formatPercent(r.retentionProtein)}% / ${CalculationEngine.formatPercent(r.retentionFat)}% / ${CalculationEngine.formatPercent(r.retentionCarbs)}%',
+                      'Сохранность Б / Ж / У: ${CalculationEngine.formatPercent(r.retentionProtein)}% / ${CalculationEngine.formatPercent(r.retentionFat)}% / ${CalculationEngine.formatPercent(r.retentionCarbs)}%${r.retentionProtein == 94 && r.retentionFat == 88 && r.retentionCarbs == 91 ? ' (усреднённые)' : ''}',
                       style: theme.textTheme.bodyMedium),
                   Text(
                       'После т.о.: ${k(r.cookedKcal)} ккал на всё блюдо (4Б + 9Ж + 4У)',

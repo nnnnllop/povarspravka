@@ -12,6 +12,7 @@ class CustomNumpadSheet extends StatefulWidget {
   final bool initialIsGross;
   final bool isEditing;
   final Function(double grams, bool isGross) onConfirm;
+  final void Function(Product product)? onProductUpdated;
 
   const CustomNumpadSheet({
     super.key,
@@ -20,6 +21,7 @@ class CustomNumpadSheet extends StatefulWidget {
     this.initialIsGross = false,
     this.isEditing = false,
     required this.onConfirm,
+    this.onProductUpdated,
   });
 
   @override
@@ -29,6 +31,7 @@ class CustomNumpadSheet extends StatefulWidget {
 class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
   late String _currentInput;
   late bool _isGross;
+  late double _wastePct;
   bool _isFreshInput = true;
 
   @override
@@ -38,6 +41,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
         ? widget.initialGrams.toString().replaceAll('.', ',')
         : '100';
     _isGross = widget.initialIsGross;
+    _wastePct = widget.product.wastePct;
     _isFreshInput = true;
   }
 
@@ -99,8 +103,8 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     final mass = CalculationEngine.parseInputDouble(_currentInput);
     if (mass == null) return;
     final converted = value
-        ? Ingredient.grossFromNet(mass, widget.product.wastePct)
-        : Ingredient.netFromGross(mass, widget.product.wastePct);
+        ? Ingredient.grossFromNet(mass, _wastePct)
+        : Ingredient.netFromGross(mass, _wastePct);
     if (converted == null || !converted.isFinite || converted > 9999999) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text(
@@ -112,6 +116,67 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
       _currentInput = converted.toString().replaceAll('.', ',');
       _isFreshInput = true;
     });
+  }
+
+  Future<void> _editWastePercentage() async {
+    final controller = TextEditingController(
+      text: _wastePct > 0 ? CalculationEngine.formatWastePercent(_wastePct) : '0',
+    );
+    String? error;
+    final newPct = await showDialog<double>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Процент отходов при холодной обработке'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Продукт: ${widget.product.name}\nЗадайте процент отходов (0–99%).',
+                style: AppTypography.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: controller,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: 'Отходы, %',
+                  errorText: error,
+                  suffixText: '%',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Отмена'),
+            ),
+            TextButton(
+              onPressed: () {
+                final parsed = CalculationEngine.parseInputDouble(controller.text);
+                if (parsed == null || parsed < 0 || parsed >= 100) {
+                  setDialogState(() {
+                    error = 'Введите число от 0 до 99';
+                  });
+                  return;
+                }
+                Navigator.pop(ctx, parsed);
+              },
+              child: const Text('Сохранить'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (newPct != null) {
+      setState(() {
+        _wastePct = newPct;
+      });
+    }
   }
 
   Future<void> _chooseMeasure(ProductMeasure measure) async {
@@ -178,11 +243,11 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final parsedGrams =
         CalculationEngine.parseInputDouble(_currentInput) ?? 0.0;
-    final hasWaste = widget.product.wastePct > 0;
+    final hasWaste = _wastePct > 0;
 
     double netGrams = parsedGrams;
-    if (_isGross && hasWaste) {
-      netGrams = parsedGrams * (100.0 - widget.product.wastePct) / 100.0;
+    if (_isGross) {
+      netGrams = Ingredient.netFromGross(parsedGrams, _wastePct);
     }
 
     return Container(
@@ -261,12 +326,32 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                             ),
                           ),
                           if (_isGross && hasWaste)
-                            Text(
-                              'Съедобная часть: ${CalculationEngine.formatGrams(netGrams)} г (отходы ${CalculationEngine.formatWastePercent(widget.product.wastePct)}%)',
-                              style: AppTypography.bodySmall.copyWith(
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.w600,
-                              ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'Съедобная часть: ${CalculationEngine.formatGrams(netGrams)} г (отходы ${CalculationEngine.formatWastePercent(_wastePct)}%)',
+                                    style: AppTypography.bodySmall.copyWith(
+                                      color: AppColors.primary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                InkWell(
+                                  onTap: _editWastePercentage,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                    child: Text(
+                                      'изменить %',
+                                      style: AppTypography.bodySmall.copyWith(
+                                        color: AppColors.primary,
+                                        decoration: TextDecoration.underline,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                         ],
                       ),
@@ -365,27 +450,61 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                 ),
               ],
 
-              // Переключатель Брутто / Нетто (если у продукта есть процент отходов)
-              if (hasWaste) ...[
-                const SizedBox(height: 6),
-                SwitchListTile.adaptive(
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  title: Text(
-                    'Брутто (с учетом отходов ${CalculationEngine.formatWastePercent(widget.product.wastePct)}%)',
-                    style: AppTypography.bodyMedium.copyWith(fontSize: 13),
-                  ),
-                  subtitle: Text(
-                    _isGross
-                        ? 'Ввод в брутто → расчет по нетто'
-                        : 'Ввод чистой массы нетто',
-                    style: AppTypography.bodySmall,
-                  ),
-                  value: _isGross,
-                  activeColor: AppColors.primary,
-                  onChanged: _toggleGross,
+              // Переключатель Брутто / Нетто
+              const SizedBox(height: 6),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: Text(
+                  hasWaste
+                      ? 'Брутто (с учетом отходов ${CalculationEngine.formatWastePercent(_wastePct)}%)'
+                      : 'Брутто (отходы не заданы, принято 0 %)',
+                  style: AppTypography.bodyMedium.copyWith(fontSize: 13),
                 ),
-              ],
+                subtitle: Text(
+                  _isGross
+                      ? 'Ввод в брутто → расчет по нетто'
+                      : 'Ввод чистой массы нетто',
+                  style: AppTypography.bodySmall,
+                ),
+                value: _isGross,
+                activeColor: AppColors.primary,
+                onChanged: _toggleGross,
+              ),
+
+              if (_isGross && !hasWaste)
+                Container(
+                  margin: const EdgeInsets.only(top: 4, bottom: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.orange.withOpacity(0.5)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'отходы для этого продукта не заданы, принято 0 %',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: isDark ? Colors.orange[200] : Colors.orange[900],
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _editWastePercentage,
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        child: const Text('Задать %'),
+                      ),
+                    ],
+                  ),
+                ),
 
               const SizedBox(height: 10),
 
@@ -398,6 +517,12 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
               ElevatedButton(
                 onPressed: parsedGrams >= .1 && parsedGrams <= 9999999
                     ? () {
+                        final effectiveProduct = _wastePct != widget.product.wastePct
+                            ? widget.product.copyWith(wastePct: _wastePct)
+                            : widget.product;
+                        if (_wastePct != widget.product.wastePct) {
+                          widget.onProductUpdated?.call(effectiveProduct);
+                        }
                         widget.onConfirm(parsedGrams, _isGross);
                         Navigator.pop(context);
                       }

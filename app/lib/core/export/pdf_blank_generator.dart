@@ -542,6 +542,12 @@ class PdfBlankGenerator {
         ? 'Белки (после т.о) х 4 + Жиры (после т.о) х 9 + Углеводы (после т.о) х 4 = ${CalculationEngine.formatMacro(calc.cookedProtein)} х 4 + ${CalculationEngine.formatMacro(calc.cookedFat)} х 9 + ${CalculationEngine.formatMacro(calc.cookedCarbs)} х 4 = ${CalculationEngine.formatKcal(calc.cookedKcal)} ккал'
         : 'Белки (после т.о) х 4 + Жиры (после т.о) х 9 + Углеводы (после т.о) х 4';
 
+    final zeroWasteIngs =
+        dish.ingredients.where((i) => i.isGross && i.product.wastePct <= 0).toList();
+    final zeroWasteWarning = zeroWasteIngs.isNotEmpty
+        ? '* Предупреждение: для сырья брутто без указания отходов (${zeroWasteIngs.map((i) => '«${i.product.name}»').join(', ')}) принято 0 % отходов.'
+        : null;
+
     return pw.Container(
       width: _totalWidth,
       alignment: pw.Alignment.centerLeft,
@@ -577,6 +583,13 @@ class PdfBlankGenerator {
             kcalLine,
             style: pw.TextStyle(font: fontRegular, fontSize: 8.5),
           ),
+          if (zeroWasteWarning != null) ...[
+            pw.SizedBox(height: 3),
+            pw.Text(
+              zeroWasteWarning,
+              style: pw.TextStyle(font: fontRegular, fontSize: 7.5, color: PdfColors.orange900),
+            ),
+          ],
         ],
       ),
     );

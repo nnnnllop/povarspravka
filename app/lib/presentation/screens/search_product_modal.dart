@@ -386,6 +386,9 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
         initialGrams: 100,
         initialIsGross: false,
         isEditing: false,
+        onProductUpdated: (updatedProduct) {
+          product = updatedProduct;
+        },
         onConfirm: (grams, isGross) {
           dishNotifier.addIngredient(
             product,

@@ -7,7 +7,14 @@ from typing import Dict, List, Optional, Tuple, Any
 import re
 import pymupdf
 
-from .config import DEFAULT_PDF_PATH, FOOD_GROUPS, KNOWN_CANONICAL_NAMES
+from .config import (
+    DEFAULT_PDF_PATH,
+    FOOD_GROUPS,
+    KNOWN_CANONICAL_NAMES,
+    KNOWN_KCAL_FIXES,
+    KNOWN_PROXIMATE_FIXES,
+    KNOWN_WASTE_OVERRIDES,
+)
 from .subject_index_parser import parse_subject_index
 from .appendices_parser import (
     parse_appendix_1,
@@ -288,11 +295,62 @@ def extract_all_products(doc: Optional[pymupdf.Document] = None) -> List[Dict[st
             table_name = " ".join(name_words).strip()
 
             # 3. Extract nutrient values
+            # The macro (left) and micronutrient (right) tables of a spread have
+            # independent row grids, so their baselines drift by several points.
+            # Anchor the right row on the product code printed in the right
+            # page's "Код" column instead of reusing the left row's y.
+            yc_r = yc
+            anchor = None
+            right_codes = [
+                w for w in wo
+                if w[0] > 455 and re.search(r'\d+(?:[.,:;]\d+)+', w[4])
+            ]
+            if right_codes:
+                if code:
+                    norm_code = re.sub(r'[,:;]', '.', code)
+                    for w in right_codes:
+                        if re.sub(r'[,:;]', '.', w[4]) == norm_code:
+                            anchor = w
+                            break
+                if anchor is None:
+                    candidate = min(right_codes,
+                                    key=lambda w: abs((w[1]+w[3])/2 - yc))
+                    if abs((candidate[1]+candidate[3])/2 - yc) <= 6:
+                        anchor = candidate
+                if anchor is not None:
+                    yc_r = (anchor[1]+anchor[3])/2
+
             row_we = [w for w in we if abs((w[1]+w[3])/2 - yc) < 7]
-            row_wo = [w for w in wo if abs((w[1]+w[3])/2 - yc) < 7]
+            row_wo = [w for w in wo if abs((w[1]+w[3])/2 - yc_r) < 7]
 
             l_vals = {c[0]: parse_cell_tokens([w[4] for w in row_we if c[1] <= (w[0]+w[2])/2 < c[2]]) for c in bounds_l}
-            r_vals = {c[0]: parse_cell_tokens([w[4] for w in row_wo if c[1] <= (w[0]+w[2])/2 < c[2]]) for c in bounds_r}
+            r_words = {c[0]: [w for w in row_wo if c[1] <= (w[0]+w[2])/2 < c[2]] for c in bounds_r}
+            r_vals = {k: parse_cell_tokens([w[4] for w in v]) for k, v in r_words.items()}
+
+            # A numeric value can look like a code ("5.1" grams of something) and
+            # pull the anchor onto a section header row. Only keep the anchored
+            # row when it really carries the energy value.
+            if yc_r != yc and r_vals.get('kcal', 0.0) <= 0.0:
+                alt_wo = [w for w in wo if abs((w[1]+w[3])/2 - yc) < 7]
+                alt_vals = {c[0]: parse_cell_tokens([w[4] for w in alt_wo if c[1] <= (w[0]+w[2])/2 < c[2]]) for c in bounds_r}
+                if alt_vals.get('kcal', 0.0) > 0.0:
+                    r_vals = alt_vals
+                    r_words = {c[0]: [w for w in alt_wo if c[1] <= (w[0]+w[2])/2 < c[2]] for c in bounds_r}
+
+            # The right table always ends "... | ЭЦ | Код". When the vitamin C
+            # column header is lost in OCR its band is absorbed by its
+            # neighbours, so a stray "0" (vitamin C) or a separator "1" can land
+            # on a kcal band edge next to the real energy value. Ignore tokens
+            # hugging the band edges before reading the cell.
+            kcal_band = next((c for c in bounds_r if c[0] == 'kcal'), None)
+            if kcal_band is not None and len(r_words.get('kcal', [])) > 1:
+                lo, hi = kcal_band[1], kcal_band[2]
+                inner = [w for w in r_words['kcal']
+                         if lo + 4.0 <= (w[0] + w[2]) / 2 <= hi - 4.0]
+                if inner:
+                    value = parse_cell_tokens([w[4] for w in inner])
+                    if 0.0 < value <= 950.0:
+                        r_vals['kcal'] = value
 
             # Proximates
             water = l_vals.get('water', 0.0)
@@ -386,6 +444,31 @@ def extract_all_products(doc: Optional[pymupdf.Document] = None) -> List[Dict[st
                 prot = 0.8
                 l_vals['protein'] = 0.8
 
+            # Manually verified cells whose OCR text layer lost a digit or a
+            # decimal point (see config.KNOWN_PROXIMATE_FIXES).
+            for field, value in KNOWN_PROXIMATE_FIXES.get(code, {}).items():
+                if field == 'water':
+                    water = value
+                    l_vals['water'] = value
+                elif field == 'protein':
+                    prot = value
+                    l_vals['protein'] = value
+                elif field == 'fat':
+                    fat = value
+                    l_vals['fat'] = value
+                elif field == 'carbs':
+                    carb = value
+                    l_vals['carbs'] = value
+                elif field == 'fiber':
+                    fiber = value
+                    l_vals['fiber'] = value
+                elif field == 'ash':
+                    ash = value
+                    l_vals['ash'] = value
+                elif field == 'organic_acids':
+                    oa = value
+                    l_vals['organic_acids'] = value
+
             # Energy (kcal) - include alcohol (7 kcal/g) and organic acids (3 kcal/g)
             kcal_calc = round(4.0 * prot + 9.0 * fat + 4.0 * carb + 7.0 * alc_val + 3.0 * oa, 1)
             # OCR digit error check (e.g. 387 vs 287 on jam where hundreds digit was smudged)
@@ -401,6 +484,10 @@ def extract_all_products(doc: Optional[pymupdf.Document] = None) -> List[Dict[st
                 kcal_final = kcal_calc
             else:
                 kcal_final = kcal_book if kcal_book > 0.0 else kcal_calc
+
+            # Verified energy values whose OCR text layer bound to a neighbour.
+            if code in KNOWN_KCAL_FIXES:
+                kcal_final = KNOWN_KCAL_FIXES[code]
 
             # 4. Resolve official name and hierarchy from Subject Index & Canonical overrides
             official_name = ""
@@ -446,6 +533,8 @@ def extract_all_products(doc: Optional[pymupdf.Document] = None) -> List[Dict[st
             waste_pct = find_waste_percentage(final_name, waste_map)
             if waste_pct is None and category_name:
                 waste_pct = find_waste_percentage(category_name, waste_map)
+            if code in KNOWN_WASTE_OVERRIDES:
+                waste_pct = KNOWN_WASTE_OVERRIDES[code]
 
             # 7. Measures
             measures = get_measures_for_product(final_name, measures_map, pieces_map)

@@ -260,6 +260,12 @@ class DocxBlankGenerator {
         ? 'Белки (после т.о) х 4 + Жиры (после т.о) х 9 + Углеводы (после т.о) х 4 = ${CalculationEngine.formatMacro(calc.cookedProtein)} х 4 + ${CalculationEngine.formatMacro(calc.cookedFat)} х 9 + ${CalculationEngine.formatMacro(calc.cookedCarbs)} х 4 = ${CalculationEngine.formatKcal(calc.cookedKcal)} ккал'
         : 'Белки (после т.о) х 4 + Жиры (после т.о) х 9 + Углеводы (после т.о) х 4';
 
+    final zeroWasteIngs =
+        dish.ingredients.where((i) => i.isGross && i.product.wastePct <= 0).toList();
+    final zeroWasteWarning = zeroWasteIngs.isNotEmpty
+        ? '* Предупреждение: для сырья брутто без указания отходов (${zeroWasteIngs.map((i) => '«${i.product.name}»').join(', ')}) принято 0 % отходов.'
+        : null;
+
     docSb.write('''
     ${_formulaParagraph('Сохранность после тепловой обработки:', bold: true, spaceBefore: 40)}
     ${_formulaParagraph(pLine)}
@@ -267,6 +273,7 @@ class DocxBlankGenerator {
     ${_formulaParagraph(cLine)}
     ${_formulaParagraph('Энергетическая ценность:', bold: true, spaceBefore: 30)}
     ${_formulaParagraph(kcalLine)}
+    ${zeroWasteWarning != null ? _formulaParagraph(zeroWasteWarning, spaceBefore: 20) : ''}
     <w:sectPr>
       <w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/>
       <w:pgMar w:top="567" w:right="567" w:bottom="567" w:left="567"/>

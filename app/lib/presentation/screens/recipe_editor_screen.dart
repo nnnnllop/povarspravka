@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/calculation/calculation_engine.dart';
+import '../../core/calculation/calculation_math.dart';
 import '../../core/calculation/models/blank_mode.dart';
 import '../../core/calculation/models/dish.dart';
 import '../../core/calculation/models/ingredient.dart';
@@ -201,6 +202,22 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
     ));
   }
 
+  /// Масса БЖУ после тепловой обработки — нижняя граница выхода блюда.
+  /// Считается на «бесконечном» выходе: масса БЖУ от выхода не зависит, а
+  /// инвариант ядра (БЖУ ≤ выход) при этом заведомо выполнен.
+  double _cookedMacroMass(Dish dish,
+      {double? protein, double? fat, double? carbs}) {
+    final probe = dish.copyWith(
+      customYieldGrams: 999999,
+      retentionProtein: protein,
+      retentionFat: fat,
+      retentionCarbs: carbs,
+    );
+    final r = CalculationEngine.calculate(probe);
+    return CalculationMath.sumRounded(
+        [r.cookedProtein, r.cookedFat, r.cookedCarbs], 2);
+  }
+
   Widget _buildParameters(Dish dish) {
     final custom = dish.customYieldGrams != null;
     final explanation =
@@ -281,6 +298,13 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                 parsed > 9999999) {
               setState(() => _yieldError =
                   'Введите выход не менее 0,1 г. Сохранён прежний выход.');
+            } else if (parsed < _cookedMacroMass(dish)) {
+              // Масса БЖУ не может быть больше массы готового блюда.
+              setState(() => _yieldError =
+                  'Выход меньше суммарной массы БЖУ после т.о. '
+                  '(${CalculationEngine.formatMacro(_cookedMacroMass(dish))} г). '
+                  'Сохранён прежний выход — увеличьте выход или уменьшите '
+                  'сохранность.');
             } else {
               setState(() => _yieldError = null);
               ref.read(dishProvider.notifier).setCustomYield(parsed);
@@ -369,6 +393,14 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
         initialGrams: ing.weightGrams,
         initialIsGross: ing.isGross,
         isEditing: true,
+        onProductUpdated: (updatedProduct) {
+          ref.read(dishProvider.notifier).updateIngredient(
+                ing.id,
+                ing.weightGrams,
+                isGross: ing.isGross,
+                product: updatedProduct,
+              );
+        },
         onConfirm: (grams, isGross) {
           ref.read(dishProvider.notifier).updateIngredient(
                 ing.id,
@@ -409,13 +441,21 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                     style: AppTypography.bodySmall
                         .copyWith(fontWeight: FontWeight.w700),
                   ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Усреднённые коэффициенты сохранности по умолчанию (для конкретных блюд см. табл. 13 Скурихина)',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textSecondaryLight,
+                      fontSize: 11,
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
                     runSpacing: 6,
                     children: [
                       ActionChip(
-                        label: const Text('По умолчанию (94 / 88 / 91%)'),
+                        label: const Text('По умолчанию: усреднённые (94 / 88 / 91%)'),
                         onPressed: () {
                           setDialogState(() {
                             pCtrl.text = '94';
@@ -509,6 +549,16 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                   final pVal = values[0]! / 100;
                   final fVal = values[1]! / 100;
                   final cVal = values[2]! / 100;
+                  final mass = _cookedMacroMass(dish,
+                      protein: pVal, fat: fVal, carbs: cVal);
+                  if (mass > dish.effectiveYieldGrams) {
+                    setDialogState(() => retentionError =
+                        'При этих коэффициентах масса БЖУ после т.о. '
+                        '${CalculationEngine.formatMacro(mass)} г превышает выход '
+                        '${CalculationEngine.formatGrams(dish.effectiveYieldGrams)} г. '
+                        'Увеличьте выход или уменьшите сохранность.');
+                    return;
+                  }
                   final notifier = ref.read(dishProvider.notifier);
                   notifier.setRetention(
                     protein: pVal,

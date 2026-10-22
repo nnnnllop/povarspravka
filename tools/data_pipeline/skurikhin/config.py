@@ -108,6 +108,57 @@ KNOWN_CANONICAL_NAMES = {
     "1.3.2.11": "Ряженка 6,0% жирности",
     "10.8.1": "Какао-порошок",
     "5.1.5": "Масло сливочное несоленое «Крестьянское»",
+    # 4.1.1.1 and 4.1.1.5 were both named "Килька балтийская" from the Subject
+    # Index, so the fish and the prepared dish were indistinguishable in search.
+    # Printed p. 80, code 4.1.1.5: "Килька соленая с картофелем и маслом по 1-100".
+    "4.1.1.5": "Килька соленая с картофелем и маслом по 1-100",
+}
+
+# Manual corrections for cells whose OCR text layer lost a digit or a decimal
+# point.  Every value below was read from the rendered page, not from the text
+# layer.  Key: product code -> {field: correct value}.
+KNOWN_PROXIMATE_FIXES = {
+    # Printed p. 50, table 2: "Яйцо целое 12,7"; the OCR text layer has "12./".
+    "2.1.1": {"protein": 12.7},
+    "2.1.2": {"protein": 12.7},
+    # Printed p. 128: "Салат" 1,5 % protein; OCR produced 5.0.
+    "8.1.1.4": {"protein": 1.5},
+    # Printed p. 144: "Салат из свежих помидоров с перцем" 87,3 / 0,9.
+    "8.1.6.9": {"water": 87.3, "protein": 0.9},
+    # Printed p. 184: "Кофе черный" fat 0,5; OCR produced 5.0.
+    "11.1.8.2": {"fat": 0.5},
+    # Printed p. 170: agar water 14,0 / carbohydrates 0,0; pectin water 10,0.
+    "10.11.1": {"water": 14.0, "carbs": 0.0},
+    "10.11.11": {"water": 10.0},
+    # Printed p. 56: canned chicken in its own juice water 64,4; OCR dropped 6.
+    "3.3.11": {"water": 64.4},
+    # Printed p. 80: the dish's fibre column is 0,1; OCR produced 3.0.
+    "4.1.1.5": {"fiber": 0.1},
+    # Printed p. 74: "Столичные" ash 2,8; OCR produced 0.
+    "3.6.3.4": {"ash": 2.8},
+}
+
+# Energy values that the OCR text layer bound to a neighbouring row.  Verified
+# against the printed page and against 4P+9F+4C (+ organic acids, where the
+# book includes them).
+KNOWN_KCAL_FIXES = {
+    # Printed p. 185: coffee (black, no sugar) 7 kcal / 100 g.
+    "11.1.8.2": 7.0,
+    # Printed p. 145: 66 kcal / 100 g (0.9 protein, 4.7 fat, 4.3 carbs).
+    "8.1.6.9": 66.0,
+}
+
+# Waste overrides where the Appendix 1 heuristic is ambiguous or clearly wrong.
+# None means "no cold-processing waste" (a prepared dish / ready-to-eat product).
+KNOWN_WASTE_OVERRIDES = {
+    # Printed p. 204: "Яйца куриные I категории 13"; "Яйца перепелиные 8".
+    "2.1.1": 13.0,
+    "2.5.1": 8.0,
+    # Printed p. 80: 4.1.1.5 is a prepared dish, not the raw fish; the 46 % in
+    # Appendix 1 belongs to 4.1.1.1 "Килька балтийская".
+    "4.1.1.5": None,
+    # Prepared egg salad (p. 50) must not inherit the raw "Салат" 20 %.
+    "2.1.5": None,
 }
 
 # Common Russian culinary synonyms for fast search in reference.db

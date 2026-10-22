@@ -424,6 +424,19 @@ class XlsxBlankGenerator {
       rowIdx++;
     }
 
+    final zeroWasteIngs =
+        dish.ingredients.where((i) => i.isGross && i.product.wastePct <= 0).toList();
+    if (zeroWasteIngs.isNotEmpty) {
+      final zeroWasteWarning =
+          '* Предупреждение: для сырья брутто без указания отходов (${zeroWasteIngs.map((i) => '«${i.product.name}»').join(', ')}) принято 0 % отходов.';
+      sheetSb.write('''
+    <row r="$rowIdx" ht="16" customHeight="1">
+      <c r="B$rowIdx" s="7" t="inlineStr"><is><t>${_escape(zeroWasteWarning)}</t></is></c>
+    </row>
+''');
+      rowIdx++;
+    }
+
     sheetSb.write('  </sheetData>\n');
 
     // Блок объединенных ячеек

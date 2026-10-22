@@ -248,13 +248,14 @@ class DishNotifier extends StateNotifier<Dish> {
     _persist();
   }
 
-  void updateIngredient(String id, double grams, {bool? isGross}) {
+  void updateIngredient(String id, double grams, {bool? isGross, Product? product}) {
     if (!CalculationValidation.inRange(grams, .1, 9999999)) return;
     final updatedList = state.ingredients.map((ing) {
       if (ing.id == id) {
         return ing.copyWith(
           weightGrams: grams,
           isGross: isGross ?? ing.isGross,
+          product: product ?? ing.product,
         );
       }
       return ing;

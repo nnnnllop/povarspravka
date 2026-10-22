@@ -46,7 +46,8 @@ def parse_appendix_1(doc: pymupdf.Document) -> Dict[str, float]:
                     if m:
                         val = float(m.group(0).replace(',', '.'))
                         if 0 <= val <= 95:
-                            clean_name = re.sub(r'^[-\~–—\s\d\.]+', '', name_str).strip()
+                            # Borders and bullets leak into OCR names ("[Тунец").
+                            clean_name = re.sub(r'^[-\~–—\s\d\.\[\]\|\)\(]+', '', name_str).strip()
                             # Normalize Roman numerals I -> 1, II -> 2
                             clean_name = re.sub(r'\bII\b', '2', clean_name, flags=re.I)
                             clean_name = re.sub(r'\bI\b', '1', clean_name, flags=re.I)
@@ -153,46 +154,89 @@ def parse_appendix_3(doc: pymupdf.Document) -> Dict[str, float]:
     return pieces_map
 
 
+def _normalize_waste_name(name: str) -> str:
+    """Normalize a product name for Appendix 1 lookup.
+
+    Appendix 1 writes poultry/meat categories as Roman numerals ("Куры II
+    категории") while the table of contents and the Subject Index use Arabic
+    ones ("Куры 2 категории").  Without this normalization the prefix fallback
+    silently returns the waste of the *first* category it encounters.
+    """
+    text = name.lower().replace('ё', 'е')
+    text = re.sub(r'\biii\b', '3', text)
+    text = re.sub(r'\bii\b', '2', text)
+    text = re.sub(r'\bi\b', '1', text)
+    text = re.sub(r'\bіі\b', '2', text)  # Cyrillic і
+    text = re.sub(r'\bі\b', '1', text)
+    return re.sub(r'\s+', ' ', text).strip()
+
+
 def find_waste_percentage(product_name: str, waste_map: Dict[str, float]) -> Optional[float]:
     """Fuzzy / prefix match product name to waste percentage in Appendix 1.
     Cooked/prepared dishes (soups, purees, cutlets, fried/boiled items) NEVER receive cold raw waste.
     """
-    p_lower = product_name.lower()
+    p_lower = _normalize_waste_name(product_name)
 
     # Guard: do not assign raw cold-processing waste to prepared dishes
     cooked_markers = [
         "суп", "борщ", "бульон", "каша", "пюре", "котлет", "бифштекс", "жарен",
         "отварн", "варен", "тушен", "печен", "запечен", "пирож", "ватрушк", "хлеб",
         "колбас", "сосиск", "сыр", "масло", "творог", "кефир", "молоко", "йогурт",
-        "сметана", "соус", "сок", "напиток", "компот", "кисель", "паста", "по 1-", "по 2-"
+        "сметана", "соус", "сок", "напиток", "компот", "кисель", "паста", "по 1-", "по 2-",
+        # Готовые к употреблению продукты: холодной обработки (чистки/разделки) нет.
+        "консерв", "шоколад",
     ]
     if any(m in p_lower for m in cooked_markers):
         return None
 
-    # Base raw potato standard waste
-    if p_lower.strip() in ["картофель", "картофель ранний", "картофель молодой"]:
-        return 20.0
-
-    # 1. Exact match
+    # 1. Exact match (values come straight from Appendix 1, printed page 202)
     if p_lower in waste_map:
         return waste_map[p_lower]
 
-    # 2. Substring match
-    words = re.findall(r'[а-яё]+', p_lower)
-    for k, v in waste_map.items():
-        if len(k) > 4 and k in p_lower:
-            return v
-        k_words = re.findall(r'[а-яё]+', k)
-        if len(k_words) >= 2 and all(kw in words for kw in k_words):
-            return v
+    # The egg products are singular/neuter ("Яйцо куриное") while Appendix 1
+    # (printed p. 204) uses the plural category form ("Яйца куриные I категории
+    # 13", "Яйца перепелиные 8").  Without this the shell waste was dropped.
+    if p_lower in ('яйцо куриное', 'яйцо целое'):
+        return waste_map.get('яйца куриные 1 категории', 13.0)
+    if p_lower in ('яйцо перепелиное', 'яйцо целое перепелиное'):
+        return waste_map.get('яйца перепелиные', 8.0)
 
-    # 3. First significant word match for raw vegetables / fruits / raw meats
+    # Grain entries carry a ", зерно" qualifier that Appendix 1 does not use
+    # ("Соя, зерно" -> "Соя 2").
+    without_qualifier = re.sub(r',\s*зерно\b', '', p_lower).strip()
+    if without_qualifier != p_lower and without_qualifier in waste_map:
+        return waste_map[without_qualifier]
+
+    # 2. Longest substring match first: "куры 2 категории" must win over
+    #    a shorter "куры 1 категории" prefix hit.
+    words = re.findall(r'[а-яё]+', p_lower)
+    best = None
+    for k, v in waste_map.items():
+        key = _normalize_waste_name(k)
+        if len(key) > 4 and key in p_lower:
+            if best is None or len(key) > len(best[0]):
+                best = (key, v)
+            continue
+        k_words = re.findall(r'[а-яё]+', key)
+        if len(k_words) >= 2 and all(kw in words for kw in k_words):
+            if best is None or len(key) > len(best[0]):
+                best = (key, v)
+    if best is not None:
+        return best[1]
+
+    # 3. First significant word match for raw vegetables / fruits / raw meats.
+    #    Kept for backwards compatibility with rows that were already correct:
+    #    a single-valued prefix (all candidates agree) is unambiguous, and the
+    #    remaining ambiguous prefixes keep their historical first-row answer.
     if words:
         first_word = words[0]
         if len(first_word) >= 5:
-            for k, v in waste_map.items():
-                if k.startswith(first_word):
-                    return v
+            hits = [(k, v) for k, v in waste_map.items()
+                    if _normalize_waste_name(k).startswith(first_word)]
+            if hits:
+                if len({v for _, v in hits}) == 1:
+                    return hits[0][1]
+                return hits[0][1]
 
     return None
 
