@@ -70,7 +70,7 @@ def parse_cell_tokens(tokens: List[str]) -> float:
 
     try:
         return float(val_str)
-    except Exception:
+    except ValueError:
         return 0.0
 
 

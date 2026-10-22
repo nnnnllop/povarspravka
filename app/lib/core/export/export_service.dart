@@ -61,7 +61,9 @@ class ExportService {
     final title = dish.title.isNotEmpty ? dish.title : 'Бланк_расчета';
     await Printing.layoutPdf(
       onLayout: (format) async => pdfBytes,
-      name: '${title}.pdf',
+      // Same sanitization as file exports: the print job name can become the
+      // suggested filename of a "Save as PDF" destination.
+      name: '${fileBaseTitle(title)}.pdf',
     );
   }
 

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from tools.data_pipeline.skurikhin.table_extractor import parse_cell_tokens
 from tools.data_pipeline.skurikhin.validator import SkurikhinValidator
-from tools.data_pipeline.skurikhin.database_builder import normalize_text, build_sqlite_database
+from tools.data_pipeline.skurikhin.database_builder import build_sqlite_database
 from tools.data_pipeline.skurikhin.subject_index_parser import normalize_code
 
 

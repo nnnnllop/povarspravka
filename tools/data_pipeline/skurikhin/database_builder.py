@@ -16,7 +16,6 @@ from pathlib import Path
 from .config import (
     FOOD_GROUPS,
     NUTRIENT_CODES,
-    OUTPUT_DIR,
     DB_PATH,
     JSON_PATH,
     CSV_PATH,

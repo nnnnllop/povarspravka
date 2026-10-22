@@ -1,7 +1,5 @@
 import unittest
 import xml.etree.ElementTree as ET
-import zipfile
-import io
 
 class TestExportGeneration(unittest.TestCase):
     def test_docx_xml_validity(self):

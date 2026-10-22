@@ -1,6 +1,5 @@
 import json
 import csv
-import sys
 from collections import Counter
 
 JSON_PATH = r"data\skurikhin\products_skurikhin.json"

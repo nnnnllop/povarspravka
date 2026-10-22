@@ -11,7 +11,6 @@ from .config import (
     MAX_CALORIES,
     MAX_MACRO_SUM,
     MAX_MACRO_VALUE,
-    NUTRIENT_CODE_MAP,
 )
 
 

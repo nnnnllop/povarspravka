@@ -7,11 +7,7 @@ import pymupdf
 
 from tools.data_pipeline.skurikhin.config import (
     DEFAULT_PDF_PATH,
-    FOOD_GROUPS,
-    OUTPUT_DIR,
-    DB_PATH,
-    JSON_PATH,
-    CSV_PATH
+    OUTPUT_DIR
 )
 from tools.data_pipeline.skurikhin.subject_index_parser import (
     parse_subject_index,

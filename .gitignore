@@ -41,14 +41,27 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+coverage/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
 
 # ==============================================================================
 # Large Downloaded Datasets & Raw Caches
 # ==============================================================================
 tools/usda/cache/*.zip
+tools/usda/cache/*.db
 tools/usda/cache/foundation/
 tools/usda/cache/sr_legacy/
 tools/data_pipeline/usda/data/*.zip
+tools/data_pipeline/usda/output/
+
+# Regenerated pipeline artifacts except the canonical reference.db
+# (byte-checked against app/assets/db/reference.db by test_deployed_database)
+tools/data_pipeline/output/*
+!tools/data_pipeline/output/reference.db
 
 # ==============================================================================
 # Audit Artifacts & Temporary Files

@@ -7,8 +7,6 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from .config import DEFAULT_OUTPUT_DB, REFERENCE_DB_PATH
-
 logger = logging.getLogger(__name__)
 
 CREATE_CANONICAL_TABLES_SQL = """
@@ -110,7 +108,7 @@ def populate_database(
     if db_path.exists():
         try:
             db_path.unlink()
-        except Exception:
+        except OSError:
             pass
 
     conn = init_database(db_path)

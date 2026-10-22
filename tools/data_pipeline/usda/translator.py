@@ -7,10 +7,8 @@ import logging
 import re
 import sqlite3
 from pathlib import Path
-from typing import Any
 
 from .config import (
-    ARGOS_MODEL_PATH,
     TRANSLATION_CACHE_PATH,
     TRANSLATIONS_CACHE_DB,
     USDA_CATEGORIES,
@@ -423,8 +421,6 @@ class TranslationEngine:
         self.db_cache = db_cache or TRANSLATIONS_CACHE_DB
         self.cache: dict[str, str] = {}
         self.load_all_caches()
-        self._argos_translation = None
-        self._argos_initialized = False
 
     def load_all_caches(self) -> None:
         """Load translations from SQLite cache and JSON file."""

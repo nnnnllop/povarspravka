@@ -1,5 +1,4 @@
 import pymupdf
-import json
 
 PDF_PATH = r"C:\Users\zomni\Downloads\Telegram Desktop\Khimicheskiy_sostav_Rossiyskikh_produktov_pitania_Skurikhin.pdf"
 

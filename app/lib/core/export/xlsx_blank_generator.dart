@@ -229,10 +229,8 @@ class XlsxBlankGenerator {
         final c100 = _round2(ing.product.carbs);
         final cDish = ing.carbsInDish;
         final kcalDish = ing.blankKcalInDish;
-        totalW += netW;
-        totalP += pDish;
-        totalF += fDish;
-        totalC += cDish;
+        // Only calorie sums are accumulated here: totals for W/P/F/C below are
+        // taken from the engine result, which rounds cells before summing.
         totalKcal += kcalDish;
 
         final kcalCell = isCrossMode

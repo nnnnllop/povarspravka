@@ -1,12 +1,10 @@
 import pymupdf
-import re
 
 PDF_PATH = r"C:\Users\zomni\Downloads\Telegram Desktop\Khimicheskiy_sostav_Rossiyskikh_produktov_pitania_Skurikhin.pdf"
 
 def main():
     doc = pymupdf.open(PDF_PATH)
-    appendix_data = {}
-    
+
     # Doc pages 202 to 207 (pages 201..206 0-indexed)
     for pno in range(201, 207):
         page = doc[pno]

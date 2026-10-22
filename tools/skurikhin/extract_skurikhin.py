@@ -3,7 +3,6 @@ import re
 import json
 import csv
 import os
-import sys
 
 PDF_PATH = r"C:\Users\zomni\Downloads\Telegram Desktop\Khimicheskiy_sostav_Rossiyskikh_produktov_pitania_Skurikhin.pdf"
 DATA_DIR = r"data\skurikhin"

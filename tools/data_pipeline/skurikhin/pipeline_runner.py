@@ -8,11 +8,7 @@ import pymupdf
 
 from .config import (
     DEFAULT_PDF_PATH,
-    OUTPUT_DIR,
-    DB_PATH,
-    JSON_PATH,
-    CSV_PATH,
-    VALIDATION_REPORT_PATH
+    OUTPUT_DIR
 )
 from .table_extractor import extract_all_products
 from .validator import SkurikhinValidator
@@ -38,8 +34,9 @@ def run_pipeline(pdf_path: Path = DEFAULT_PDF_PATH, output_dir: Path = OUTPUT_DI
 
     # Phase 1: Extraction
     print("\n[Phase 1/4] Extracting tables, Subject Index, and Appendices...")
-    doc = pymupdf.open(str(pdf_path))
-    products = extract_all_products(doc)
+    with pymupdf.open(str(pdf_path)) as doc:
+        products = extract_all_products(doc)
+
     print(f"  --> Extracted {len(products)} products across 12 food groups.")
 
     # Phase 2: Validation

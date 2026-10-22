@@ -4,10 +4,8 @@ Every expectation below cites the printed page of Скурихин (2002) that w
 directly from the PDF.  ``page`` is the printed book page; the PDF page is
 ``page + 1``.
 """
-import os
 import sqlite3
 import unittest
-from pathlib import Path
 
 import pymupdf
 

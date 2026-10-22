@@ -23,7 +23,6 @@ def normalize_code(raw_code: str) -> Optional[str]:
 def parse_subject_index(doc: pymupdf.Document, start_page: int = 211, end_page: int = 234) -> List[Dict]:
     """Parse all pages of the Subject Index and return list of products."""
     products = []
-    seen_codes = set()
 
     root_parent = ""
     sub_parent = ""
@@ -120,7 +119,6 @@ def parse_subject_index(doc: pymupdf.Document, start_page: int = 211, end_page: 
                 "source_index_page": pno,
             }
             products.append(prod_item)
-            seen_codes.add(code)
 
     return products
 

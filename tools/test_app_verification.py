@@ -1,8 +1,6 @@
 import unittest
 import sqlite3
 import os
-import zipfile
-import xml.etree.ElementTree as ET
 
 class TestPovarSpravka(unittest.TestCase):
     def setUp(self):

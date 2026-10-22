@@ -162,8 +162,17 @@ class BlankPreviewScreen extends ConsumerWidget {
                     child: OutlinedButton.icon(
                       icon: const Icon(Icons.picture_as_pdf_rounded, size: 18),
                       label: const Text('PDF'),
-                      onPressed: () =>
-                          ExportService.shareFile(dish, ExportType.pdf),
+                      onPressed: () async {
+                        try {
+                          await ExportService.shareFile(dish, ExportType.pdf);
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Ошибка при экспорте: $e')),
+                            );
+                          }
+                        }
+                      },
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -171,8 +180,17 @@ class BlankPreviewScreen extends ConsumerWidget {
                     child: OutlinedButton.icon(
                       icon: const Icon(Icons.description_rounded, size: 18),
                       label: const Text('Word'),
-                      onPressed: () =>
-                          ExportService.shareFile(dish, ExportType.docx),
+                      onPressed: () async {
+                        try {
+                          await ExportService.shareFile(dish, ExportType.docx);
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Ошибка при экспорте: $e')),
+                            );
+                          }
+                        }
+                      },
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -180,15 +198,34 @@ class BlankPreviewScreen extends ConsumerWidget {
                     child: OutlinedButton.icon(
                       icon: const Icon(Icons.table_chart_rounded, size: 18),
                       label: const Text('Excel'),
-                      onPressed: () =>
-                          ExportService.shareFile(dish, ExportType.xlsx),
+                      onPressed: () async {
+                        try {
+                          await ExportService.shareFile(dish, ExportType.xlsx);
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Ошибка при экспорте: $e')),
+                            );
+                          }
+                        }
+                      },
                     ),
                   ),
                   const SizedBox(width: 8),
                   IconButton.filled(
                     icon: const Icon(Icons.print_rounded),
                     tooltip: 'Печать',
-                    onPressed: () => ExportService.printPdf(dish),
+                    onPressed: () async {
+                      try {
+                        await ExportService.printPdf(dish);
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Ошибка при печати: $e')),
+                          );
+                        }
+                      }
+                    },
                   ),
                 ],
               ),

@@ -1,7 +1,6 @@
 import os
 import re
 import sqlite3
-import sys
 from typing import List, Dict, Tuple, Optional
 
 # Pre-translation normalization patterns (English)

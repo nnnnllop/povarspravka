@@ -113,24 +113,20 @@ flutter build apk --release
 - **Опасные разрешения (Dangerous permissions):** 0 (отсутствуют `INTERNET`, `CAMERA`, `RECORD_AUDIO`, `ACCESS_FINE_LOCATION`, `READ_EXTERNAL_STORAGE`, `WRITE_EXTERNAL_STORAGE`).
 - Экспорт и печать осуществляются через безопасные системные контракты Android (`FileProvider`, `ShareSheet`, `PrintManager`).
 
-### Контрольные проверки качества (RC Sign-off)
+### Контрольные проверки качества (Sign-off)
 Из корня проекта:
 ```powershell
-# 1. Запуск пайплайн-тестов Python (42 теста)
+# 1. Пайплайн-тесты Python (62 теста)
 python -X utf8 -m unittest discover -s tools/data_pipeline -p "test_*.py"
 
-# 2. Flutter: 37 штатных + 25 новых тестов логики и UI
+# 2. Flutter: статический анализ + все тесты (225)
 cd app
-..\audit_artifacts\flutter-sdk\bin\flutter.bat test
-..\audit_artifacts\flutter-sdk\bin\flutter.bat analyze
-
-# 3. Граничные сценарии и инварианты расчетов аудитора (23 теста)
-..\audit_artifacts\flutter-sdk\bin\flutter.bat test audit_rc_signoff/rc_edge_test.dart
+flutter analyze
+flutter test
 cd ..
 
-# 4. Независимая проверка 401 формулы XLSX и многостраничных PDF
-python -X utf8 audit_artifacts/rc_signoff_20261016/verify_rc.py
-python tools/data_pipeline/verify_exports.py
+# 3. Независимая проверка формул XLSX и многостраничных PDF
+python -X utf8 tools/data_pipeline/verify_exports.py
 ```
-Все проверки завершаются с кодом 0 (PASS 100%). Эталонное фото бумажного бланка сохранено в `audit_artifacts/reference_photo.jpg` и `docs/reference_photo.jpg`. Подробный отчет: [FINAL_SIGNOFF_PASSED.md](file:///c:/projects/povarspravka/audit_artifacts/rc_signoff_20261016/FINAL_SIGNOFF_PASSED.md).
+Все проверки завершаются с кодом 0 (PASS 100%). Эталонное фото бумажного бланка: `docs/reference_photo.jpg`. Подробный отчёт по логике и знаку «логика закрыта»: [docs/FINAL_LOGIC_SIGNOFF.md](docs/FINAL_LOGIC_SIGNOFF.md).
 
