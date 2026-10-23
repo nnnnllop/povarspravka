@@ -118,6 +118,12 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     });
   }
 
+  void _setWastePct(double newPct) {
+    setState(() {
+      _wastePct = newPct;
+    });
+  }
+
   Future<void> _editWastePercentage() async {
     final controller = TextEditingController(
       text: _wastePct > 0 ? CalculationEngine.formatWastePercent(_wastePct) : '0',
@@ -133,7 +139,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Продукт: ${widget.product.name}\nЗадайте процент отходов (0–99%).',
+                'Продукт: ${widget.product.name}\nЗадайте процент технологических отходов (0–99%).',
                 style: AppTypography.bodySmall,
               ),
               const SizedBox(height: 12),
@@ -173,9 +179,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     );
 
     if (newPct != null) {
-      setState(() {
-        _wastePct = newPct;
-      });
+      _setWastePct(newPct);
     }
   }
 
@@ -190,6 +194,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                 content: Column(mainAxisSize: MainAxisSize.min, children: [
                   Text(
                       '1 мера = ${CalculationEngine.formatGrams(measure.grams)} г нетто. Источник: ${widget.product.sourceLabel}.'),
+                  const SizedBox(height: 12),
                   TextFormField(
                       key: const ValueKey('measure-count'),
                       initialValue: '1',
@@ -238,9 +243,33 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     });
   }
 
+  List<(String, double)> _getSeasonalPresets() {
+    final name = widget.product.name.toLowerCase();
+    if (name.contains('картофел')) {
+      return const [
+        ('До 1 янв (25%)', 25.0),
+        ('С 1 янв (30%)', 30.0),
+        ('С 1 мар (35%)', 35.0),
+        ('С 25 апр (40%)', 40.0),
+        ('Молодой (20%)', 20.0),
+      ];
+    } else if (name.contains('морков') || name.contains('свекл') || name.contains('капуст')) {
+      return const [
+        ('До 1 янв (20%)', 20.0),
+        ('С 1 янв (25%)', 25.0),
+      ];
+    } else if (name.contains('лук') && !name.contains('зелен')) {
+      return const [
+        ('ГОСТ (16%)', 16.0),
+      ];
+    }
+    return const [];
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final parsedGrams =
         CalculationEngine.parseInputDouble(_currentInput) ?? 0.0;
     final hasWaste = _wastePct > 0;
@@ -250,15 +279,21 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
       netGrams = Ingredient.netFromGross(parsedGrams, _wastePct);
     }
 
+    final seasonalPresets = _getSeasonalPresets();
+
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? AppColors.surfaceDark : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        border: Border.all(
+          color: isDark ? AppColors.borderDark : AppColors.borderLight,
+          width: 1,
+        ),
       ),
       child: SafeArea(
         top: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -266,10 +301,10 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
               // Полоска хэндла
               Center(
                 child: Container(
-                  width: 40,
+                  width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: isDark ? Colors.grey[700] : Colors.grey[300],
+                    color: isDark ? AppColors.borderDark : AppColors.borderLight,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -278,11 +313,13 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
 
               // Заголовок продукта
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: Text(
                       widget.product.name,
                       style: AppTypography.titleLarge.copyWith(
+                        fontSize: 17,
                         fontWeight: FontWeight.w700,
                       ),
                       maxLines: 2,
@@ -290,22 +327,20 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  SourceBadge(source: widget.product.source),
+                  SourceBadge(source: widget.product.source, compact: true),
                 ],
               ),
               const SizedBox(height: 12),
 
-              // Карточка ввода граммов с кнопкой сброса C
+              // Поле отображения ввода с кнопкой сброса
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color:
-                      isDark ? AppColors.cardDark : AppColors.backgroundLight,
-                  borderRadius: BorderRadius.circular(16),
+                  color: isDark ? AppColors.cardDark : AppColors.backgroundLight,
+                  borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: AppColors.primary.withOpacity(0.45),
-                    width: 1.5,
+                    color: isDark ? AppColors.borderDark : AppColors.borderLight,
+                    width: 1,
                   ),
                 ),
                 child: Row(
@@ -332,7 +367,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                                   child: Text(
                                     'Съедобная часть: ${CalculationEngine.formatGrams(netGrams)} г (отходы ${CalculationEngine.formatWastePercent(_wastePct)}%)',
                                     style: AppTypography.bodySmall.copyWith(
-                                      color: AppColors.primary,
+                                      color: isDark ? AppColors.accentLight : AppColors.accent,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -344,7 +379,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                                     child: Text(
                                       'изменить %',
                                       style: AppTypography.bodySmall.copyWith(
-                                        color: AppColors.primary,
+                                        color: isDark ? AppColors.primaryLight : AppColors.primary,
                                         decoration: TextDecoration.underline,
                                         fontSize: 11,
                                       ),
@@ -362,8 +397,8 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                         Text(
                           _currentInput,
                           style: AppTypography.numericLarge.copyWith(
-                            fontSize: 28,
-                            color: AppColors.primary,
+                            fontSize: 26,
+                            color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
                           ),
                         ),
                         const SizedBox(width: 4),
@@ -375,21 +410,24 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                                 : AppColors.textSecondaryLight,
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 10),
                         InkWell(
                           onTap: _onClear,
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(6),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: AppColors.kcal.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(8),
+                              color: isDark ? AppColors.kcalBgDark : AppColors.kcalBgLight,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: isDark ? AppColors.kcalBorderDark : AppColors.kcalBorderLight,
+                                width: 0.8,
+                              ),
                             ),
                             child: Text(
                               'C',
                               style: AppTypography.bodySmall.copyWith(
-                                color: AppColors.kcal,
+                                color: isDark ? AppColors.kcalTextDark : AppColors.kcalTextLight,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
@@ -400,28 +438,83 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                   ],
                 ),
               ),
-              const SizedBox(height: 10),
 
-              // Быстрые чипсы граммовки
+              const SizedBox(height: 8),
+
+              // Сезонные нормы отходов по ГОСТ / Марчуку (если доступны для продукта)
+              if (seasonalPresets.isNotEmpty) ...[
+                Row(
+                  children: [
+                    Text(
+                      'Нормы отходов (ГОСТ/Марчук):',
+                      style: AppTypography.bodySmall.copyWith(
+                        fontSize: 11,
+                        color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: seasonalPresets.map((preset) {
+                      final isSelected = (_wastePct - preset.$2).abs() < 0.01;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: InkWell(
+                          onTap: () => _setWastePct(preset.$2),
+                          borderRadius: BorderRadius.circular(6),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? (isDark ? AppColors.accentDark : AppColors.accentLight)
+                                  : (isDark ? AppColors.cardDark : AppColors.backgroundLight),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: isSelected
+                                    ? AppColors.accent
+                                    : (isDark ? AppColors.borderDark : AppColors.borderLight),
+                                width: isSelected ? 1.2 : 0.8,
+                              ),
+                            ),
+                            child: Text(
+                              preset.$1,
+                              style: AppTypography.bodySmall.copyWith(
+                                fontSize: 11,
+                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                color: isSelected
+                                    ? AppColors.accent
+                                    : (isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+
+              // Быстрые инкременты граммов
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
-                    _buildQuickChip('+10 г', () => _onAdd(10)),
-                    _buildQuickChip('+50 г', () => _onAdd(50)),
-                    _buildQuickChip('+100 г', () => _onAdd(100)),
-                    _buildQuickChip('+250 г', () => _onAdd(250)),
-                    _buildQuickChip('50 г', () => _setPreset(50)),
-                    _buildQuickChip('100 г', () => _setPreset(100)),
-                    _buildQuickChip('200 г', () => _setPreset(200)),
+                    _buildQuickChip('+10 г', () => _onAdd(10), isDark),
+                    _buildQuickChip('+50 г', () => _onAdd(50), isDark),
+                    _buildQuickChip('+100 г', () => _onAdd(100), isDark),
+                    _buildQuickChip('+250 г', () => _onAdd(250), isDark),
+                    _buildQuickChip('50 г', () => _setPreset(50), isDark),
+                    _buildQuickChip('100 г', () => _setPreset(100), isDark),
+                    _buildQuickChip('200 г', () => _setPreset(200), isDark),
                   ],
                 ),
               ),
 
-              if (widget.product.calculationMeasures.isEmpty)
-                const Text(
-                    'Для продукта нет проверенных мер. Введите массу в граммах.'),
-              // Меры из базы (если есть)
+              // Меры из базы продуктов (если есть)
               if (widget.product.calculationMeasures.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 SingleChildScrollView(
@@ -431,18 +524,20 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                       return Padding(
                         padding: const EdgeInsets.only(right: 6),
                         child: ActionChip(
-                          label: Text(
-                              '${m.name} (${CalculationEngine.formatGrams(m.grams)}г)'),
+                          label: Text('${m.name} (${CalculationEngine.formatGrams(m.grams)}г)'),
                           onPressed: () => _chooseMeasure(m),
-                          backgroundColor:
-                              isDark ? AppColors.cardDark : Colors.white,
+                          backgroundColor: isDark ? AppColors.cardDark : AppColors.surfaceLight,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6),
+                            side: BorderSide(
+                              color: isDark ? AppColors.borderDark : AppColors.borderLight,
+                            ),
+                          ),
                           labelStyle: AppTypography.bodySmall.copyWith(
                             fontSize: 11,
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w600,
+                            color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+                            fontWeight: FontWeight.w500,
                           ),
-                          side: BorderSide(
-                              color: AppColors.primary.withOpacity(0.3)),
                         ),
                       );
                     }).toList(),
@@ -459,7 +554,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                   hasWaste
                       ? 'Брутто (с учетом отходов ${CalculationEngine.formatWastePercent(_wastePct)}%)'
                       : 'Брутто (отходы не заданы, принято 0 %)',
-                  style: AppTypography.bodyMedium.copyWith(fontSize: 13),
+                  style: AppTypography.bodyMedium.copyWith(fontSize: 13, fontWeight: FontWeight.w600),
                 ),
                 subtitle: Text(
                   _isGross
@@ -468,28 +563,34 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                   style: AppTypography.bodySmall,
                 ),
                 value: _isGross,
-                activeColor: AppColors.primary,
+                activeColor: isDark ? AppColors.primaryLight : AppColors.primary,
                 onChanged: _toggleGross,
               ),
 
               if (_isGross && !hasWaste)
                 Container(
                   margin: const EdgeInsets.only(top: 4, bottom: 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.orange.withOpacity(0.5)),
+                    color: isDark ? AppColors.fatBgDark : AppColors.fatBgLight,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isDark ? AppColors.fatBorderDark : AppColors.fatBorderLight,
+                    ),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+                      Icon(
+                        Icons.info_outline_rounded,
+                        color: isDark ? AppColors.fatTextDark : AppColors.fatTextLight,
+                        size: 18,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'отходы для этого продукта не заданы, принято 0 %',
                           style: AppTypography.bodySmall.copyWith(
-                            color: isDark ? Colors.orange[200] : Colors.orange[900],
+                            color: isDark ? AppColors.fatTextDark : AppColors.fatTextLight,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -497,7 +598,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                       TextButton(
                         onPressed: _editWastePercentage,
                         style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
                           visualDensity: VisualDensity.compact,
                         ),
                         child: const Text('Задать %'),
@@ -506,12 +607,12 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                   ),
                 ),
 
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
 
               // Цифровая клавиатура (3x4 с запятой)
               _buildKeypad(isDark),
 
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
 
               // Кнопка подтверждения
               ElevatedButton(
@@ -527,8 +628,14 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                         Navigator.pop(context);
                       }
                     : null,
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  backgroundColor: isDark ? AppColors.primaryLight : AppColors.primary,
+                  foregroundColor: isDark ? AppColors.backgroundDark : Colors.white,
+                ),
                 child: Text(
                   widget.isEditing ? 'Сохранить изменения' : 'Добавить в блюдо',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
             ],
@@ -538,16 +645,30 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     );
   }
 
-  Widget _buildQuickChip(String label, VoidCallback onTap) {
+  Widget _buildQuickChip(String label, VoidCallback onTap, bool isDark) {
     return Padding(
       padding: const EdgeInsets.only(right: 6),
-      child: ActionChip(
-        label: Text(label),
-        onPressed: onTap,
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        labelStyle: AppTypography.bodySmall.copyWith(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.cardDark : AppColors.backgroundLight,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: isDark ? AppColors.borderDark : AppColors.borderLight,
+              width: 0.8,
+            ),
+          ),
+          child: Text(
+            label,
+            style: AppTypography.numericSmall.copyWith(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+            ),
+          ),
         ),
       ),
     );
@@ -578,27 +699,30 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                         _onKey(k);
                       }
                     },
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(8),
                     child: Container(
-                      height: 44,
+                      height: 48,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: isDark
                             ? AppColors.cardDark
-                            : AppColors.backgroundLight,
-                        borderRadius: BorderRadius.circular(10),
+                            : AppColors.surfaceLight,
+                        borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                           color: isDark
                               ? AppColors.borderDark
                               : AppColors.borderLight,
+                          width: 1,
                         ),
                       ),
                       child: Text(
                         k,
                         style: AppTypography.titleLarge.copyWith(
-                          fontSize: 18,
+                          fontSize: 20,
                           fontWeight: FontWeight.w700,
-                          color: k == '⌫' ? AppColors.primary : null,
+                          color: k == '⌫'
+                              ? (isDark ? AppColors.primaryLight : AppColors.primary)
+                              : (isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight),
                         ),
                       ),
                     ),

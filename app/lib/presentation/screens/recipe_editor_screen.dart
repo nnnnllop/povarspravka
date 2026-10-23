@@ -8,6 +8,7 @@ import '../../core/calculation/models/ingredient.dart';
 import '../../core/calculation/yield_explanation.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
+import '../../data/masters_recipes.dart';
 import '../providers/dish_provider.dart';
 import '../widgets/custom_numpad.dart';
 import '../widgets/ingredient_card.dart';
@@ -59,13 +60,15 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
     final dish = ref.watch(dishProvider);
     final calc = ref.watch(calculationResultProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
     ref.listen<Dish>(dishProvider, (previous, next) {
       if (previous?.id != next.id) {
         _syncControllers(next);
         setState(() => _yieldError = null);
       } else {
-        if (previous?.title != next.title && _titleCtrl.text != next.title)
+        if (previous?.title != next.title && _titleCtrl.text != next.title) {
           _titleCtrl.text = next.title;
+        }
         if (previous?.customYieldGrams != next.customYieldGrams &&
             CalculationEngine.parseInputDouble(_yieldCtrl.text) !=
                 next.customYieldGrams) {
@@ -75,9 +78,11 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
         }
       }
     });
+
     final separateActions = MediaQuery.sizeOf(context).width < 380 ||
         MediaQuery.textScalerOf(context).scale(1) > 1.2;
     final actions = _buildActions(dish);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Калькулятор',
@@ -94,21 +99,47 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
       ),
       body: ReorderableListView.builder(
         padding: const EdgeInsets.all(16),
-        header:
-            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          _buildParameters(dish),
-          const SizedBox(height: 24),
-          Text('Ингредиенты · ${dish.ingredients.length}',
-              style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 4),
-          const Text(
-              'Удерживайте карточку для перестановки. Смахните влево для удаления.'),
-          const SizedBox(height: 12),
-          if (dish.ingredients.isEmpty) _buildEmptyState(context, isDark),
-        ]),
+        header: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildParameters(dish, isDark),
+            const SizedBox(height: 20),
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
+                  'Ингредиенты · ${dish.ingredients.length}',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                if (dish.ingredients.isNotEmpty)
+                  TextButton.icon(
+                    onPressed: () => _showMastersCatalogSheet(context),
+                    icon: const Icon(Icons.auto_stories_outlined, size: 16),
+                    label: const Text('Рецепты мастеров', style: TextStyle(fontSize: 12)),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      visualDensity: VisualDensity.compact,
+                      foregroundColor: isDark ? AppColors.accentLight : AppColors.accent,
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Удерживайте карточку для перестановки. Смахните влево для удаления.',
+              style: AppTypography.bodySmall.copyWith(
+                color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (dish.ingredients.isEmpty) _buildEmptyState(context, isDark),
+          ],
+        ),
         footer: Padding(
-            padding: const EdgeInsets.only(top: 12, bottom: 24),
-            child: MacroSummaryBar(key: ValueKey(dish.id), result: calc)),
+          padding: const EdgeInsets.only(top: 12, bottom: 24),
+          child: MacroSummaryBar(key: ValueKey(dish.id), result: calc),
+        ),
         itemCount: dish.ingredients.length,
         onReorder: (a, b) =>
             ref.read(dishProvider.notifier).reorderIngredients(a, b),
@@ -118,45 +149,71 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
             key: ValueKey(ing.id),
             direction: DismissDirection.endToStart,
             background: Container(
-                alignment: Alignment.centerRight,
-                padding: const EdgeInsets.all(24),
+              alignment: Alignment.centerRight,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.errorContainer,
-                child: const Icon(Icons.delete_outline)),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.delete_outline),
+            ),
             onDismissed: (_) => _removeIngredient(ing, index),
             child: IngredientCard(
-                index: index + 1,
-                ingredient: ing,
-                onTap: () => _editIngredient(context, ing),
-                onDelete: () => _removeIngredient(ing, index)),
+              index: index + 1,
+              ingredient: ing,
+              onTap: () => _editIngredient(context, ing),
+              onDelete: () => _removeIngredient(ing, index),
+            ),
           );
         },
       ),
       bottomNavigationBar: SafeArea(
-          top: false,
-          child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-              child: FilledButton.icon(
-                  onPressed: () => SearchProductModal.show(context,
-                      mode: SearchMode.pickForRecipe),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Добавить продукт')))),
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: FilledButton.icon(
+            onPressed: () => SearchProductModal.show(
+              context,
+              mode: SearchMode.pickForRecipe,
+            ),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(48),
+              backgroundColor: isDark ? AppColors.primaryLight : AppColors.primary,
+              foregroundColor: isDark ? AppColors.backgroundDark : Colors.white,
+            ),
+            icon: const Icon(Icons.add_rounded, size: 20),
+            label: const Text('Добавить продукт', style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ),
+      ),
     );
   }
 
   List<Widget> _buildActions(Dish dish) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return [
       IconButton(
-          icon: const Icon(Icons.tune_rounded),
-          tooltip: 'Параметры',
-          onPressed: () => _showRetentionSettingsDialog(context, dish)),
+        icon: const Icon(Icons.tune_rounded),
+        tooltip: 'Параметры',
+        onPressed: () => _showRetentionSettingsDialog(context, dish),
+      ),
       Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child:
-              FilledButton(onPressed: _openBlank, child: const Text('Бланк'))),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: FilledButton(
+          onPressed: _openBlank,
+          style: FilledButton.styleFrom(
+            backgroundColor: isDark ? AppColors.primaryLight : AppColors.primary,
+            foregroundColor: isDark ? AppColors.backgroundDark : Colors.white,
+          ),
+          child: const Text('Бланк'),
+        ),
+      ),
       PopupMenuButton<String>(
         tooltip: 'Другие действия',
         onSelected: (value) async {
-          if (value == 'save') {
+          if (value == 'masters') {
+            _showMastersCatalogSheet(context);
+          } else if (value == 'save') {
             try {
               await ref.read(dishProvider.notifier).saveCurrentToLibrary();
               if (!mounted) return;
@@ -173,6 +230,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
           }
         },
         itemBuilder: (_) => const [
+          PopupMenuItem(value: 'masters', child: Text('Рецептуры мастеров (Марчук)')),
           PopupMenuItem(value: 'save', child: Text('Сохранить в мои блюда')),
           PopupMenuItem(value: 'clear', child: Text('Очистить рецепт')),
         ],
@@ -194,17 +252,15 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
       action: SnackBarAction(
           label: 'Отменить',
           onPressed: () {
-            if (ref.read(dishProvider).id == dishId)
+            if (ref.read(dishProvider).id == dishId) {
               ref
                   .read(dishProvider.notifier)
                   .restoreIngredient(ingredient, index);
+            }
           }),
     ));
   }
 
-  /// Масса БЖУ после тепловой обработки — нижняя граница выхода блюда.
-  /// Считается на «бесконечном» выходе: масса БЖУ от выхода не зависит, а
-  /// инвариант ядра (БЖУ ≤ выход) при этом заведомо выполнен.
   double _cookedMacroMass(Dish dish,
       {double? protein, double? fat, double? carbs}) {
     final probe = dish.copyWith(
@@ -218,167 +274,229 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
         [r.cookedProtein, r.cookedFat, r.cookedCarbs], 2);
   }
 
-  Widget _buildParameters(Dish dish) {
+  Widget _buildParameters(Dish dish, bool isDark) {
     final custom = dish.customYieldGrams != null;
     final explanation =
         YieldExplanation(dish.totalRawNetGrams, dish.effectiveYieldGrams);
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      TextField(
-        controller: _titleCtrl,
-        textCapitalization: TextCapitalization.sentences,
-        onChanged: (value) => ref.read(dishProvider.notifier).setTitle(value),
-        decoration: const InputDecoration(
-            labelText: 'Название блюда', hintText: 'Например, борщ сибирский'),
-      ),
-      SwitchListTile.adaptive(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Печатать название в заголовке бланка'),
-          value: dish.showTitleInExport,
-          onChanged: (value) =>
-              ref.read(dishProvider.notifier).toggleShowTitle(value)),
-      DropdownButtonFormField<BlankMode>(
-        isDense: MediaQuery.textScalerOf(context).scale(1) <= 1.2,
-        itemHeight: null,
-        value: dish.blankMode,
-        isExpanded: true,
-        decoration: const InputDecoration(labelText: 'Режим бланка'),
-        items: BlankMode.values
-            .map((mode) => DropdownMenuItem(
-                value: mode, child: Text(mode.shortName, softWrap: true)))
-            .toList(),
-        onChanged: (mode) {
-          if (mode != null) ref.read(dishProvider.notifier).setBlankMode(mode);
-        },
-      ),
-      const SizedBox(height: 8),
-      Text(dish.blankMode == BlankMode.photoCross
-          ? 'Типовой бланк с крестом: калорийность только в строке «После т.о.».'
-          : 'Построчный расчёт калорийности каждого продукта.'),
-      const SizedBox(height: 16),
-      Text(
-          'Выход готового блюда: ${CalculationEngine.formatGrams(dish.effectiveYieldGrams)} г',
-          style: Theme.of(context).textTheme.titleMedium),
-      SwitchListTile.adaptive(
-        contentPadding: EdgeInsets.zero,
-        title: const Text('Задать фактический выход'),
-        subtitle: Text(custom
-            ? 'Ручной выход • нетто сырья ${CalculationEngine.formatGrams(dish.totalRawNetGrams)} г'
-            : 'Автоматически: сумма нетто ингредиентов'),
-        value: custom,
-        onChanged: (enabled) {
-          if (enabled && dish.totalRawNetGrams <= 0) {
-            ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Сначала добавьте ингредиенты')));
-            return;
-          }
-          ref
-              .read(dishProvider.notifier)
-              .setCustomYield(enabled ? dish.effectiveYieldGrams : null);
-          _yieldCtrl.text = enabled
-              ? CalculationEngine.formatGrams(dish.effectiveYieldGrams)
-              : '';
-          setState(() => _yieldError = null);
-        },
-      ),
-      if (custom) ...[
-        TextField(
-          key: const ValueKey('actual-yield'),
-          controller: _yieldCtrl,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(
-              labelText: 'Фактический выход готового блюда',
-              suffixText: 'г',
-              errorMaxLines: 3,
-              errorText: _yieldError),
-          onChanged: (value) {
-            final parsed = CalculationEngine.parseInputDouble(value);
-            if (parsed == null ||
-                !parsed.isFinite ||
-                parsed < 0.1 ||
-                parsed > 9999999) {
-              setState(() => _yieldError =
-                  'Введите выход не менее 0,1 г. Сохранён прежний выход.');
-            } else if (parsed < _cookedMacroMass(dish)) {
-              // Масса БЖУ не может быть больше массы готового блюда.
-              setState(() => _yieldError =
-                  'Выход меньше суммарной массы БЖУ после т.о. '
-                  '(${CalculationEngine.formatMacro(_cookedMacroMass(dish))} г). '
-                  'Сохранён прежний выход — увеличьте выход или уменьшите '
-                  'сохранность.');
-            } else {
-              setState(() => _yieldError = null);
-              ref.read(dishProvider.notifier).setCustomYield(parsed);
-            }
-          },
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.cardDark : AppColors.cardLight,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? AppColors.borderDark : AppColors.borderLight,
+          width: 1,
         ),
-        const SizedBox(height: 12),
-        Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-                color: Theme.of(context)
-                    .colorScheme
-                    .primaryContainer
-                    .withOpacity(.4),
-                borderRadius: BorderRadius.circular(8)),
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(explanation.badge,
-                  style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 8),
-              Text(explanation.description),
-            ])),
-      ],
-    ]);
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _titleCtrl,
+            textCapitalization: TextCapitalization.sentences,
+            onChanged: (value) => ref.read(dishProvider.notifier).setTitle(value),
+            decoration: const InputDecoration(
+              labelText: 'Название блюда',
+              hintText: 'Например, борщ с капустой и картофелем',
+            ),
+          ),
+          const SizedBox(height: 8),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('Печатать название в заголовке бланка'),
+            value: dish.showTitleInExport,
+            onChanged: (value) =>
+                ref.read(dishProvider.notifier).toggleShowTitle(value),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<BlankMode>(
+            isDense: MediaQuery.textScalerOf(context).scale(1) <= 1.2,
+            itemHeight: null,
+            value: dish.blankMode,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Режим бланка'),
+            items: BlankMode.values
+                .map((mode) => DropdownMenuItem(
+                    value: mode, child: Text(mode.shortName, softWrap: true)))
+                .toList(),
+            onChanged: (mode) {
+              if (mode != null) ref.read(dishProvider.notifier).setBlankMode(mode);
+            },
+          ),
+          const SizedBox(height: 6),
+          Text(
+            dish.blankMode == BlankMode.photoCross
+                ? 'Типовой бланк с крестом: калорийность только в строке «После т.о.».'
+                : 'Построчный расчёт калорийности каждого продукта.',
+            style: AppTypography.bodySmall.copyWith(
+              color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+              fontSize: 11,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Выход готового блюда: ${CalculationEngine.formatGrams(dish.effectiveYieldGrams)} г',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('Задать фактический выход'),
+            subtitle: Text(
+              custom
+                  ? 'Ручной выход • нетто сырья ${CalculationEngine.formatGrams(dish.totalRawNetGrams)} г'
+                  : 'Автоматически: сумма нетто ингредиентов',
+              style: AppTypography.bodySmall,
+            ),
+            value: custom,
+            onChanged: (enabled) {
+              if (enabled && dish.totalRawNetGrams <= 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Сначала добавьте ингредиенты')));
+                return;
+              }
+              ref
+                  .read(dishProvider.notifier)
+                  .setCustomYield(enabled ? dish.effectiveYieldGrams : null);
+              _yieldCtrl.text = enabled
+                  ? CalculationEngine.formatGrams(dish.effectiveYieldGrams)
+                  : '';
+              setState(() => _yieldError = null);
+            },
+          ),
+          if (custom) ...[
+            const SizedBox(height: 8),
+            TextField(
+              key: const ValueKey('actual-yield'),
+              controller: _yieldCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: AppTypography.numeric,
+              decoration: InputDecoration(
+                labelText: 'Фактический выход готового блюда',
+                suffixText: 'г',
+                errorMaxLines: 3,
+                errorText: _yieldError,
+              ),
+              onChanged: (value) {
+                final parsed = CalculationEngine.parseInputDouble(value);
+                if (parsed == null ||
+                    !parsed.isFinite ||
+                    parsed < 0.1 ||
+                    parsed > 9999999) {
+                  setState(() => _yieldError =
+                      'Введите выход не менее 0,1 г. Сохранён прежний выход.');
+                } else if (parsed < _cookedMacroMass(dish)) {
+                  setState(() => _yieldError =
+                      'Выход меньше суммарной массы БЖУ после т.о. '
+                      '(${CalculationEngine.formatMacro(_cookedMacroMass(dish))} г). '
+                      'Сохранён прежний выход — увеличьте выход или уменьшите '
+                      'сохранность.');
+                } else {
+                  setState(() => _yieldError = null);
+                  ref.read(dishProvider.notifier).setCustomYield(parsed);
+                }
+              },
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.surfaceDark : AppColors.backgroundLight,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: isDark ? AppColors.borderDark : AppColors.borderLight,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(explanation.badge,
+                      style: Theme.of(context).textTheme.titleSmall),
+                  const SizedBox(height: 6),
+                  Text(
+                    explanation.description,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Widget _buildEmptyState(BuildContext context, bool isDark) {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.restaurant_menu_rounded,
-                size: 36,
-                color: AppColors.primary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Рецепт пока пуст',
-              style: AppTypography.titleLarge
-                  .copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Нажмите «Добавить продукт», чтобы найти ингредиенты в справочнике Скурихина и базе USDA.\nОграничений по числу ингредиентов нет.',
-              textAlign: TextAlign.center,
-              style: AppTypography.bodyMedium.copyWith(
-                color: isDark
-                    ? AppColors.textSecondaryDark
-                    : AppColors.textSecondaryLight,
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton.icon(
-              onPressed: () => SearchProductModal.show(
-                context,
-                mode: SearchMode.pickForRecipe,
-              ),
-              icon: const Icon(Icons.search_rounded, size: 18),
-              label: const Text('Открыть поиск продуктов'),
-            ),
-          ],
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.cardDark : AppColors.cardLight,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? AppColors.borderDark : AppColors.borderLight,
+          width: 1,
         ),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.primaryContainerDark : AppColors.primaryContainerLight,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              Icons.restaurant_menu_rounded,
+              size: 28,
+              color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Рецепт пока пуст',
+            style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Нажмите «Добавить продукт», чтобы найти ингредиенты в справочнике Скурихина и базе USDA, либо выберите готовую раскладку мастера.',
+            textAlign: TextAlign.center,
+            style: AppTypography.bodySmall.copyWith(
+              color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            alignment: WrapAlignment.center,
+            children: [
+              ElevatedButton.icon(
+                onPressed: () => SearchProductModal.show(
+                  context,
+                  mode: SearchMode.pickForRecipe,
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isDark ? AppColors.primaryLight : AppColors.primary,
+                  foregroundColor: isDark ? AppColors.backgroundDark : Colors.white,
+                ),
+                icon: const Icon(Icons.search_rounded, size: 18),
+                label: const Text('Поиск продуктов'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _showMastersCatalogSheet(context),
+                icon: const Icon(Icons.auto_stories_outlined, size: 18),
+                label: const Text('Рецепты мастеров (Марчук)'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -408,6 +526,163 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                 isGross: isGross,
               );
         },
+      ),
+    );
+  }
+
+  void _showMastersCatalogSheet(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.85,
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: isDark ? AppColors.borderDark : AppColors.borderLight,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Сборник рецептур мастеров',
+                          style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        Text(
+                          'Официальные эталонные раскладки (Ф. Л. Марчук, ГОСТ)',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView.separated(
+                  itemCount: MastersRecipesCatalog.recipes.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (context, idx) {
+                    final recipe = MastersRecipesCatalog.recipes[idx];
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: isDark ? AppColors.cardDark : AppColors.backgroundLight,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isDark ? AppColors.borderDark : AppColors.borderLight,
+                        ),
+                      ),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        title: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                recipe.name,
+                                style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: isDark ? AppColors.accentDark : AppColors.accentLight,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                recipe.standardCode,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark ? AppColors.accentLight : AppColors.accent,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        subtitle: Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                recipe.description,
+                                style: AppTypography.bodySmall.copyWith(
+                                  fontSize: 11,
+                                  color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Text(
+                                    'Выход: ${CalculationEngine.formatGrams(recipe.expectedYieldGrams)} г · ${recipe.ingredients.length} инг.',
+                                    style: AppTypography.numericSmall.copyWith(fontWeight: FontWeight.w600),
+                                  ),
+                                  const Spacer(),
+                                  Text(
+                                    recipe.culinaryProcess,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _loadMasterRecipe(recipe);
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _loadMasterRecipe(MasterRecipe master) {
+    final newDish = master.toDish();
+    ref.read(dishProvider.notifier).loadDish(newDish);
+    _syncControllers(newDish);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Загружена эталонная рецептура: «${master.name}»'),
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -443,7 +718,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Усреднённые коэффициенты сохранности по умолчанию (для конкретных блюд см. табл. 13 Скурихина)',
+                    'Усреднённые коэффициенты сохранности по ГОСТ/Скурихину:',
                     style: AppTypography.bodySmall.copyWith(
                       color: AppColors.textSecondaryLight,
                       fontSize: 11,
@@ -451,16 +726,46 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                   ),
                   const SizedBox(height: 8),
                   Wrap(
-                    spacing: 8,
+                    spacing: 6,
                     runSpacing: 6,
                     children: [
                       ActionChip(
-                        label: const Text('По умолчанию: усреднённые (94 / 88 / 91%)'),
+                        label: const Text('Варка / припускание (94/88/91%)'),
                         onPressed: () {
                           setDialogState(() {
                             pCtrl.text = '94';
                             fCtrl.text = '88';
                             cCtrl.text = '91';
+                          });
+                        },
+                      ),
+                      ActionChip(
+                        label: const Text('Жарка (92/95/93%)'),
+                        onPressed: () {
+                          setDialogState(() {
+                            pCtrl.text = '92';
+                            fCtrl.text = '95';
+                            cCtrl.text = '93';
+                          });
+                        },
+                      ),
+                      ActionChip(
+                        label: const Text('Запекание (92/90/95%)'),
+                        onPressed: () {
+                          setDialogState(() {
+                            pCtrl.text = '92';
+                            fCtrl.text = '90';
+                            cCtrl.text = '95';
+                          });
+                        },
+                      ),
+                      ActionChip(
+                        label: const Text('Фритюр (90/100/95%)'),
+                        onPressed: () {
+                          setDialogState(() {
+                            pCtrl.text = '90';
+                            fCtrl.text = '100';
+                            cCtrl.text = '95';
                           });
                         },
                       ),
@@ -513,7 +818,13 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                       ),
                     ],
                   ),
-                  if (retentionError != null) Text(retentionError!),
+                  if (retentionError != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      retentionError!,
+                      style: const TextStyle(color: AppColors.error, fontSize: 12),
+                    ),
+                  ],
                   const SizedBox(height: 14),
                   SwitchListTile.adaptive(
                     contentPadding: EdgeInsets.zero,

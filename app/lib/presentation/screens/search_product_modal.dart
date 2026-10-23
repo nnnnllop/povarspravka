@@ -8,6 +8,7 @@ import '../../core/theme/app_typography.dart';
 import '../providers/dish_provider.dart';
 import '../providers/search_provider.dart';
 import '../widgets/custom_numpad.dart';
+import '../widgets/nutrient_chip.dart';
 import '../widgets/source_badge.dart';
 
 enum SearchMode {
@@ -297,37 +298,39 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
         ],
       ),
       subtitle: Padding(
-        padding: const EdgeInsets.only(top: 4),
+        padding: const EdgeInsets.only(top: 6),
         child: Wrap(
-          spacing: 8,
-          runSpacing: 2,
+          spacing: 6,
+          runSpacing: 4,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Text(
-              'Б: ${CalculationEngine.formatMacro(p.protein)}г',
-              style:
-                  AppTypography.numericSmall.copyWith(color: AppColors.protein),
+            NutrientChip(
+              type: NutrientType.protein,
+              value: CalculationEngine.formatMacro(p.protein),
+              compact: true,
             ),
-            Text(
-              'Ж: ${CalculationEngine.formatMacro(p.fat)}г',
-              style: AppTypography.numericSmall.copyWith(color: AppColors.fat),
+            NutrientChip(
+              type: NutrientType.fat,
+              value: CalculationEngine.formatMacro(p.fat),
+              compact: true,
             ),
-            Text(
-              'У: ${CalculationEngine.formatMacro(p.carbs)}г',
-              style:
-                  AppTypography.numericSmall.copyWith(color: AppColors.carbs),
+            NutrientChip(
+              type: NutrientType.carbs,
+              value: CalculationEngine.formatMacro(p.carbs),
+              compact: true,
             ),
-            Text(
-              '${CalculationEngine.formatKcal(p.kcal)} ккал',
-              style: AppTypography.numericSmall.copyWith(
-                color: AppColors.kcal,
-                fontWeight: FontWeight.w700,
-              ),
+            NutrientChip(
+              type: NutrientType.kcal,
+              value: CalculationEngine.formatKcal(p.kcal),
+              compact: true,
             ),
             if (p.wastePct > 0)
               Text(
                 'отходы ${CalculationEngine.formatWastePercent(p.wastePct)}%',
-                style: AppTypography.bodySmall.copyWith(fontSize: 10),
+                style: AppTypography.bodySmall.copyWith(
+                  fontSize: 11,
+                  color: isDark ? AppColors.accentLight : AppColors.accent,
+                ),
               ),
           ],
         ),
