@@ -2,13 +2,38 @@ import 'package:flutter/material.dart';
 import '../../core/calculation/calculation_engine.dart';
 import '../../core/calculation/models/calculation_result.dart';
 import '../../core/calculation/yield_explanation.dart';
-import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
-import 'nutrient_chip.dart';
 
+/// Итоги блюда как **жизненный цикл** (аудит P1-6).
+///
+/// Было: 4 цветные пастельные карточки Б/Ж/У/ккал, под ними текстовый блок
+/// «Сырьё → т.о. → готовое блюдо», всё это — в подвале прокручиваемой ленты,
+/// то есть далеко от глаз и под клавиатурой. Читатель не понимал, к какой
+/// стадии относятся цифры.
+///
+/// Стало: три ступени сверху вниз, ровно в той последовательности, в которой
+/// существует блюдо:
+///
+/// | Ступень | Что показывает | Почему |
+/// |---|---|---|
+/// | 1. Сырьё | нетто-масса и Б/Ж/У до т.о. | «сколько положили в кастрюлю» |
+/// | 2. После т.о. | что выжило после сохранности | «что осталось» |
+/// | 3. Порция | на 100 г, на всё блюдо, любая масса | «что съел гость» |
+///
+/// Числа — tabular figures, без цветных заливок; цвет — только 2-dp маркер.
 class MacroSummaryBar extends StatefulWidget {
   final CalculationResult result;
-  const MacroSummaryBar({super.key, required this.result});
+
+  /// Компактный режим для нижней закреплённой полосы на коротком экране:
+  /// одна строка + «Инспектор расчёта» + переключатель.
+  final bool compact;
+
+  const MacroSummaryBar({
+    super.key,
+    required this.result,
+    this.compact = false,
+  });
 
   @override
   State<MacroSummaryBar> createState() => _MacroSummaryBarState();
@@ -28,307 +53,300 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
   @override
   Widget build(BuildContext context) {
     final r = widget.result;
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final p = Palette.of(context);
+
+    if (widget.compact) return _buildCompact(context, p, r);
 
     return Container(
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.cardDark : AppColors.cardLight,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? AppColors.borderDark : AppColors.borderLight,
-          width: 1,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+      color: p.surface,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, Space.x4),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Заголовок и кнопка инспектора
-            Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
+            Row(
               children: [
-                Text(
-                  'Пищевая ценность готового блюда',
-                  style: AppTypography.titleMedium.copyWith(
-                    fontWeight: FontWeight.w700,
+                Expanded(
+                  child: Text(
+                    'Пищевая ценность готового блюда',
+                    style: AppTypography.label.copyWith(
+                      color: p.ink,
+                      letterSpacing: 0.4,
+                    ),
                   ),
                 ),
-                TextButton.icon(
-                  onPressed: () => _inspect(context),
-                  icon: const Icon(Icons.tune_rounded, size: 16),
-                  label: const Text('Инспектор расчёта', style: TextStyle(fontSize: 12)),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    visualDensity: VisualDensity.compact,
-                    foregroundColor: isDark ? AppColors.primaryLight : AppColors.primary,
-                  ),
-                ),
+                _buildInspectorButton(p, dense: true),
               ],
             ),
+            const SizedBox(height: Space.x2),
 
-            const SizedBox(height: 12),
-
-            // Переключатель: на всё блюдо vs на 100 г
-            SizedBox(
-              width: double.infinity,
-              child: SegmentedButton<bool>(
-                showSelectedIcon: false,
-                style: SegmentedButton.styleFrom(
-                  selectedBackgroundColor: isDark ? AppColors.primaryLight : AppColors.primary,
-                  selectedForegroundColor: isDark ? AppColors.backgroundDark : Colors.white,
-                  foregroundColor: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                  side: BorderSide(
-                    color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                    width: 1,
-                  ),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                ),
-                segments: [
-                  ButtonSegment(
-                    value: false,
-                    label: Text(
-                      'На всё блюдо (${g(r.yieldGrams)} г)',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.bodySmall.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  ButtonSegment(
-                    value: true,
-                    label: Text(
-                      'На 100 г готового блюда',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.bodySmall.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
-                selected: {_showPer100g},
-                onSelectionChanged: (value) => setState(() => _showPer100g = value.single),
-              ),
+            // ── Ступень 1: Сырьё ────────────────────────────────────────
+            _StageRow(
+              palette: p,
+              number: 1,
+              title: 'Сырьё',
+              subtitle: 'нетто ${g(r.rawTotalWeight)} г',
+              cells: [
+                ('Б', m(r.rawTotalProtein), p.protein),
+                ('Ж', m(r.rawTotalFat), p.fat),
+                ('У', m(r.rawTotalCarbs), p.carbs),
+              ],
+              muted: true,
             ),
-
-            const SizedBox(height: 14),
-
-            // 4 пастельные карточки макронутриентов
-            LayoutBuilder(builder: (context, constraints) {
-              final values = [
-                (
-                  'Белки',
-                  m(_showPer100g ? r.per100gProtein : r.cookedProtein),
-                  'г',
-                  NutrientType.protein,
-                ),
-                (
-                  'Жиры',
-                  m(_showPer100g ? r.per100gFat : r.cookedFat),
-                  'г',
-                  NutrientType.fat,
-                ),
-                (
-                  'Углеводы',
-                  m(_showPer100g ? r.per100gCarbs : r.cookedCarbs),
-                  'г',
-                  NutrientType.carbs,
-                ),
-                (
-                  'Энергия',
-                  k(_showPer100g ? r.per100gKcal : r.cookedKcal),
-                  'ккал',
-                  NutrientType.kcal,
-                ),
-              ];
-
-              final columns = constraints.maxWidth < 350 ||
-                      MediaQuery.textScalerOf(context).scale(1) > 1.3
-                  ? 2
-                  : 4;
-
-              return Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final v in values)
-                    _buildNutrientCard(
-                      context: context,
-                      width: (constraints.maxWidth - (columns - 1) * 8) / columns,
-                      type: v.$4,
-                      title: v.$1,
-                      value: v.$2,
-                      unit: v.$3,
-                      isDark: isDark,
-                    ),
-                ],
-              );
-            }),
-
-            const SizedBox(height: 14),
-
-            // Сводная технологическая цепочка сырье -> т.о. -> готовое блюдо
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.surfaceDark : AppColors.backgroundLight,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                  width: 0.8,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Сырье → тепловая обработка → готовое блюдо',
-                    style: AppTypography.bodySmall.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Сырье (нетто ${g(r.rawTotalWeight)} г): ${macros(r.rawTotalProtein, r.rawTotalFat, r.rawTotalCarbs)}',
-                    style: AppTypography.bodySmall.copyWith(
-                      color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Сохранность Б / Ж / У: ${CalculationEngine.formatPercent(r.retentionProtein)}% / ${CalculationEngine.formatPercent(r.retentionFat)}% / ${CalculationEngine.formatPercent(r.retentionCarbs)}%${r.retentionProtein == 0.94 && r.retentionFat == 0.88 && r.retentionCarbs == 0.91 ? ' (усреднённые)' : ''}',
-                    style: AppTypography.bodySmall.copyWith(
-                      color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'После т.о.: ${k(r.cookedKcal)} ккал на всё блюдо (4Б + 9Ж + 4У)',
-                    style: AppTypography.bodySmall.copyWith(
-                      color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                    ),
-                  ),
-                ],
-              ),
+            // ── Ступень 2: После т.о. ───────────────────────────────────
+            _StageRow(
+              palette: p,
+              number: 2,
+              title: 'После т.о.',
+              subtitle:
+                  'сохранность ${CalculationEngine.formatPercent(r.retentionProtein)} / '
+                  '${CalculationEngine.formatPercent(r.retentionFat)} / '
+                  '${CalculationEngine.formatPercent(r.retentionCarbs)} %',
+              cells: [
+                ('Б', m(r.cookedProtein), p.protein),
+                ('Ж', m(r.cookedFat), p.fat),
+                ('У', m(r.cookedCarbs), p.carbs),
+              ],
+              trailing: '${k(r.cookedKcal)} ккал',
+              trailingTint: p.kcal,
+              onTap: () => _inspect(context),
             ),
-
-            // Калькулятор порции
-            if (r.yieldGrams > 0) ...[
-              const SizedBox(height: 14),
-              TextFormField(
-                key: const ValueKey('portion-grams'),
-                initialValue: '200',
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                style: AppTypography.numeric,
-                decoration: InputDecoration(
-                  labelText: 'Масса порции, г',
-                  errorText: _portionError,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                ),
-                onChanged: (text) {
-                  final v = CalculationEngine.parseInputDouble(text);
-                  setState(() {
-                    if (v == null || v < .1 || v > 9999999) {
-                      _portionError = 'Введите массу от 0,1 до 9999999 г';
-                    } else {
-                      _portionGrams = v;
-                      _portionError = null;
-                    }
-                  });
-                },
-              ),
-              const SizedBox(height: 8),
-              Builder(builder: (_) {
-                final p = r.portion(_portionGrams);
-                return Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: isDark ? AppColors.surfaceDark : AppColors.backgroundLight,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                    ),
-                  ),
-                  child: Text(
-                    'Порция ${g(_portionGrams)} г: ${macros(p.protein, p.fat, p.carbs)} · ${k(p.kcal)} ккал',
-                    key: const ValueKey('portion-result'),
-                    style: AppTypography.numericSmall.copyWith(
-                      fontSize: 12,
-                      color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                    ),
-                  ),
-                );
-              }),
-            ],
+            // ── Ступень 3: Порция ───────────────────────────────────────
+            _buildPortionStage(context, p, r),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildNutrientCard({
-    required BuildContext context,
-    required double width,
-    required NutrientType type,
-    required String title,
-    required String value,
-    required String unit,
-    required bool isDark,
-  }) {
-    final Color bg;
-    final Color text;
-    final Color border;
+  Widget _buildInspectorButton(Palette p, {required bool dense}) {
+    return TextButton.icon(
+      onPressed: () => _inspect(context),
+      icon: const Icon(Icons.tune_rounded, size: 16),
+      label: const Text('Инспектор расчёта'),
+      style: TextButton.styleFrom(
+        foregroundColor: p.accent,
+        minimumSize: const Size(kMinTapTarget, kMinTapTarget),
+        padding: EdgeInsets.symmetric(
+            horizontal: dense ? Space.x2 : Space.x3, vertical: 0),
+        textStyle: AppTypography.caption.copyWith(fontWeight: FontWeight.w700),
+      ),
+    );
+  }
 
-    switch (type) {
-      case NutrientType.protein:
-        bg = isDark ? AppColors.proteinBgDark : AppColors.proteinBgLight;
-        text = isDark ? AppColors.proteinTextDark : AppColors.proteinTextLight;
-        border = isDark ? AppColors.proteinBorderDark : AppColors.proteinBorderLight;
-        break;
-      case NutrientType.fat:
-        bg = isDark ? AppColors.fatBgDark : AppColors.fatBgLight;
-        text = isDark ? AppColors.fatTextDark : AppColors.fatTextLight;
-        border = isDark ? AppColors.fatBorderDark : AppColors.fatBorderLight;
-        break;
-      case NutrientType.carbs:
-        bg = isDark ? AppColors.carbsBgDark : AppColors.carbsBgLight;
-        text = isDark ? AppColors.carbsTextDark : AppColors.carbsTextLight;
-        border = isDark ? AppColors.carbsBorderDark : AppColors.carbsBorderLight;
-        break;
-      case NutrientType.kcal:
-        bg = isDark ? AppColors.kcalBgDark : AppColors.kcalBgLight;
-        text = isDark ? AppColors.kcalTextDark : AppColors.kcalTextLight;
-        border = isDark ? AppColors.kcalBorderDark : AppColors.kcalBorderLight;
-        break;
-    }
+  /// Ступень 3: «Порция» — переключатель «на всё блюдо / на 100 г» верхней
+  /// строкой, затем 4 значения в ряд и калькулятор произвольной массы.
+  Widget _buildPortionStage(BuildContext context, Palette p, CalculationResult r) {
+    final totalLabel = 'На всё блюдо (${g(r.yieldGrams)} г)';
+    final per100Label = 'На 100 г готового блюда';
 
     return Container(
-      width: width,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      padding: const EdgeInsets.all(Space.x3),
       decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: border, width: 1),
+        color: p.surface,
+        borderRadius: Radii.cardAll,
+        border: Border.all(color: p.border),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: text.withOpacity(0.9),
+          Row(
+            children: [
+              Container(
+                width: 20,
+                height: 20,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: p.accent,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  '3',
+                  style: AppTypography.caption.copyWith(
+                    color: p.onAccent,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: Space.x2),
+              Expanded(
+                child: Text(
+                  'Порция',
+                  style: AppTypography.label.copyWith(color: p.ink),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: Space.x2),
+          // Выбор ответа: «на всё блюдо» или «на 100 г».
+          SegmentedButton<bool>(
+            showSelectedIcon: false,
+            style: SegmentedButton.styleFrom(
+              minimumSize: const Size(0, kMinTapTarget),
+              backgroundColor: p.surface,
+              foregroundColor: p.inkSecondary,
+              selectedBackgroundColor: p.accentSoft,
+              selectedForegroundColor: p.accent,
+              side: BorderSide(color: p.border),
+              shape: RoundedRectangleBorder(borderRadius: Radii.fieldAll),
+              textStyle: AppTypography.caption.copyWith(fontWeight: FontWeight.w700),
+            ),
+            segments: [
+              ButtonSegment(
+                value: false,
+                label: Text(totalLabel,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis),
+              ),
+              ButtonSegment(
+                value: true,
+                label: Text(per100Label,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis),
+              ),
+            ],
+            selected: {_showPer100g},
+            onSelectionChanged: (value) =>
+                setState(() => _showPer100g = value.single),
+          ),
+          const SizedBox(height: Space.x3),
+          // Четыре числа — одна строка, tabular figures, 2-dp маркеры.
+          Wrap(
+            spacing: Space.x4,
+            runSpacing: Space.x2,
+            children: [
+              _ValueCell(
+                tint: p.protein,
+                title: 'Белки',
+                value: m(_showPer100g ? r.per100gProtein : r.cookedProtein),
+                unit: 'г',
+                palette: p,
+              ),
+              _ValueCell(
+                tint: p.fat,
+                title: 'Жиры',
+                value: m(_showPer100g ? r.per100gFat : r.cookedFat),
+                unit: 'г',
+                palette: p,
+              ),
+              _ValueCell(
+                tint: p.carbs,
+                title: 'Углеводы',
+                value: m(_showPer100g ? r.per100gCarbs : r.cookedCarbs),
+                unit: 'г',
+                palette: p,
+              ),
+              _ValueCell(
+                tint: p.kcal,
+                title: 'Энергия',
+                value: k(_showPer100g ? r.per100gKcal : r.cookedKcal),
+                unit: 'ккал',
+                palette: p,
+              ),
+            ],
+          ),
+          if (r.yieldGrams > 0) ...[
+            const SizedBox(height: Space.x3),
+            TextFormField(
+              key: const ValueKey('portion-grams'),
+              initialValue: '200',
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              style: AppTypography.num,
+              decoration: InputDecoration(
+                isDense: true,
+                labelText: 'Масса порции, г',
+                errorText: _portionError,
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: Space.x3, vertical: Space.x2),
+              ),
+              onChanged: (text) {
+                final v = CalculationEngine.parseInputDouble(text);
+                setState(() {
+                  if (v == null || v < .1 || v > 9999999) {
+                    _portionError = 'Введите массу от 0,1 до 9999999 г';
+                  } else {
+                    _portionGrams = v;
+                    _portionError = null;
+                  }
+                });
+              },
+            ),
+            const SizedBox(height: Space.x2),
+            Builder(builder: (_) {
+              final portion = r.portion(_portionGrams);
+              return Text(
+                'Порция ${g(_portionGrams)} г: ${macros(portion.protein, portion.fat, portion.carbs)} · ${k(portion.kcal)} ккал',
+                key: const ValueKey('portion-result'),
+                style: AppTypography.numSm.copyWith(color: p.ink),
+              );
+            }),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Компактная полоса для нижнего дока: одна числовая строка + инспектор.
+  ///
+  /// Выход блюда здесь сознательно НЕ дублируется: он уже выведен крупной
+  /// строкой в карточке параметров выше, а повтор в доке — это второй ответ
+  /// на тот же вопрос.
+  Widget _buildCompact(BuildContext context, Palette p, CalculationResult r) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Space.x3, Space.x2, Space.x2, Space.x2),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'После т.о. · на всё блюдо',
+                  style: AppTypography.caption.copyWith(color: p.inkSecondary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                // Wrap не даёт строгих ограничений по ширине ни ОДНОМУ
+                // ребёнку и переносит их сам — поэтому внутренние Column
+                // здесь безопасны, а при крупном шрифте строка уйдёт вниз.
+                Wrap(
+                  spacing: Space.x3,
+                  runSpacing: 2,
+                  crossAxisAlignment: WrapCrossAlignment.start,
+                  children: [
+                    for (final cell in <(Color, String, String, String)>[
+                      (p.protein, 'Белки', m(r.cookedProtein), 'г'),
+                      (p.fat, 'Жиры', m(r.cookedFat), 'г'),
+                      (p.carbs, 'Углеводы', m(r.cookedCarbs), 'г'),
+                      (p.kcal, 'Энергия', k(r.cookedKcal), 'ккал'),
+                    ])
+                      _ValueCell(
+                        tint: cell.$1,
+                        title: cell.$2,
+                        value: cell.$3,
+                        unit: cell.$4,
+                        palette: p,
+                        compact: true,
+                      ),
+                  ],
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            '$value $unit',
-            key: ValueKey('macro-$title'),
-            style: AppTypography.numeric.copyWith(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: text,
+          IconButton(
+            // В компактном доке места на текст нет — подпись уходит в
+            // семантику и tooltip, чтобы кнопка оставалась находимой
+            // скринридером и голосовым управлением.
+            tooltip: 'Инспектор расчёта',
+            onPressed: () => _inspect(context),
+            icon: Semantics(
+              label: 'Инспектор расчёта',
+              child: Icon(Icons.tune_rounded, size: 20, color: p.accent),
             ),
           ),
         ],
@@ -339,105 +357,134 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
   void _inspect(BuildContext context) {
     final r = widget.result;
     final e = YieldExplanation(r.rawTotalWeight, r.yieldGrams);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = Palette.of(context);
 
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       showDragHandle: true,
-      backgroundColor: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => SafeArea(
+      backgroundColor: p.surface,
+      shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
+      // Фиксированная высота: неограниченный bottom sheet + Column без
+      // строгих ограничений = бесконечно пружинящее полотно. Берём явную
+      // долю экрана.
+      builder: (context) => SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.92,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+          padding:
+              const EdgeInsets.fromLTRB(Space.x5, 0, Space.x5, Space.x6),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 'Инспектор расчёта',
-                style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w700),
+                style: AppTypography.title.copyWith(color: p.ink),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: Space.x1),
+              Text(
+                'Откуда взялась каждая цифра — по шагам.',
+                style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
+              ),
+              const SizedBox(height: Space.x4),
               _buildStepCard(
+                palette: p,
                 title: '1. Сырье — нетто ${g(r.rawTotalWeight)} г',
                 content: Text(
                   macros(r.rawTotalProtein, r.rawTotalFat, r.rawTotalCarbs),
-                  style: AppTypography.numeric,
+                  style: AppTypography.num.copyWith(color: p.ink),
                 ),
-                isDark: isDark,
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: Space.x2),
               _buildStepCard(
+                palette: p,
                 title: '2. Потери при т.о. — применяем сохранность',
                 content: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     for (final row in [
-                      ('Белки', r.rawTotalProtein, r.retentionProtein, r.cookedProtein),
-                      ('Жиры', r.rawTotalFat, r.retentionFat, r.cookedFat),
-                      ('Углеводы', r.rawTotalCarbs, r.retentionCarbs, r.cookedCarbs),
+                      (
+                        'Белки',
+                        r.rawTotalProtein,
+                        r.retentionProtein,
+                        r.cookedProtein
+                      ),
+                      (
+                        'Жиры',
+                        r.rawTotalFat,
+                        r.retentionFat,
+                        r.cookedFat
+                      ),
+                      (
+                        'Углеводы',
+                        r.rawTotalCarbs,
+                        r.retentionCarbs,
+                        r.cookedCarbs
+                      ),
                     ])
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: Text(
                           '${row.$1}: ${m(row.$2)} × ${CalculationEngine.formatPercent(row.$3)}% = ${m(row.$4)} г',
-                          style: AppTypography.numeric,
+                          style: AppTypography.num.copyWith(color: p.ink),
                         ),
                       ),
                   ],
                 ),
-                isDark: isDark,
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: Space.x2),
               _buildStepCard(
+                palette: p,
                 title: '3. Энергетическая ценность после т.о.',
                 content: Text(
                   '${m(r.cookedProtein)} × 4 + ${m(r.cookedFat)} × 9 + ${m(r.cookedCarbs)} × 4 = ${k(r.cookedKcal)} ккал',
-                  style: AppTypography.numeric,
+                  style: AppTypography.num.copyWith(color: p.ink),
                 ),
-                isDark: isDark,
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: Space.x2),
               _buildStepCard(
+                palette: p,
                 title: '4. Выход готового блюда: ${g(r.yieldGrams)} г',
                 content: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(e.badge, style: const TextStyle(fontWeight: FontWeight.w600)),
-                    Text(e.description, style: AppTypography.bodySmall),
+                    Text(e.badge,
+                        style: AppTypography.bodySm.copyWith(
+                            color: p.ink, fontWeight: FontWeight.w700)),
+                    Text(e.description,
+                        style: AppTypography.bodySm
+                            .copyWith(color: p.inkSecondary)),
                     if (r.yieldGrams > 0) ...[
                       const SizedBox(height: 6),
                       Text(
                         'На 100 г: каждый итог после т.о. × 100 / ${g(r.yieldGrams)}',
-                        style: AppTypography.bodySmall,
+                        style: AppTypography.bodySm
+                            .copyWith(color: p.inkSecondary),
                       ),
                       Text(
                         '${macros(r.per100gProtein, r.per100gFat, r.per100gCarbs)} · ${k(r.per100gKcal)} ккал',
-                        style: AppTypography.numeric,
+                        style: AppTypography.num.copyWith(color: p.ink),
                       ),
                     ],
                   ],
                 ),
-                isDark: isDark,
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: Space.x4),
               Text(
-                'Сырой состав и готовое блюдо — разные стадии, а не противоречащие значения. Сохранность задаётся в параметрах и не определяет уварку. Округление как в бланке: БЖУ до 0,01 г, энергия до 0,1 ккал; энергия считается по округлённым БЖУ.',
-                style: AppTypography.bodySmall.copyWith(
-                  color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                ),
+                'Сырой состав и готовое блюдо — разные стадии, а не противоречащие значения. '
+                'Сохранность задаётся в параметрах и не определяет уварку. Округление как в бланке: '
+                'БЖУ до 0,01 г, энергия до 0,1 ккал; энергия считается по округлённым БЖУ.',
+                style:
+                    AppTypography.bodySm.copyWith(color: p.inkSecondary),
               ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: isDark ? AppColors.primaryLight : AppColors.primary,
-                  foregroundColor: isDark ? AppColors.backgroundDark : Colors.white,
+              const SizedBox(height: Space.x4),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Понятно'),
                 ),
-                child: const Text('Понятно'),
               ),
             ],
           ),
@@ -447,30 +494,196 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
   }
 
   Widget _buildStepCard({
+    required Palette palette,
     required String title,
     required Widget content,
-    required bool isDark,
   }) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(Space.x3),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.cardDark : AppColors.backgroundLight,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isDark ? AppColors.borderDark : AppColors.borderLight,
-        ),
+        color: palette.sunken,
+        borderRadius: Radii.fieldAll,
+        border: Border.all(color: palette.borderStatic),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             title,
-            style: AppTypography.titleMedium.copyWith(fontSize: 14, fontWeight: FontWeight.w700),
+            style: AppTypography.label.copyWith(color: palette.ink),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: Space.x1),
           content,
         ],
       ),
     );
   }
 }
+
+/// Ступень жизненного цикла: номер, заголовок, Б/Ж/У и опционально энергия.
+class _StageRow extends StatelessWidget {
+  final Palette palette;
+  final int number;
+  final String title;
+  final String subtitle;
+  final List<(String, String, Color)> cells;
+  final String? trailing;
+  final Color? trailingTint;
+  final bool muted;
+  final VoidCallback? onTap;
+
+  const _StageRow({
+    required this.palette,
+    required this.number,
+    required this.title,
+    required this.subtitle,
+    required this.cells,
+    this.trailing,
+    this.trailingTint,
+    this.muted = false,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = palette;
+    final row = Padding(
+      padding: const EdgeInsets.symmetric(vertical: Space.x2),
+      child: Row(
+        children: [
+          Container(
+            width: 20,
+            height: 20,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: muted ? p.sunken : p.accent,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              '$number',
+              style: AppTypography.caption.copyWith(
+                color: muted ? p.inkSecondary : p.onAccent,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: Space.x2),
+          // Заголовок ступени и её значения — одной колонкой внутри Expanded:
+          // никаких неограниченных Column внутри Row (это и давало overflow
+          // на 320 dp при масштабе 2.0×).
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: AppTypography.label.copyWith(color: p.ink)),
+                Text(
+                  subtitle,
+                  style: AppTypography.caption.copyWith(color: p.inkSecondary),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (cells.isNotEmpty || trailing != null) ...[
+                  const SizedBox(height: 3),
+                  Wrap(
+                    spacing: Space.x3,
+                    runSpacing: 2,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      for (final c in cells)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(width: 2, height: 11, color: c.$3),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${c.$1} ',
+                              style: AppTypography.caption
+                                  .copyWith(color: p.inkMuted),
+                            ),
+                            Text(
+                              c.$2,
+                              style: AppTypography.numSm.copyWith(
+                                color: muted ? p.inkSecondary : p.ink,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      if (trailing != null)
+                        Text(
+                          trailing!,
+                          style: AppTypography.numSm.copyWith(
+                            color: trailingTint ?? p.kcal,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (onTap == null) return row;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: Radii.fieldAll,
+      child: row,
+    );
+  }
+}
+
+/// Одно числовое значение с 2-dp маркером и подписью.
+class _ValueCell extends StatelessWidget {
+  final Color tint;
+  final String title;
+  final String value;
+  final String unit;
+  final Palette palette;
+  final bool compact;
+
+  const _ValueCell({
+    required this.tint,
+    required this.title,
+    required this.value,
+    required this.unit,
+    required this.palette,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 2,
+          height: compact ? 26 : 30,
+          color: tint,
+          margin: const EdgeInsets.only(right: Space.x2),
+        ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(title,
+                style: AppTypography.caption
+                    .copyWith(color: palette.inkMuted)),
+            Text(
+              '$value $unit',
+              key: ValueKey('macro-$title'),
+              style: (compact ? AppTypography.numSm : AppTypography.num)
+                  .copyWith(color: palette.ink),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+

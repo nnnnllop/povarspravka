@@ -1,11 +1,32 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../core/calculation/calculation_engine.dart';
 import '../../core/calculation/models/product.dart';
 import '../../core/calculation/models/ingredient.dart';
-import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_haptics.dart';
+import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
+import 'adaptive_host.dart';
 import 'source_badge.dart';
 
+/// Ввод массы продукта (аудит P0-1, P0-2).
+///
+/// Ключевые решения:
+/// * «Брутто | Нетто» — это **единица измерения числа**, а не тумблер
+///   функции: `SegmentedButton` 48 dp над полем, а не `SwitchListTile`.
+/// * При смене единицы число конвертируется, но рядом на 2 с появляется
+///   дельта-подпись «← 250 г нетто · 312,5 г брутто (отходы 20 %)» — видно,
+///   что и почему изменилось.
+/// * Подтверждение — правая нижняя клавиша кейпада (позиция Enter), клавиши
+///   высотой 56 dp.
+/// * `⌫` (не латинская `C`): тап — удалить символ, долгое нажатие — сброс.
+/// * Только прибавки (`+10 / +50 / +100 / +250`), никаких «пресетов-замен».
+/// * Каждое нажатие — тактильный отклик.
+///
+/// Сохранены публичные контракты (тип `CustomNumpadSheet`, параметры,
+/// тексты «Добавить в блюдо» / «Сохранить изменения», диалоги мер и процента
+/// отходов, ключ `measure-count`) — на них завязаны тесты.
 class CustomNumpadSheet extends StatefulWidget {
   final Product product;
   final double initialGrams;
@@ -34,6 +55,10 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
   late double _wastePct;
   bool _isFreshInput = true;
 
+  /// Дельта-подпись, показываемая 2 с после смены единицы.
+  String? _deltaNote;
+  Timer? _deltaTimer;
+
   @override
   void initState() {
     super.initState();
@@ -45,7 +70,22 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     _isFreshInput = true;
   }
 
+  @override
+  void dispose() {
+    _deltaTimer?.cancel();
+    super.dispose();
+  }
+
+  void _showDelta(String message) {
+    _deltaTimer?.cancel();
+    setState(() => _deltaNote = message);
+    _deltaTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _deltaNote = null);
+    });
+  }
+
   void _onKey(String k) {
+    AppHaptics.key();
     setState(() {
       if (k == ',') {
         if (_isFreshInput) {
@@ -73,6 +113,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
   }
 
   void _onBackspace() {
+    AppHaptics.key();
     setState(() {
       _isFreshInput = false;
       if (_currentInput.length > 1) {
@@ -84,13 +125,16 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
   }
 
   void _onClear() {
+    AppHaptics.error();
     setState(() {
       _currentInput = '0';
       _isFreshInput = true;
+      _deltaNote = null;
     });
   }
 
   void _onAdd(double delta) {
+    AppHaptics.key();
     final val = CalculationEngine.parseInputDouble(_currentInput) ?? 0.0;
     final newVal = (val + delta).clamp(1.0, 99999.0);
     setState(() {
@@ -99,32 +143,51 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     });
   }
 
-  void _toggleGross(bool value) {
+  void _setMode(bool gross) {
+    if (gross == _isGross) return;
+    AppHaptics.toggle();
     final mass = CalculationEngine.parseInputDouble(_currentInput);
-    if (mass == null) return;
-    final converted = value
+    if (mass == null) {
+      setState(() => _isGross = gross);
+      return;
+    }
+    final converted = gross
         ? Ingredient.grossFromNet(mass, _wastePct)
         : Ingredient.netFromGross(mass, _wastePct);
     if (converted == null || !converted.isFinite || converted > 9999999) {
+      AppHaptics.error();
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text(
               'При 100% отходов положительное нетто невозможно перевести в брутто.')));
       return;
     }
+    final convertedStr = CalculationEngine.formatGrams(converted);
     setState(() {
-      _isGross = value;
-      _currentInput = converted.toString().replaceAll('.', ',');
+      _isGross = gross;
+      _currentInput = convertedStr;
       _isFreshInput = true;
     });
+    // Дельта-подпись: пользователь видит, ЧТО и ПОЧЕМУ поменялось.
+    final beforeStr = CalculationEngine.formatGrams(mass);
+    final wasteNote = _wastePct > 0
+        ? ' (отходы ${CalculationEngine.formatWastePercent(_wastePct)}%)'
+        : '';
+    if (gross) {
+      _showDelta('← $beforeStr г нетто · $convertedStr г брутто$wasteNote');
+    } else {
+      _showDelta('← $beforeStr г брутто · $convertedStr г нетто$wasteNote');
+    }
   }
 
   void _setWastePct(double newPct) {
+    AppHaptics.toggle();
     setState(() {
       _wastePct = newPct;
     });
   }
 
   Future<void> _editWastePercentage() async {
+    AppHaptics.key();
     final controller = TextEditingController(
       text: _wastePct > 0 ? CalculationEngine.formatWastePercent(_wastePct) : '0',
     );
@@ -140,13 +203,14 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
             children: [
               Text(
                 'Продукт: ${widget.product.name}\nЗадайте процент технологических отходов (0–99%).',
-                style: AppTypography.bodySmall,
+                style: AppTypography.bodySm,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: Space.x3),
               TextFormField(
                 controller: controller,
                 autofocus: true,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
                 decoration: InputDecoration(
                   labelText: 'Отходы, %',
                   errorText: error,
@@ -164,6 +228,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
               onPressed: () {
                 final parsed = CalculationEngine.parseInputDouble(controller.text);
                 if (parsed == null || parsed < 0 || parsed >= 100) {
+                  AppHaptics.warn();
                   setDialogState(() {
                     error = 'Введите число от 0 до 99';
                   });
@@ -184,6 +249,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
   }
 
   Future<void> _chooseMeasure(ProductMeasure measure) async {
+    AppHaptics.key();
     var countText = '1';
     String? error;
     final count = await showDialog<double>(
@@ -194,7 +260,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                 content: Column(mainAxisSize: MainAxisSize.min, children: [
                   Text(
                       '1 мера = ${CalculationEngine.formatGrams(measure.grams)} г нетто. Источник: ${widget.product.sourceLabel}.'),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: Space.x3),
                   TextFormField(
                       key: const ValueKey('measure-count'),
                       initialValue: '1',
@@ -218,6 +284,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                             !grams.isFinite ||
                             grams < .1 ||
                             grams > 9999999) {
+                          AppHaptics.warn();
                           update(() => error =
                               'Количество должно давать от 0,1 до 9999999 г');
                           return;
@@ -233,43 +300,51 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
       _isGross = false;
       _currentInput = (measure.grams * count).toString().replaceAll('.', ',');
       _isFreshInput = true;
+      _deltaNote =
+          '✓ ${CalculationEngine.formatGrams(measure.grams * count)} г нетто · ${measure.name}';
     });
   }
 
-  void _setPreset(double grams) {
-    setState(() {
-      _currentInput = CalculationEngine.formatGrams(grams);
-      _isFreshInput = true;
-    });
-  }
-
-  List<(String, double)> _getSeasonalPresets() {
+  List<(String, double, bool)> _getSeasonalPresets() {
     final name = widget.product.name.toLowerCase();
     if (name.contains('картофел')) {
       return const [
-        ('До 1 янв (25%)', 25.0),
-        ('С 1 янв (30%)', 30.0),
-        ('С 1 мар (35%)', 35.0),
-        ('С 25 апр (40%)', 40.0),
-        ('Молодой (20%)', 20.0),
+        ('До 1 янв', 25.0, false),
+        ('С 1 янв', 30.0, false),
+        ('С 1 мар', 35.0, false),
+        ('С 25 апр', 40.0, false),
+        ('Молодой', 20.0, true),
       ];
-    } else if (name.contains('морков') || name.contains('свекл') || name.contains('капуст')) {
+    } else if (name.contains('морков') ||
+        name.contains('свекл') ||
+        name.contains('капуст')) {
       return const [
-        ('До 1 янв (20%)', 20.0),
-        ('С 1 янв (25%)', 25.0),
+        ('До 1 янв', 20.0, false),
+        ('С 1 янв', 25.0, false),
       ];
     } else if (name.contains('лук') && !name.contains('зелен')) {
       return const [
-        ('ГОСТ (16%)', 16.0),
+        ('ГОСТ', 16.0, false),
       ];
     }
     return const [];
   }
 
+  void _confirm(double parsedGrams) {
+    AppHaptics.commit();
+    final effectiveProduct = _wastePct != widget.product.wastePct
+        ? widget.product.copyWith(wastePct: _wastePct)
+        : widget.product;
+    if (_wastePct != widget.product.wastePct) {
+      widget.onProductUpdated?.call(effectiveProduct);
+    }
+    widget.onConfirm(parsedGrams, _isGross);
+    Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final p = Palette.of(context);
     final parsedGrams =
         CalculationEngine.parseInputDouble(_currentInput) ?? 0.0;
     final hasWaste = _wastePct > 0;
@@ -280,362 +355,567 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     }
 
     final seasonalPresets = _getSeasonalPresets();
+    final canConfirm = parsedGrams >= .1 && parsedGrams <= 9999999;
 
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        border: Border.all(
-          color: isDark ? AppColors.borderDark : AppColors.borderLight,
-          width: 1,
-        ),
+        color: p.surface,
+        borderRadius:
+            const BorderRadius.vertical(top: Radius.circular(Radii.sheet)),
       ),
       child: SafeArea(
         top: false,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Полоска хэндла
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                    borderRadius: BorderRadius.circular(2),
+        child: AdaptiveHost(
+          body: _buildIntro(p, seasonalPresets, netGrams, hasWaste),
+          stickyFooter: _buildKeypadBlock(p, canConfirm, parsedGrams),
+        ),
+      ),
+    );
+  }
+
+  /// Верхняя (справочная) часть: заголовок, единица, число, нормы отходов.
+  /// Всегда в скролле — поэтому не может переполнить экран.
+  Widget _buildIntro(
+    Palette p,
+    List<(String, double, bool)> seasonalPresets,
+    double net,
+    bool hasWaste,
+  ) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(Space.x4, Space.x1, Space.x4, Space.x2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildHeader(p),
+          const SizedBox(height: Space.x3),
+          _buildModeSelector(p),
+          if (_deltaNote != null) ...[
+            const SizedBox(height: Space.x2),
+            _buildDeltaNote(p),
+          ],
+          const SizedBox(height: Space.x3),
+          _buildReadout(p, net, hasWaste),
+          const SizedBox(height: Space.x3),
+          if (seasonalPresets.isNotEmpty) ...[
+            _buildSectionLabel(p, 'НОРМА ОТХОДОВ · СЕЗОН'),
+            const SizedBox(height: Space.x2),
+            _buildWasteChips(p, seasonalPresets),
+            const SizedBox(height: Space.x3),
+          ],
+          if (widget.product.calculationMeasures.isNotEmpty) ...[
+            _buildSectionLabel(p, 'БЫТОВЫЕ МЕРЫ'),
+            const SizedBox(height: Space.x2),
+            _buildMeasures(p),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Нижний блок: ряд прибавок + кейпад с клавишей подтверждения.
+  /// Прижат к нижней кромке — под большой палец.
+  Widget _buildKeypadBlock(Palette p, bool canConfirm, double parsedGrams) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildQuickRow(p),
+        const SizedBox(height: Space.x2),
+        _buildKeypad(p, canConfirm, parsedGrams),
+      ],
+    );
+  }
+
+  Widget _buildHeader(Palette p) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Text(
+            widget.product.name,
+            style: AppTypography.title.copyWith(fontSize: 18),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const SizedBox(width: Space.x2),
+        SourceBadge(source: widget.product.source, compact: true),
+      ],
+    );
+  }
+
+  Widget _buildModeSelector(Palette p) {
+    // Контракт из аудита: старая подпись тумблера осталась доступной для
+    // скринридера — она и есть подсказка к сегментам «Брутто | Нетто».
+    const semanticsHint = 'Ввод чистой массы нетто · переключение Брутто/Нетто';
+    return Semantics(
+      label: semanticsHint,
+      child: SizedBox(
+        width: double.infinity,
+        child: SegmentedButton<bool>(
+          showSelectedIcon: false,
+          style: SegmentedButton.styleFrom(
+            minimumSize: const Size(0, kMinTapTarget),
+            backgroundColor: p.surface,
+            foregroundColor: p.inkSecondary,
+            selectedBackgroundColor: p.accentSoft,
+            selectedForegroundColor: p.accent,
+            side: BorderSide(color: p.border, width: 1),
+            shape: RoundedRectangleBorder(borderRadius: Radii.fieldAll),
+            textStyle: AppTypography.label,
+          ),
+          segments: const [
+            ButtonSegment(
+              value: true,
+              label: Text('Брутто', textAlign: TextAlign.center),
+            ),
+            ButtonSegment(
+              value: false,
+              label: Text('Нетто', textAlign: TextAlign.center),
+            ),
+          ],
+          selected: {_isGross},
+          onSelectionChanged: (value) => _setMode(value.single),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDeltaNote(Palette p) {
+    return Container(
+      padding:
+          const EdgeInsets.symmetric(horizontal: Space.x3, vertical: Space.x2),
+      decoration: BoxDecoration(
+        color: p.accentSoft,
+        borderRadius: Radii.fieldAll,
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.swap_horiz_rounded, size: 16, color: p.accent),
+          const SizedBox(width: Space.x2),
+          Expanded(
+            child: Text(
+              _deltaNote ?? '',
+              style: AppTypography.numSm.copyWith(
+                color: p.accent,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReadout(Palette p, double net, bool hasWaste) {
+    const digits = TextStyle(
+      fontFamily: AppTypography.fontName,
+      fontSize: 34,
+      height: 1,
+      fontWeight: FontWeight.w700,
+      letterSpacing: -0.8,
+      fontFeatures: [FontFeature.tabularFigures()],
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // Число — дисплей-кегль: единственное значение на шите. Смена
+        // единицы анимируется: fade + slide 8 dp (подтверждение изменения,
+        // которого раньше не было вообще).
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Flexible(
+              child: AnimatedSwitcher(
+                duration: Motion.base,
+                switchInCurve: Motion.ease,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 0.12),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
                   ),
                 ),
+                child: Text(
+                  _currentInput,
+                  key: ValueKey<String>(_currentInput),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: digits.copyWith(color: p.ink),
+                ),
               ),
-              const SizedBox(height: 12),
+            ),
+            const SizedBox(width: Space.x1),
+            Text(
+              'г',
+              style: AppTypography.title.copyWith(color: p.inkSecondary),
+            ),
+          ],
+        ),
+        const SizedBox(height: Space.x2),
+        // Живая подпись вместо второго мелкого абзаца.
+        _buildLiveCaption(p, net, hasWaste),
+      ],
+    );
+  }
 
-              // Заголовок продукта
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Text(
-                      widget.product.name,
-                      style: AppTypography.titleLarge.copyWith(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+  Widget _buildLiveCaption(Palette p, double net, bool hasWaste) {
+    final String text;
+    final bool ok;
+    if (_isGross && hasWaste) {
+      text =
+          '✓ съедобная часть ${CalculationEngine.formatGrams(net)} г · отходы ${CalculationEngine.formatWastePercent(_wastePct)}%';
+      ok = true;
+    } else if (_isGross) {
+      text = 'отходы не заданы — брутто равно нетто';
+      ok = false;
+    } else {
+      text = '✓ чистая масса нетто';
+      ok = true;
+    }
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Flexible(
+          child: Text(
+            text,
+            textAlign: TextAlign.center,
+            style: AppTypography.numSm.copyWith(
+              color: ok ? p.inkSecondary : p.warning,
+            ),
+          ),
+        ),
+        if (hasWaste || _isGross) ...[
+          const SizedBox(width: Space.x1),
+          TextButton(
+            onPressed: _editWastePercentage,
+            style: TextButton.styleFrom(
+              minimumSize: const Size(kMinTapTarget, kMinTapTarget),
+              padding: const EdgeInsets.symmetric(horizontal: Space.x2),
+            ),
+            child: const Text('изменить %'),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildSectionLabel(Palette p, String text) {
+    return Text(
+      text,
+      style: AppTypography.caption.copyWith(
+        color: p.inkMuted,
+        letterSpacing: 0.8,
+        fontWeight: FontWeight.w700,
+      ),
+    );
+  }
+
+  Widget _buildWasteChips(Palette p, List<(String, double, bool)> presets) {
+    return Wrap(
+      spacing: Space.x2,
+      runSpacing: Space.x2,
+      children: presets.map((preset) {
+        final isSelected = (_wastePct - preset.$2).abs() < 0.01;
+        return _TapChip(
+          key: ValueKey('waste-${preset.$1}'),
+          selected: isSelected,
+          accent: p.accent,
+          label: preset.$1,
+          trailing: '${CalculationEngine.formatWastePercent(preset.$2)} %',
+          season: preset.$3,
+          onTap: () => _setWastePct(preset.$2),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildMeasures(Palette p) {
+    return Wrap(
+      spacing: Space.x2,
+      runSpacing: Space.x2,
+      children: widget.product.calculationMeasures.map((m) {
+        return _TapChip(
+          label: m.name,
+          trailing: '${CalculationEngine.formatGrams(m.grams)} г',
+          accent: p.accent,
+          selected: false,
+          onTap: () => _chooseMeasure(m),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildQuickRow(Palette p) {
+    const increments = <(String, double)>[
+      ('+10 г', 10),
+      ('+50 г', 50),
+      ('+100 г', 100),
+      ('+250 г', 250),
+    ];
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: Space.x3),
+      child: Row(
+        children: increments.map((inc) {
+          return Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: InkWell(
+                onTap: () => _onAdd(inc.$2),
+                borderRadius: Radii.fieldAll,
+                child: Container(
+                  height: kMinTapTarget,
+                  alignment: Alignment.center,
+                  child: Text(
+                    inc.$1,
+                    maxLines: 1,
+                    overflow: TextOverflow.clip,
+                    style: AppTypography.numSm.copyWith(
+                      color: p.accent,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  SourceBadge(source: widget.product.source, compact: true),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              // Поле отображения ввода с кнопкой сброса
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: isDark ? AppColors.cardDark : AppColors.backgroundLight,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                    width: 1,
-                  ),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildKeypad(Palette p, bool canConfirm, double parsedGrams) {
+    const rows = <List<String>>[
+      ['1', '2', '3'],
+      ['4', '5', '6'],
+      ['7', '8', '9'],
+      ['⌫', '0', ','],
+    ];
+    final scaler = MediaQuery.textScalerOf(context).scale(1);
+    final keyGap = Space.x1;
+    // Клавиши 56 dp (было 48): больше поверхности нажатия — меньше промахов
+    // на кухне. При крупном тексте растём вместе с ним.
+    final keyHeight = 56.0 * (scaler > 1.3 ? scaler : 1.0);
+    final gridHeight = keyHeight * 4 + keyGap * 4;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Space.x3, 0, Space.x3, Space.x2),
+      child: SizedBox(
+        height: gridHeight,
+        child: Row(
+          children: [
+            // 3 классические колонки цифр.
+            Expanded(
+              flex: 3,
+              child: Column(
+                children: [
+                  for (final row in rows)
+                    Padding(
+                      padding: EdgeInsets.only(bottom: keyGap),
+                      child: Row(
                         children: [
-                          Text(
-                            _isGross
-                                ? 'Масса брутто (с отходами)'
-                                : 'Масса нетто (чистая)',
-                            style: AppTypography.bodySmall.copyWith(
-                              color: isDark
-                                  ? AppColors.textSecondaryDark
-                                  : AppColors.textSecondaryLight,
-                            ),
-                          ),
-                          if (_isGross && hasWaste)
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    'Съедобная часть: ${CalculationEngine.formatGrams(netGrams)} г (отходы ${CalculationEngine.formatWastePercent(_wastePct)}%)',
-                                    style: AppTypography.bodySmall.copyWith(
-                                      color: isDark ? AppColors.accentLight : AppColors.accent,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                                InkWell(
-                                  onTap: _editWastePercentage,
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                                    child: Text(
-                                      'изменить %',
-                                      style: AppTypography.bodySmall.copyWith(
-                                        color: isDark ? AppColors.primaryLight : AppColors.primary,
-                                        decoration: TextDecoration.underline,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
+                          for (final k in row)
+                            Expanded(
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 2),
+                                child: _buildKey(p, k, keyHeight),
+                              ),
                             ),
                         ],
                       ),
                     ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _currentInput,
-                          style: AppTypography.numericLarge.copyWith(
-                            fontSize: 26,
-                            color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'г',
-                          style: AppTypography.titleMedium.copyWith(
-                            color: isDark
-                                ? AppColors.textSecondaryDark
-                                : AppColors.textSecondaryLight,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        InkWell(
-                          onTap: _onClear,
-                          borderRadius: BorderRadius.circular(6),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: isDark ? AppColors.kcalBgDark : AppColors.kcalBgLight,
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: isDark ? AppColors.kcalBorderDark : AppColors.kcalBorderLight,
-                                width: 0.8,
-                              ),
-                            ),
-                            child: Text(
-                              'C',
-                              style: AppTypography.bodySmall.copyWith(
-                                color: isDark ? AppColors.kcalTextDark : AppColors.kcalTextLight,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: Space.x1),
+            // Колонка Enter: подтверждение — под большим пальцем, как Enter
+            // на нормальном калькуляторе.
+            Expanded(
+              flex: 2,
+              child: Padding(
+                padding: EdgeInsets.only(bottom: keyGap),
+                child: _buildConfirmKey(p, canConfirm, parsedGrams, keyHeight * 4 + keyGap * 3),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildKey(Palette p, String k, double height) {
+    final isBackspace = k == '⌫';
+    return SizedBox(
+      // Стабильный ключ клавиши: по нему тесты проверяют размеры нажатия
+      // (WCAG 2.5.5) и не зависят от порядка обхода дерева.
+      key: ValueKey('key-$k'),
+      height: height,
+      child: isBackspace
+          ? GestureDetector(
+              onLongPress: _onClear,
+              child: Semantics(
+                button: true,
+                label: 'Удалить символ. Долгое нажатие — сброс',
+                child: InkWell(
+                  onTap: _onBackspace,
+                  borderRadius: Radii.fieldAll,
+                  child: _keySurface(
+                    p,
+                    child:
+                        Icon(Icons.backspace_outlined, size: 22, color: p.ink),
+                  ),
                 ),
               ),
-
-              const SizedBox(height: 8),
-
-              // Сезонные нормы отходов по ГОСТ / Марчуку (если доступны для продукта)
-              if (seasonalPresets.isNotEmpty) ...[
-                Row(
-                  children: [
-                    Text(
-                      'Нормы отходов (ГОСТ/Марчук):',
-                      style: AppTypography.bodySmall.copyWith(
-                        fontSize: 11,
-                        color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: seasonalPresets.map((preset) {
-                      final isSelected = (_wastePct - preset.$2).abs() < 0.01;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 6),
-                        child: InkWell(
-                          onTap: () => _setWastePct(preset.$2),
-                          borderRadius: BorderRadius.circular(6),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? (isDark ? AppColors.accentDark : AppColors.accentLight)
-                                  : (isDark ? AppColors.cardDark : AppColors.backgroundLight),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: isSelected
-                                    ? AppColors.accent
-                                    : (isDark ? AppColors.borderDark : AppColors.borderLight),
-                                width: isSelected ? 1.2 : 0.8,
-                              ),
-                            ),
-                            child: Text(
-                              preset.$1,
-                              style: AppTypography.bodySmall.copyWith(
-                                fontSize: 11,
-                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                                color: isSelected
-                                    ? AppColors.accent
-                                    : (isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight),
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
-
-              // Быстрые инкременты граммов
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _buildQuickChip('+10 г', () => _onAdd(10), isDark),
-                    _buildQuickChip('+50 г', () => _onAdd(50), isDark),
-                    _buildQuickChip('+100 г', () => _onAdd(100), isDark),
-                    _buildQuickChip('+250 г', () => _onAdd(250), isDark),
-                    _buildQuickChip('50 г', () => _setPreset(50), isDark),
-                    _buildQuickChip('100 г', () => _setPreset(100), isDark),
-                    _buildQuickChip('200 г', () => _setPreset(200), isDark),
-                  ],
-                ),
-              ),
-
-              // Меры из базы продуктов (если есть)
-              if (widget.product.calculationMeasures.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: widget.product.calculationMeasures.map((m) {
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 6),
-                        child: ActionChip(
-                          label: Text('${m.name} (${CalculationEngine.formatGrams(m.grams)}г)'),
-                          onPressed: () => _chooseMeasure(m),
-                          backgroundColor: isDark ? AppColors.cardDark : AppColors.surfaceLight,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(6),
-                            side: BorderSide(
-                              color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                            ),
-                          ),
-                          labelStyle: AppTypography.bodySmall.copyWith(
-                            fontSize: 11,
-                            color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ],
-
-              // Переключатель Брутто / Нетто
-              const SizedBox(height: 6),
-              SwitchListTile.adaptive(
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                title: Text(
-                  hasWaste
-                      ? 'Брутто (с учетом отходов ${CalculationEngine.formatWastePercent(_wastePct)}%)'
-                      : 'Брутто (отходы не заданы, принято 0 %)',
-                  style: AppTypography.bodyMedium.copyWith(fontSize: 13, fontWeight: FontWeight.w600),
-                ),
-                subtitle: Text(
-                  _isGross
-                      ? 'Ввод в брутто → расчет по нетто'
-                      : 'Ввод чистой массы нетто',
-                  style: AppTypography.bodySmall,
-                ),
-                value: _isGross,
-                activeColor: isDark ? AppColors.primaryLight : AppColors.primary,
-                onChanged: _toggleGross,
-              ),
-
-              if (_isGross && !hasWaste)
-                Container(
-                  margin: const EdgeInsets.only(top: 4, bottom: 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: isDark ? AppColors.fatBgDark : AppColors.fatBgLight,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: isDark ? AppColors.fatBorderDark : AppColors.fatBorderLight,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.info_outline_rounded,
-                        color: isDark ? AppColors.fatTextDark : AppColors.fatTextLight,
-                        size: 18,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'отходы для этого продукта не заданы, принято 0 %',
-                          style: AppTypography.bodySmall.copyWith(
-                            color: isDark ? AppColors.fatTextDark : AppColors.fatTextLight,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: _editWastePercentage,
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 6),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                        child: const Text('Задать %'),
-                      ),
-                    ],
-                  ),
-                ),
-
-              const SizedBox(height: 8),
-
-              // Цифровая клавиатура (3x4 с запятой)
-              _buildKeypad(isDark),
-
-              const SizedBox(height: 12),
-
-              // Кнопка подтверждения
-              ElevatedButton(
-                onPressed: parsedGrams >= .1 && parsedGrams <= 9999999
-                    ? () {
-                        final effectiveProduct = _wastePct != widget.product.wastePct
-                            ? widget.product.copyWith(wastePct: _wastePct)
-                            : widget.product;
-                        if (_wastePct != widget.product.wastePct) {
-                          widget.onProductUpdated?.call(effectiveProduct);
-                        }
-                        widget.onConfirm(parsedGrams, _isGross);
-                        Navigator.pop(context);
-                      }
-                    : null,
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48),
-                  backgroundColor: isDark ? AppColors.primaryLight : AppColors.primary,
-                  foregroundColor: isDark ? AppColors.backgroundDark : Colors.white,
-                ),
+            )
+          : InkWell(
+              onTap: () => _onKey(k),
+              borderRadius: Radii.fieldAll,
+              child: _keySurface(
+                p,
                 child: Text(
-                  widget.isEditing ? 'Сохранить изменения' : 'Добавить в блюдо',
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                  k,
+                  maxLines: 1,
+                  style: AppTypography.num.copyWith(
+                    fontSize: 24,
+                    color: p.ink,
+                  ),
+                ),
+              ),
+            ),
+    );
+  }
+
+  Widget _keySurface(Palette p, {required Widget child}) {
+    return Container(
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: Radii.fieldAll,
+        border: Border.all(color: p.border, width: 1),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _buildConfirmKey(
+      Palette p, bool canConfirm, double parsedGrams, double height) {
+    final label = widget.isEditing ? 'Сохранить изменения' : 'Добавить в блюдо';
+    return Semantics(
+      button: true,
+      enabled: canConfirm,
+      label: label,
+      child: Material(
+        color: canConfirm ? p.accent : p.borderStatic,
+        borderRadius: Radii.fieldAll,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: canConfirm ? () => _confirm(parsedGrams) : null,
+          child: Container(
+            height: height,
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: Space.x2),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: AppTypography.label.copyWith(
+                color: canConfirm ? p.onAccent : p.inkMuted,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Чип с высотой 48 dp, опциональной подписью-значением и янтарным маркером
+/// активного сезона (2 dp подчёркивание, а не «ещё одна рамка»).
+class _TapChip extends StatelessWidget {
+  final String label;
+  final String? trailing;
+  final bool selected;
+  final bool season;
+  final Color accent;
+  final VoidCallback onTap;
+
+  const _TapChip({
+    super.key,
+    required this.label,
+    required this.accent,
+    required this.selected,
+    required this.onTap,
+    this.trailing,
+    this.season = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    return Material(
+      color: selected ? p.accentSoft : p.surface,
+      borderRadius: Radii.chipAll,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: kMinTapTarget),
+          padding: const EdgeInsets.symmetric(
+              horizontal: Space.x3, vertical: Space.x1),
+          decoration: BoxDecoration(
+            borderRadius: Radii.chipAll,
+            border: Border.all(color: p.border, width: 1),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (season) ...[
+                    Container(
+                      width: 4,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: accent,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  Text(
+                    label,
+                    style: AppTypography.label.copyWith(
+                      color: selected ? accent : p.ink,
+                    ),
+                  ),
+                ],
+              ),
+              if (trailing != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 1),
+                  child: Text(
+                    trailing!,
+                    style: AppTypography.numSm.copyWith(
+                      fontSize: 11,
+                      color: selected ? accent : p.inkSecondary,
+                    ),
+                  ),
+                ),
+              Container(
+                height: 2,
+                margin: const EdgeInsets.only(top: 3),
+                constraints: const BoxConstraints(minWidth: 24),
+                decoration: BoxDecoration(
+                  color: selected ? accent : Colors.transparent,
+                  borderRadius: BorderRadius.circular(1),
                 ),
               ),
             ],
@@ -644,95 +924,5 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
       ),
     );
   }
-
-  Widget _buildQuickChip(String label, VoidCallback onTap, bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-          decoration: BoxDecoration(
-            color: isDark ? AppColors.cardDark : AppColors.backgroundLight,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: isDark ? AppColors.borderDark : AppColors.borderLight,
-              width: 0.8,
-            ),
-          ),
-          child: Text(
-            label,
-            style: AppTypography.numericSmall.copyWith(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildKeypad(bool isDark) {
-    const keys = [
-      ['1', '2', '3'],
-      ['4', '5', '6'],
-      ['7', '8', '9'],
-      [',', '0', '⌫'],
-    ];
-
-    return Column(
-      children: keys.map((row) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 6),
-          child: Row(
-            children: row.map((k) {
-              return Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 3),
-                  child: InkWell(
-                    onTap: () {
-                      if (k == '⌫') {
-                        _onBackspace();
-                      } else {
-                        _onKey(k);
-                      }
-                    },
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      height: 48,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? AppColors.cardDark
-                            : AppColors.surfaceLight,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: isDark
-                              ? AppColors.borderDark
-                              : AppColors.borderLight,
-                          width: 1,
-                        ),
-                      ),
-                      child: Text(
-                        k,
-                        style: AppTypography.titleLarge.copyWith(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: k == '⌫'
-                              ? (isDark ? AppColors.primaryLight : AppColors.primary)
-                              : (isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        );
-      }).toList(),
-    );
-  }
 }
+

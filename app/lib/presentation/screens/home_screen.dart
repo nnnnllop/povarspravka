@@ -2,526 +2,202 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/calculation/calculation_engine.dart';
 import '../../core/calculation/models/dish.dart';
-import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_haptics.dart';
+import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
 import '../../data/masters_recipes.dart';
 import '../providers/dish_provider.dart';
-import '../widgets/nutrient_chip.dart';
 import 'recipe_editor_screen.dart';
 import 'search_product_modal.dart';
 
+/// Главный экран (аудит P1-7).
+///
+/// Было: экран открывался рекламным блоком «100% ОФЛАЙН» высотой ~430 dp,
+/// под ним горизонтальная карусель рецептур мастеров, потом две плитки-
+/// лозунга и в самом низу — сохранённые блюда. То есть главное действие
+/// (продолжить начатый расчёт) и главная ценность (моя библиотека) стояли
+/// ниже всего, что не помогает повару.
+///
+/// Стало — правило «сверху вниз по частоте»:
+///  1. Активный черновик: одна строка + «Продолжить» (или «Новый расчёт»).
+///  2. Мои блюда — библиотека, 1-в-ряд, с выходом и ккал.
+///  3. Рецептуры мастеров — сетка по 2 в ряд.
+///  4. Нижний док: «Новый расчёт» и «Справочник продуктов».
+/// Допущения и форматы — под катом «Как считается», а не на первом экране.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final p = Palette.of(context);
     final activeDish = ref.watch(dishProvider);
     final savedDishes = ref.watch(savedDishesProvider);
 
     return Scaffold(
+      backgroundColor: p.canvas,
       appBar: AppBar(
-        toolbarHeight: 56 * MediaQuery.textScalerOf(context).scale(1),
+        toolbarHeight: kToolbarHeight,
         title: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.primaryContainerDark : AppColors.primaryContainerLight,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                  width: 0.8,
-                ),
-              ),
-              child: Icon(
-                Icons.menu_book_rounded,
-                size: 18,
-                color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-              ),
-            ),
-            const SizedBox(width: 10),
+            Icon(Icons.menu_book_rounded, size: 20, color: p.accent),
+            const SizedBox(width: Space.x2),
             Expanded(
               child: Text(
                 'Поварская справка',
-                style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w700),
+                style: AppTypography.title.copyWith(color: p.ink),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Как считается',
+            icon: Icon(Icons.info_outline_rounded, color: p.inkSecondary),
+            onPressed: () => _showHowItWorks(context),
+          ),
+        ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Верхний карточный блок (Чистый минимализм без градиентов)
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.cardDark : AppColors.cardLight,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                  width: 1,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: isDark ? AppColors.primaryLight : AppColors.primary,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          '100% ОФЛАЙН',
-                          style: TextStyle(
-                            color: isDark ? AppColors.backgroundDark : Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        'Справочник Скурихина (2002) · USDA FDC',
-                        style: AppTypography.bodySmall.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Расчет энергетической и пищевой ценности блюд',
-                    style: AppTypography.headline.copyWith(
-                      fontSize: 19,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Официальный нормативный расчет по ГОСТ 1:1 к типовому бланку. Экспорт в PDF, DOCX и XLSX.',
-                    style: AppTypography.bodySmall.copyWith(
-                      color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 8,
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const RecipeEditorScreen()),
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: isDark ? AppColors.primaryLight : AppColors.primary,
-                          foregroundColor: isDark ? AppColors.backgroundDark : Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-                        ),
-                        icon: Icon(
-                          activeDish.ingredients.isNotEmpty
-                              ? Icons.edit_note_rounded
-                              : Icons.add_rounded,
-                          size: 18,
-                        ),
-                        label: Text(
-                          activeDish.ingredients.isNotEmpty
-                              ? 'Продолжить расчет (${activeDish.ingredients.length} инг.)'
-                              : 'Создать расчет блюда',
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                      if (activeDish.ingredients.isNotEmpty)
-                        OutlinedButton.icon(
-                          onPressed: () {
-                            ref.read(dishProvider.notifier).saveCurrentToLibrary();
-                            ref.read(dishProvider.notifier).createNewDish();
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const RecipeEditorScreen()),
-                            );
-                          },
-                          icon: const Icon(Icons.add_rounded, size: 18),
-                          label: const Text('Новый бланк'),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(
+            Space.x4, Space.x2, Space.x4, Space.x6),
+        children: [
+          _ActiveDraftCard(
+            dish: activeDish,
+            onOpen: () => _openEditor(context),
+            onNew: () => _newCalculation(context, ref),
+          ),
+          const SizedBox(height: Space.x5),
 
-            const SizedBox(height: 18),
+          // ── Мои блюда ────────────────────────────────────────────────
+          _SectionHeader(
+            title: 'Мои блюда',
+            trailing: savedDishes.isEmpty ? null : '${savedDishes.length}',
+          ),
+          const SizedBox(height: Space.x2),
+          if (savedDishes.isEmpty)
+            _EmptyLibrary(palette: p)
+          else
+            for (final dish in savedDishes) _SavedDishCard(dish: dish),
 
-            // Раздел «Рецептуры мастеров (Марчук)» — быстрый выбор классических блюд
-            Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text(
-                  'Рецептуры мастеров (Марчук)',
-                  style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w700),
-                ),
-                TextButton(
-                  onPressed: () => _openMastersFullCatalog(context, ref),
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    foregroundColor: isDark ? AppColors.accentLight : AppColors.accent,
-                  ),
-                  child: const Text('Все 6 рецептур →', style: TextStyle(fontSize: 12)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
+          const SizedBox(height: Space.x5),
 
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: MastersRecipesCatalog.recipes.take(4).map((recipe) {
-                  return Container(
-                    width: 230,
-                    margin: const EdgeInsets.only(right: 10),
-                    decoration: BoxDecoration(
-                      color: isDark ? AppColors.cardDark : AppColors.cardLight,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                      ),
-                    ),
-                    child: InkWell(
-                      onTap: () => _loadMasterRecipe(context, ref, recipe),
-                      borderRadius: BorderRadius.circular(10),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: isDark ? AppColors.accentDark : AppColors.accentLight,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                recipe.standardCode,
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  color: isDark ? AppColors.accentLight : AppColors.accent,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              recipe.name,
-                              style: AppTypography.titleMedium.copyWith(fontSize: 13, fontWeight: FontWeight.w700),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Выход ${CalculationEngine.formatGrams(recipe.expectedYieldGrams)} г · ${recipe.ingredients.length} инг.',
-                              style: AppTypography.numericSmall.copyWith(
-                                color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                Text(
-                                  'Загрузить',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    color: isDark ? AppColors.primaryLight : AppColors.primary,
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                Icon(
-                                  Icons.arrow_forward_rounded,
-                                  size: 12,
-                                  color: isDark ? AppColors.primaryLight : AppColors.primary,
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-
-            const SizedBox(height: 18),
-
-            // Быстрые карточки действий
-            LayoutBuilder(builder: (context, constraints) {
-              final isNarrow = constraints.maxWidth < 340;
-              final tile1 = _buildActionTile(
-                context: context,
-                icon: Icons.search_rounded,
-                title: 'Справочник продуктов',
-                subtitle: 'Полный хим. состав, витамины, минералы',
-                onTap: () => SearchProductModal.show(
-                  context,
-                  mode: SearchMode.browseCatalog,
-                  onAddedFromCatalog: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const RecipeEditorScreen()),
-                    );
-                  },
-                ),
-                isDark: isDark,
-              );
-              final tile2 = _buildActionTile(
-                context: context,
-                icon: Icons.calculate_rounded,
-                title: 'Формула расчета',
-                subtitle: 'ЭЦ = Б×4 + Ж×9 + У×4',
-                onTap: () => _showFormulaInfo(context),
-                isDark: isDark,
-              );
-
-              if (isNarrow) {
-                return Column(
-                  children: [
-                    tile1,
-                    const SizedBox(height: 10),
-                    tile2,
-                  ],
-                );
-              }
-              return Row(
-                children: [
-                  Expanded(child: tile1),
-                  const SizedBox(width: 10),
-                  Expanded(child: tile2),
-                ],
-              );
-            }),
-
-            // Список сохраненных рецептов (если есть)
-            if (savedDishes.isNotEmpty) ...[
-              const SizedBox(height: 22),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Сохраненные блюда (${savedDishes.length})',
-                    style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              ...savedDishes.map(
-                (dish) => _buildSavedDishCard(context, ref, dish, isDark),
-              ),
-            ],
-
-            const SizedBox(height: 20),
-
-            // Справочный блок стандартов
-            Text(
-              'Допущения и правила расчета',
-              style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 10),
-
-            _buildInfoCard(
-              title: 'Коэффициенты сохранности нутриентов',
-              description:
-                  'По умолчанию приняты коэффициенты сохранности:\n• Белки (Б): 94%\n• Жиры (Ж): 88%\n• Углеводы (У): 91%\nЭто настраиваемое допущение по табл. 13 Скурихина. Для блюд без т.о. выберите 100 / 100 / 100%.',
-              icon: Icons.thermostat_rounded,
-              isDark: isDark,
-            ),
-            const SizedBox(height: 10),
-
-            _buildInfoCard(
-              title: 'Два режима бланка',
-              description:
-                  '1. «Бланк с крестом (учебный)»: диагональный крест в колонке ккал сырья, итоговая калорийность только после т.о.\n2. «Подробный расчёт»: калории рассчитаны для каждого продукта.',
-              icon: Icons.splitscreen_rounded,
-              isDark: isDark,
-            ),
-            const SizedBox(height: 10),
-
-            _buildInfoCard(
-              title: 'Форматы экспорта',
-              description:
-                  'Экспорт в векторный PDF (идентично типовому бланку), Microsoft Word (.docx) и Microsoft Excel (.xlsx) с живыми формулами и печатью с телефона.',
-              icon: Icons.file_download_outlined,
-              isDark: isDark,
-            ),
-          ],
-        ),
+          // ── Рецептуры мастеров ──────────────────────────────────────
+          const _SectionHeader(title: 'Рецептуры мастеров'),
+          const SizedBox(height: Space.x2),
+          _MastersGrid(
+            onPick: (recipe) {
+              AppHaptics.toggle();
+              ref.read(dishProvider.notifier).loadDish(recipe.toDish());
+              _openEditor(context);
+            },
+          ),
+        ],
+      ),
+      bottomNavigationBar: _HomeDock(
+        onNewCalculation: () => _newCalculation(context, ref),
+        onCatalog: () => _openCatalog(context),
       ),
     );
   }
 
-  void _loadMasterRecipe(BuildContext context, WidgetRef ref, MasterRecipe recipe) {
-    final dish = recipe.toDish();
-    ref.read(dishProvider.notifier).loadDish(dish);
+  void _openEditor(BuildContext context) {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const RecipeEditorScreen()),
     );
   }
 
-  void _openMastersFullCatalog(BuildContext context, WidgetRef ref) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    showModalBottomSheet(
+  void _newCalculation(BuildContext context, WidgetRef ref) {
+    AppHaptics.commit();
+    final notifier = ref.read(dishProvider.notifier);
+    // Черновик с ингредиентами не теряем: он уходит в библиотеку.
+    if (ref.read(dishProvider).ingredients.isNotEmpty) {
+      notifier.saveCurrentToLibrary();
+    }
+    notifier.createNewDish();
+    _openEditor(context);
+  }
+
+  void _openCatalog(BuildContext context) {
+    SearchProductModal.show(
+      context,
+      mode: SearchMode.browseCatalog,
+      onAddedFromCatalog: () => _openEditor(context),
+    );
+  }
+
+  /// Допущения, режимы бланка и форматы экспорта — по требованию.
+  /// На первом экране они были справочной стеной, которая отодвигала
+  /// сохранённые блюда вниз (аудит P1-7).
+  void _showHowItWorks(BuildContext context) {
+    final p = Palette.of(context);
+    showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Container(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.85,
-          ),
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      useSafeArea: true,
+      showDragHandle: true,
+      backgroundColor: p.surface,
+      shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
+      builder: (ctx) => SizedBox(
+        height: MediaQuery.sizeOf(ctx).height * 0.85,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(
+              Space.x5, 0, Space.x5, Space.x6),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
+              Text('Как считается',
+                  style: AppTypography.title.copyWith(color: p.ink)),
+              const SizedBox(height: Space.x1),
+              Text(
+                'Справочник Скурихина (2002) · USDA FDC. Всё считается на '
+                'устройстве, без интернета.',
+                style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Сборник рецептур мастеров',
-                          style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        Text(
-                          'Официальные эталонные раскладки (Ф. Л. Марчук, ГОСТ)',
-                          style: AppTypography.bodySmall.copyWith(
-                            color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
+              const SizedBox(height: Space.x4),
+              _InfoBlock(
+                palette: p,
+                icon: Icons.functions_rounded,
+                title: 'Формула энергетической ценности',
+                body: 'Коэффициенты Этуотера:\n'
+                    '• 1 г белков = 4,0 ккал\n'
+                    '• 1 г жиров = 9,0 ккал\n'
+                    '• 1 г углеводов = 4,0 ккал\n\n'
+                    'ЭЦ = Б × 4 + Ж × 9 + У × 4. Расчёт идёт по нутриентам с '
+                    'учётом сохранности; вклад алкоголя, пищевых волокон и '
+                    'органических кислот формулой не учитывается.',
               ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: ListView.separated(
-                  itemCount: MastersRecipesCatalog.recipes.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (context, idx) {
-                    final recipe = MastersRecipesCatalog.recipes[idx];
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: isDark ? AppColors.cardDark : AppColors.backgroundLight,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                        ),
-                      ),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        title: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                recipe.name,
-                                style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w700),
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: isDark ? AppColors.accentDark : AppColors.accentLight,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                recipe.standardCode,
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  color: isDark ? AppColors.accentLight : AppColors.accent,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        subtitle: Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                recipe.description,
-                                style: AppTypography.bodySmall.copyWith(
-                                  fontSize: 11,
-                                  color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  Text(
-                                    'Выход: ${CalculationEngine.formatGrams(recipe.expectedYieldGrams)} г · ${recipe.ingredients.length} инг.',
-                                    style: AppTypography.numericSmall.copyWith(fontWeight: FontWeight.w600),
-                                  ),
-                                  const Spacer(),
-                                  Text(
-                                    recipe.culinaryProcess,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
-                        onTap: () {
-                          Navigator.pop(ctx);
-                          _loadMasterRecipe(context, ref, recipe);
-                        },
-                      ),
-                    );
-                  },
-                ),
+              const SizedBox(height: Space.x2),
+              _InfoBlock(
+                palette: p,
+                icon: Icons.thermostat_rounded,
+                title: 'Коэффициенты сохранности',
+                body: 'По умолчанию: белки 94 %, жиры 88 %, углеводы 91 % '
+                    '(табл. 13 Скурихина). Для блюд без т.о. — 100 / 100 / 100 %.',
+              ),
+              const SizedBox(height: Space.x2),
+              _InfoBlock(
+                palette: p,
+                icon: Icons.splitscreen_rounded,
+                title: 'Два режима бланка',
+                body: '1. «Бланк с крестом (учебный)» — диагональный крест в '
+                    'колонке ккал сырья, калорийность только после т.о.\n'
+                    '2. «Подробный расчёт» — калории рассчитаны для каждого продукта.',
+              ),
+              const SizedBox(height: Space.x2),
+              _InfoBlock(
+                palette: p,
+                icon: Icons.file_download_outlined,
+                title: 'Форматы экспорта',
+                body: 'PDF (векторный, идентичен типовому бланку), Word (.docx) '
+                    'и Excel (.xlsx) с живыми формулами — файлы сохраняются на '
+                    'телефоне и печатаются оттуда.',
+              ),
+              const SizedBox(height: Space.x4),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Понятно'),
               ),
             ],
           ),
@@ -529,267 +205,387 @@ class HomeScreen extends ConsumerWidget {
       ),
     );
   }
+}
 
-  Widget _buildSavedDishCard(
-    BuildContext context,
-    WidgetRef ref,
-    Dish dish,
-    bool isDark,
-  ) {
-    final calc = CalculationEngine.calculate(dish);
-    final displayTitle =
-        dish.title.trim().isNotEmpty ? dish.title.trim() : 'Блюдо без названия';
+class _InfoBlock extends StatelessWidget {
+  final Palette palette;
+  final IconData icon;
+  final String title;
+  final String body;
 
+  const _InfoBlock({
+    required this.palette,
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = palette;
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(Space.x3),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.cardDark : AppColors.cardLight,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? AppColors.borderDark : AppColors.borderLight,
-        ),
+        color: p.sunken,
+        borderRadius: Radii.fieldAll,
+        border: Border.all(color: p.borderStatic),
       ),
-      child: ListTile(
-        onTap: () {
-          ref.read(dishProvider.notifier).loadDish(dish);
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const RecipeEditorScreen()),
-          );
-        },
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: isDark ? AppColors.primaryContainerDark : AppColors.primaryContainerLight,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: isDark ? AppColors.borderDark : AppColors.borderLight,
-              width: 0.8,
-            ),
-          ),
-          child: Icon(
-            Icons.receipt_long_rounded,
-            color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-            size: 20,
-          ),
-        ),
-        title: Text(
-          displayTitle,
-          style: AppTypography.titleMedium.copyWith(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Wrap(
-            spacing: 6,
-            runSpacing: 4,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Text(
-                '${dish.ingredients.length} инг.',
-                style: AppTypography.bodySmall.copyWith(fontSize: 11),
-              ),
-              Text(
-                '· Выход: ${CalculationEngine.formatGrams(calc.yieldGrams)} г',
-                style: AppTypography.bodySmall.copyWith(fontSize: 11),
-              ),
-              NutrientChip(
-                type: NutrientType.kcal,
-                value: CalculationEngine.formatKcal(calc.cookedKcal),
-                compact: true,
+              Icon(icon, size: 18, color: p.inkSecondary),
+              const SizedBox(width: Space.x2),
+              Expanded(
+                child: Text(title,
+                    style: AppTypography.label.copyWith(color: p.ink)),
               ),
             ],
           ),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.copy_rounded, size: 18),
-              tooltip: 'Дублировать блюдо',
-              onPressed: () async {
-                try {
-                  await ref
-                      .read(savedDishesProvider.notifier)
-                      .duplicateDish(dish);
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Ошибка при дублировании: $e')),
-                    );
-                  }
-                }
-              },
+          const SizedBox(height: Space.x1),
+          Text(body,
+              style: AppTypography.bodySm.copyWith(color: p.inkSecondary)),
+        ],
+      ),
+    );
+  }
+}
+
+/// Строка активного расчёта: единственный «продолжить» на экране.
+class _ActiveDraftCard extends StatelessWidget {
+  final Dish dish;
+  final VoidCallback onOpen;
+  final VoidCallback onNew;
+
+  const _ActiveDraftCard({
+    required this.dish,
+    required this.onOpen,
+    required this.onNew,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final hasContent = dish.ingredients.isNotEmpty;
+    final calc = CalculationEngine.calculate(dish);
+    final title = dish.title.trim().isEmpty
+        ? (hasContent ? 'Черновик без названия' : 'Новый расчёт')
+        : dish.title.trim();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: Radii.cardAll,
+        border: Border.all(color: hasContent ? p.accent : p.borderStatic),
+      ),
+      padding: const EdgeInsets.all(Space.x4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            hasContent ? 'ПРОДОЛЖИТЬ' : 'НАЧАТЬ',
+            style: AppTypography.caption.copyWith(
+              color: p.accent,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
             ),
-            IconButton(
-              icon: Icon(Icons.delete_outline_rounded,
-                  size: 20, color: isDark ? AppColors.kcalTextDark : AppColors.kcalTextLight),
-              tooltip: 'Удалить',
-              onPressed: () async {
-                try {
-                  await ref
-                      .read(savedDishesProvider.notifier)
-                      .deleteDish(dish.id);
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Ошибка при удалении: $e')),
-                    );
-                  }
-                }
-              },
+          ),
+          const SizedBox(height: Space.x1),
+          Text(
+            title,
+            style: AppTypography.title.copyWith(color: p.ink),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (hasContent) ...[
+            const SizedBox(height: Space.x1),
+            Text(
+              '${dish.ingredients.length} инг. · выход ${CalculationEngine.formatGrams(calc.yieldGrams)} г · '
+              '${CalculationEngine.formatKcal(calc.cookedKcal)} ккал',
+              style: AppTypography.numSm.copyWith(color: p.inkSecondary),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionTile({
-    required BuildContext context,
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-    required bool isDark,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.cardDark : AppColors.cardLight,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? AppColors.borderDark : AppColors.borderLight,
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: isDark ? AppColors.primaryContainerDark : AppColors.primaryContainerLight,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                      width: 0.8,
-                    ),
-                  ),
-                  child: Icon(
-                    icon,
-                    size: 18,
-                    color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  title,
-                  style: AppTypography.titleMedium.copyWith(fontSize: 13, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: AppTypography.bodySmall.copyWith(
-                    fontSize: 11,
-                    color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                  ),
-                ),
-              ],
+          const SizedBox(height: Space.x3),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: hasContent ? onOpen : onNew,
+              icon: Icon(
+                hasContent ? Icons.edit_note_rounded : Icons.add_rounded,
+                size: 20,
+              ),
+              label: Text(hasContent ? 'Продолжить расчёт' : 'Новый расчёт'),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
+}
 
-  Widget _buildInfoCard({
-    required String title,
-    required String description,
-    required IconData icon,
-    required bool isDark,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.cardDark : AppColors.cardLight,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? AppColors.borderDark : AppColors.borderLight,
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  final String? trailing;
+
+  const _SectionHeader({required this.title, this.trailing});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            style: AppTypography.title.copyWith(color: p.ink),
+          ),
         ),
+        if (trailing != null)
+          Text(
+            trailing!,
+            style: AppTypography.numSm.copyWith(color: p.inkMuted),
+          ),
+      ],
+    );
+  }
+}
+
+class _EmptyLibrary extends StatelessWidget {
+  final Palette palette;
+
+  const _EmptyLibrary({required this.palette});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(Space.x4),
+      decoration: BoxDecoration(
+        color: palette.surface,
+        borderRadius: Radii.cardAll,
+        border: Border.all(color: palette.borderStatic),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: isDark ? AppColors.primaryContainerDark : AppColors.primaryContainerLight,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                width: 0.8,
-              ),
-            ),
-            child: Icon(
-              icon,
-              size: 18,
-              color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-            ),
-          ),
-          const SizedBox(width: 12),
+          Icon(Icons.folder_open_rounded, size: 20, color: palette.inkMuted),
+          const SizedBox(width: Space.x3),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: AppTypography.titleMedium.copyWith(fontSize: 13, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  description,
-                  style: AppTypography.bodySmall.copyWith(
-                    color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                    height: 1.4,
-                  ),
-                ),
-              ],
+            child: Text(
+              'Здесь появятся сохранённые блюда. Рассчитайте состав и нажмите '
+              '«Сохранить» в меню ⋮.',
+              style: AppTypography.bodySm.copyWith(color: palette.inkSecondary),
             ),
           ),
         ],
       ),
     );
   }
+}
 
-  void _showFormulaInfo(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Формула ЭЦ'),
-        content: const Text(
-          'Энергетическая ценность (ккал) рассчитывается по коэффициентам Этуотера:\n\n'
-          '• 1 г белков = 4,0 ккал\n'
-          '• 1 г жиров = 9,0 ккал\n'
-          '• 1 г углеводов = 4,0 ккал\n\n'
-          'Итоговая формула:\nЭЦ = Б × 4 + Ж × 9 + У × 4\n\n'
-          'Расчет ведется по нутриентам с учетом выбранной сохранности. Значения по умолчанию 94 / 88 / 91% можно изменить; без т.о. используются 100 / 100 / 100%. Формула 4/9/4 не учитывает отдельный вклад алкоголя, пищевых волокон и органических кислот.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Понятно'),
+/// Карточка сохранённого блюда: название, выход, ккал, меню действий.
+class _SavedDishCard extends ConsumerWidget {
+  final Dish dish;
+
+  const _SavedDishCard({required this.dish});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = Palette.of(context);
+    final calc = CalculationEngine.calculate(dish);
+    final title = dish.title.trim().isEmpty ? 'Блюдо без названия' : dish.title.trim();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: Space.x2),
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: Radii.cardAll,
+        border: Border.all(color: p.borderStatic),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            ref.read(dishProvider.notifier).loadDish(dish);
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const RecipeEditorScreen()),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+                Space.x4, Space.x3, Space.x1, Space.x3),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: AppTypography.body.copyWith(
+                            color: p.ink, fontWeight: FontWeight.w700),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${dish.ingredients.length} инг. · выход '
+                        '${CalculationEngine.formatGrams(calc.yieldGrams)} г · '
+                        '${CalculationEngine.formatKcal(calc.cookedKcal)} ккал',
+                        style: AppTypography.numSm.copyWith(color: p.inkSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+                PopupMenuButton<String>(
+                  tooltip: 'Действия с блюдом',
+                  icon: Icon(Icons.more_vert_rounded, color: p.inkMuted),
+                  onSelected: (value) async {
+                    final notifier = ref.read(savedDishesProvider.notifier);
+                    try {
+                      if (value == 'copy') await notifier.duplicateDish(dish);
+                      if (value == 'delete') await notifier.deleteDish(dish.id);
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Не удалось: $e')),
+                        );
+                      }
+                    }
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'copy', child: Text('Дублировать')),
+                    PopupMenuItem(value: 'delete', child: Text('Удалить')),
+                  ],
+                ),
+              ],
+            ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Мастера — сетка по 2 в ряд (было: горизонтальная карусель карточек
+/// шириной 230 dp, где вторая карточка всегда обрезана).
+class _MastersGrid extends StatelessWidget {
+  final void Function(MasterRecipe) onPick;
+
+  const _MastersGrid({required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    return LayoutBuilder(builder: (context, constraints) {
+      final wide = constraints.maxWidth >= 600;
+      final columns = wide ? 3 : 2;
+      const gap = Space.x2;
+      final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
+      return Wrap(
+        spacing: gap,
+        runSpacing: gap,
+        children: [
+          for (final recipe in MastersRecipesCatalog.recipes)
+            SizedBox(
+              width: width,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: p.surface,
+                  borderRadius: Radii.cardAll,
+                  border: Border.all(color: p.borderStatic),
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => onPick(recipe),
+                    borderRadius: Radii.cardAll,
+                    child: Padding(
+                      padding: const EdgeInsets.all(Space.x3),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            recipe.standardCode,
+                            style: AppTypography.caption.copyWith(
+                              color: p.inkMuted,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            recipe.name,
+                            style: AppTypography.bodySm.copyWith(
+                                color: p.ink, fontWeight: FontWeight.w700),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: Space.x1),
+                          Text(
+                            '${CalculationEngine.formatGrams(recipe.expectedYieldGrams)} г · '
+                            '${recipe.ingredients.length} инг.',
+                            style: AppTypography.numSm.copyWith(color: p.inkSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
+      );
+    });
+  }
+}
+
+/// Нижний док главного экрана: два главных действия всегда под рукой.
+class _HomeDock extends StatelessWidget {
+  final VoidCallback onNewCalculation;
+  final VoidCallback onCatalog;
+
+  const _HomeDock({
+    required this.onNewCalculation,
+    required this.onCatalog,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    return Material(
+      elevation: 8,
+      color: p.surface,
+      child: SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+              horizontal: Space.x4, vertical: Space.x3),
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: p.divider)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: onNewCalculation,
+                  icon: const Icon(Icons.add_rounded, size: 20),
+                  label: const Text('Новый расчёт'),
+                ),
+              ),
+              const SizedBox(width: Space.x2),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onCatalog,
+                  icon: const Icon(Icons.search_rounded, size: 20),
+                  label: const Text('Справочник'),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

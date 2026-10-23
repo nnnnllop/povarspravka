@@ -5,101 +5,130 @@ import '../../core/calculation/models/blank_mode.dart';
 import '../../core/calculation/models/calculation_result.dart';
 import '../../core/calculation/models/dish.dart';
 import '../../core/export/export_service.dart';
-import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_haptics.dart';
+import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
 import '../providers/dish_provider.dart';
 
-class BlankPreviewScreen extends ConsumerWidget {
+/// Просмотр бланка (аудит P1-8).
+///
+/// Было: лист в двух вложенных `SingleChildScrollView` без масштабирования
+/// (на 320 dp от бланка видно ~40 % ширины, и уменьшить его нельзя) плюс
+/// ОДИН И ТОТ ЖЕ набор из четырёх кнопок экспорта в двух местах — в меню
+/// AppBar и в нижней панели.
+///
+/// Стало:
+/// • `InteractiveViewer` с пинч-зумом 0.35×–2.5× и перетаскиванием;
+/// • один источник экспорта — кнопка «Экспорт», открывающая сгруппированный
+///   лист (PDF / Word / Excel + «Печать»), а не дублирующиеся панели;
+/// • строка режима и счётчик сгруппированы в одну плашку над листом.
+class BlankPreviewScreen extends ConsumerStatefulWidget {
   const BlankPreviewScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<BlankPreviewScreen> createState() => _BlankPreviewScreenState();
+}
+
+class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
+  static const double _minScale = 0.35;
+  static const double _maxScale = 2.5;
+
+  final _transform = TransformationController();
+  double _scale = 1;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _transform.addListener(_onTransform);
+  }
+
+  @override
+  void dispose() {
+    _transform.removeListener(_onTransform);
+    _transform.dispose();
+    super.dispose();
+  }
+
+  void _onTransform() {
+    final next = _transform.value.getMaxScaleOnAxis();
+    if ((next - _scale).abs() > 0.01 && mounted) {
+      setState(() => _scale = next);
+    }
+  }
+
+  void _zoomBy(double factor) {
+    final next = (_scale * factor).clamp(_minScale, _maxScale);
+    setState(() {
+      _scale = next;
+      _transform.value = Matrix4.identity()..scale(next);
+    });
+  }
+
+  void _resetZoom() {
+    setState(() {
+      _scale = 1;
+      _transform.value = Matrix4.identity();
+    });
+  }
+
+  Future<void> _run(Future<void> Function() action,
+      {String failure = 'Ошибка при экспорте'}) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await action();
+      AppHaptics.commit();
+    } catch (e) {
+      AppHaptics.error();
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$failure: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final dish = ref.watch(dishProvider);
     final calc = ref.watch(calculationResultProvider);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = Palette.of(context);
 
     return Scaffold(
+      backgroundColor: p.canvas,
       appBar: AppBar(
-        toolbarHeight: 64 * MediaQuery.textScalerOf(context).scale(14) / 14,
-        title: const Text('Бланк расчета КБЖУ',
+        // AppBar сам корректно масштабируется вместе с текстом. Прежняя
+        // формула `64 * scale(14)/14` = `64·s` давала двойное масштабирование
+        // и при s=2.0 толкала панель до 128 dp (аудит P2-8).
+        toolbarHeight: kToolbarHeight,
+        title: const Text('Бланк расчёта КБЖУ',
             softWrap: true,
             maxLines: 3,
-            overflow: TextOverflow.visible,
-            style: TextStyle(fontSize: 18, height: 1.1)),
+            overflow: TextOverflow.visible),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.ios_share_rounded),
+            tooltip: 'Экспорт',
+            onPressed: _busy ? null : () => _showExportSheet(dish),
+          ),
           IconButton(
             icon: const Icon(Icons.print_rounded),
             tooltip: 'Печать бланка',
-            onPressed: () async {
-              try {
-                await ExportService.printPdf(dish);
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Ошибка при печати: $e')),
-                  );
-                }
-              }
-            },
-          ),
-          PopupMenuButton<ExportType>(
-            icon: const Icon(Icons.share_rounded),
-            tooltip: 'Поделиться файлом',
-            onSelected: (type) async {
-              try {
-                await ExportService.shareFile(dish, type);
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Ошибка при экспорте: $e')),
-                  );
-                }
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: ExportType.pdf,
-                child: Row(
-                  children: [
-                    Icon(Icons.picture_as_pdf_rounded,
-                        color: AppColors.kcal, size: 20),
-                    SizedBox(width: 10),
-                    Text('Экспорт в PDF'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: ExportType.docx,
-                child: Row(
-                  children: [
-                    Icon(Icons.description_rounded,
-                        color: AppColors.carbs, size: 20),
-                    SizedBox(width: 10),
-                    Text('Экспорт в Word (.docx)'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: ExportType.xlsx,
-                child: Row(
-                  children: [
-                    Icon(Icons.table_chart_rounded,
-                        color: AppColors.protein, size: 20),
-                    SizedBox(width: 10),
-                    Text('Экспорт в Excel (.xlsx)'),
-                  ],
-                ),
-              ),
-            ],
+            onPressed:
+                _busy ? null : () => _run(() => ExportService.printPdf(dish),
+                    failure: 'Ошибка при печати'),
           ),
         ],
       ),
       body: Column(
         children: [
-          // Информационная плашка режима бланка
+          // Плашка режима: имя режима и счётчик в одной строке.
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: isDark ? AppColors.cardDark : AppColors.backgroundLight,
+            padding: const EdgeInsets.symmetric(
+                horizontal: Space.x4, vertical: Space.x2),
+            color: p.sunken,
             child: Row(
               children: [
                 Icon(
@@ -107,131 +136,199 @@ class BlankPreviewScreen extends ConsumerWidget {
                       ? Icons.grid_on_rounded
                       : Icons.view_list_rounded,
                   size: 16,
-                  color: AppColors.primary,
+                  color: p.inkSecondary,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: Space.x2),
                 Expanded(
                   child: Text(
                     'Режим: ${dish.blankMode.displayName}',
-                    style: AppTypography.bodySmall.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.primary,
-                    ),
+                    style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: Space.x2),
                 Text(
                   '${dish.ingredients.length} инг.',
-                  style: AppTypography.numericSmall,
+                  style: AppTypography.numSm.copyWith(color: p.inkSecondary),
                 ),
               ],
             ),
           ),
 
-          // Интерактивный лист бланка с горизонтальным и вертикальным скроллом
+          // Лист бланка: пинч-зум и перетаскивание.
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(12),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
+            child: InteractiveViewer(
+              transformationController: _transform,
+              minScale: _minScale,
+              maxScale: _maxScale,
+              // Лист больше экрана — панорамируем свободно по обеим осям.
+              constrained: false,
+              boundaryMargin: const EdgeInsets.all(80),
+              child: Container(
+                padding: const EdgeInsets.all(Space.x4),
                 child: _BlankPreviewDocument(
-                    dish: dish,
-                    calc: calc,
-                    scale: MediaQuery.textScalerOf(context).scale(9.5) / 9.5),
+                  dish: dish,
+                  calc: calc,
+                  scale: MediaQuery.textScalerOf(context).scale(9.5) / 9.5,
+                ),
               ),
             ),
           ),
 
-          // Нижняя панель действий экспорта
+          // Панель масштаба: единственные элементы управления листом.
           SafeArea(
             top: false,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: Space.x2, vertical: Space.x2),
               decoration: BoxDecoration(
-                color: isDark ? AppColors.surfaceDark : Colors.white,
-                border: Border(
-                  top: BorderSide(
-                    color:
-                        isDark ? AppColors.borderDark : AppColors.borderLight,
-                  ),
-                ),
+                border: Border(top: BorderSide(color: p.divider)),
               ),
-              child: Row(
+              // Wrap, а не Row: при масштабе текста 2.0× подпись «По размеру»
+              // не помещается рядом с кнопками зума и должна перейти на новую
+              // строку, а не обрезаться (проверено design_audit_test).
+              child: Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      icon: const Icon(Icons.picture_as_pdf_rounded, size: 18),
-                      label: const Text('PDF'),
-                      onPressed: () async {
-                        try {
-                          await ExportService.shareFile(dish, ExportType.pdf);
-                        } catch (e) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Ошибка при экспорте: $e')),
-                            );
-                          }
-                        }
-                      },
-                    ),
+                  IconButton(
+                    tooltip: 'Уменьшить',
+                    icon: const Icon(Icons.zoom_out_rounded),
+                    onPressed: () => _zoomBy(1 / 1.25),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      icon: const Icon(Icons.description_rounded, size: 18),
-                      label: const Text('Word'),
-                      onPressed: () async {
-                        try {
-                          await ExportService.shareFile(dish, ExportType.docx);
-                        } catch (e) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Ошибка при экспорте: $e')),
-                            );
-                          }
-                        }
-                      },
-                    ),
+                  Text(
+                    'Масштаб ${(_scale * 100).round()} %',
+                    key: const ValueKey('blank-zoom'),
+                    textAlign: TextAlign.center,
+                    style:
+                        AppTypography.numSm.copyWith(color: p.inkSecondary),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      icon: const Icon(Icons.table_chart_rounded, size: 18),
-                      label: const Text('Excel'),
-                      onPressed: () async {
-                        try {
-                          await ExportService.shareFile(dish, ExportType.xlsx);
-                        } catch (e) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Ошибка при экспорте: $e')),
-                            );
-                          }
-                        }
-                      },
-                    ),
+                  IconButton(
+                    tooltip: 'Увеличить',
+                    icon: const Icon(Icons.zoom_in_rounded),
+                    onPressed: () => _zoomBy(1.25),
                   ),
-                  const SizedBox(width: 8),
-                  IconButton.filled(
-                    icon: const Icon(Icons.print_rounded),
-                    tooltip: 'Печать',
-                    onPressed: () async {
-                      try {
-                        await ExportService.printPdf(dish);
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Ошибка при печати: $e')),
-                          );
-                        }
-                      }
-                    },
+                  TextButton.icon(
+                    onPressed: _resetZoom,
+                    icon: const Icon(Icons.fit_screen_rounded, size: 18),
+                    label: const Text('По размеру'),
                   ),
                 ],
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Один сгруппированный лист экспорта вместо двух наборов кнопок.
+  Future<void> _showExportSheet(Dish dish) async {
+    final p = Palette.of(context);
+    final choice = await showModalBottomSheet<ExportType>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      backgroundColor: p.surface,
+      shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Сохранить бланк',
+                style: AppTypography.title.copyWith(color: p.ink)),
+            const SizedBox(height: Space.x1),
+            Text(
+              'Файл сохраняется на телефоне, дальше — «Поделиться» или печать.',
+              style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
+            ),
+            const SizedBox(height: Space.x3),
+            _ExportTile(
+              palette: p,
+              icon: Icons.picture_as_pdf_rounded,
+              title: 'PDF',
+              subtitle: 'Векторный, идентичен типовому бланку',
+              onTap: () => Navigator.pop(ctx, ExportType.pdf),
+            ),
+            _ExportTile(
+              palette: p,
+              icon: Icons.description_rounded,
+              title: 'Word (.docx)',
+              subtitle: 'Редактируемый документ',
+              onTap: () => Navigator.pop(ctx, ExportType.docx),
+            ),
+            _ExportTile(
+              palette: p,
+              icon: Icons.table_chart_rounded,
+              title: 'Excel (.xlsx)',
+              subtitle: 'С живыми формулами',
+              onTap: () => Navigator.pop(ctx, ExportType.xlsx),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice != null) {
+      await _run(() => ExportService.shareFile(dish, choice));
+    }
+  }
+}
+
+class _ExportTile extends StatelessWidget {
+  final Palette palette;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _ExportTile({
+    required this.palette,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = palette;
+    return Container(
+      margin: const EdgeInsets.only(bottom: Space.x2),
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: Radii.fieldAll,
+        border: Border.all(color: p.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(Space.x3),
+            child: Row(
+              children: [
+                Icon(icon, size: 22, color: p.inkSecondary),
+                const SizedBox(width: Space.x3),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title,
+                          style: AppTypography.body.copyWith(
+                              color: p.ink, fontWeight: FontWeight.w700)),
+                      Text(subtitle,
+                          style: AppTypography.caption
+                              .copyWith(color: p.inkSecondary)),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right_rounded, color: p.inkMuted),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -580,8 +677,8 @@ class _BlankPreviewDocument extends StatelessWidget {
             _headerCell('Белки, г', _w34, h1),
             Row(
               children: [
-                _headerCell('В 100\nг', _w3, h2, fontSize: 8.5),
-                _headerCell('В\nблюде', _w4, h2, fontSize: 8.5),
+                _headerCell('В 100\nг', _w3, h2, fontSize: 9.5),
+                _headerCell('В\nблюде', _w4, h2, fontSize: 9.5),
               ],
             ),
           ],
@@ -591,8 +688,8 @@ class _BlankPreviewDocument extends StatelessWidget {
             _headerCell('Жиры, г', _w56, h1),
             Row(
               children: [
-                _headerCell('В 100\nг', _w5, h2, fontSize: 8.5),
-                _headerCell('В\nблюде', _w6, h2, fontSize: 8.5),
+                _headerCell('В 100\nг', _w5, h2, fontSize: 9.5),
+                _headerCell('В\nблюде', _w6, h2, fontSize: 9.5),
               ],
             ),
           ],
@@ -602,8 +699,8 @@ class _BlankPreviewDocument extends StatelessWidget {
             _headerCell('Углеводы, г', _w78, h1),
             Row(
               children: [
-                _headerCell('В 100\nг', _w7, h2, fontSize: 8.5),
-                _headerCell('В\nблюде', _w8, h2, fontSize: 8.5),
+                _headerCell('В 100\nг', _w7, h2, fontSize: 9.5),
+                _headerCell('В\nблюде', _w8, h2, fontSize: 9.5),
               ],
             ),
           ],
@@ -666,7 +763,7 @@ class _BlankPreviewDocument extends StatelessWidget {
               text: '(сумма по столбцам)',
               style: TextStyle(
                 color: Colors.black,
-                fontSize: 9.0,
+                fontSize: 9.5,
                 fontStyle: FontStyle.italic,
               ),
             ),
@@ -785,3 +882,6 @@ class _FullBoxCrossPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
+
+
+

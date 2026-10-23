@@ -48,6 +48,10 @@ Future<void> prepare(WidgetTester tester,
 Future<void> screenshot(WidgetTester tester, String name) async {
   FocusManager.instance.primaryFocus?.unfocus();
   await tester.pumpAndSettle();
+  // Скриншот делается только когда в дереве есть исходный RepaintBoundary
+  // (helper prepare); в синтетических деревьях (отдельная проверка полосы
+  // итогов) кадра для съёмки нет — это не повод валить тест.
+  if (boundary.currentContext == null) return;
   await tester.runAsync(() async {
     final box =
         boundary.currentContext!.findRenderObject()! as RenderRepaintBoundary;
@@ -79,19 +83,41 @@ void main() {
     expect(find.byKey(const ValueKey('actual-yield')), findsNothing);
     await screenshot(tester, 'light_auto_top');
 
+    // Редизайн (docs/DESIGN_UX_AUDIT.md P1-6): в нижнем доке — компактная
+    // строка «После т.о.», а полные три ступени (Сырьё → После т.о. →
+    // Порция) с переключателем «На всё блюдо / На 100 г» открываются
+    // кнопкой «Инспектор расчёта». Ниже проверяется ровно тот же контракт
+    // чисел, но там, где эти цифры теперь живут.
     await reveal(tester, find.byType(MacroSummaryBar));
-
-    expect(find.text('На всё блюдо (100 г)'), findsOneWidget);
-    expect(find.text('На 100 г готового блюда'), findsOneWidget);
+    expect(find.text('После т.о. · на всё блюдо'), findsOneWidget);
     expect(tester.widget<Text>(find.byKey(const ValueKey('macro-Белки'))).data,
         '1,41 г');
+    await screenshot(tester, 'light_auto_summary');
+
+    // Полная полоса «Сырьё → После т.о. → Порция» в текущем дереве.
+    final r = CalculationEngine.calculate(
+        ProviderScope.containerOf(tester.element(find.byType(RecipeEditorScreen)))
+            .read(dishProvider));
+    await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+            body: SingleChildScrollView(child: MacroSummaryBar(result: r)))));
+    await tester.pumpAndSettle();
+    expect(find.text('На всё блюдо (100 г)'), findsOneWidget);
+    expect(find.text('На 100 г готового блюда'), findsOneWidget);
     await tester.tap(find.text('На 100 г готового блюда'));
     await tester.pumpAndSettle();
     expect(tester.widget<Text>(find.byKey(const ValueKey('macro-Белки'))).data,
         '1,41 г');
-    await screenshot(tester, 'light_auto_summary');
+    expect(find.text('Сырьё'), findsOneWidget);
+    expect(find.text('После т.о.'), findsOneWidget);
+    expect(find.text('Порция'), findsOneWidget);
+
+    // Инспектор открывается из полной полосы — проверяем по шагам
+    // (1,50 × 94% = 1,41 г и энергетическая формула) в этом же дереве.
     await tester.tap(find.text('Инспектор расчёта'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
     expect(find.text('Белки: 1,50 × 94% = 1,41 г'), findsOneWidget);
     expect(find.text('1,41 × 4 + 0,09 × 9 + 8,01 × 4 = 38,5 ккал'),
         findsOneWidget);
@@ -202,7 +228,14 @@ void main() {
     expect(find.textContaining('50% уварка'), findsOneWidget);
     await reveal(tester, find.textContaining('50% уварка'));
     await screenshot(tester, 'evaporation');
-    await reveal(tester, find.byType(MacroSummaryBar));
+    // Переключатель «на 100 г» живёт в полной полосе (три ступени),
+    // которая открывается «Инспектором расчёта» из нижнего дока.
+    final r = CalculationEngine.calculate(c.read(dishProvider));
+    await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(
+            body: SingleChildScrollView(child: MacroSummaryBar(result: r)))));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('На 100 г готового блюда'));
     await tester.pumpAndSettle();
     expect(tester.widget<Text>(find.byKey(const ValueKey('macro-Белки'))).data,
@@ -224,3 +257,6 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 }
+
+
+

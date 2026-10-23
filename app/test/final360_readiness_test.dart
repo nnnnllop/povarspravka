@@ -115,7 +115,10 @@ void main() {
           const Size(390, 844),
           repo: FixtureRepo(products: [bad]));
       final before = jsonEncode(n.state.toJson());
-      await t.tap(find.byType(ListTile).first);
+      // Редизайн (docs/DESIGN_UX_AUDIT.md P1-5): строка результата больше не
+      // `ListTile`, а combo-pick-строка (раскрывается на месте, не закрывая
+      // поиск). Тапаем по самой строке продукта — смысл проверки тот же.
+      await t.tap(find.text(bad.name));
       await t.pumpAndSettle();
       expect(find.textContaining('недоступен для расчёта'), findsOneWidget);
       expect(find.byType(CustomNumpadSheet), findsNothing);

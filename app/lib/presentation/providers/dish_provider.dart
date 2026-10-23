@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -117,6 +118,42 @@ class DishNotifier extends StateNotifier<Dish> {
   bool _editedBeforeLoad = false;
   Object? lastPersistenceError;
 
+  /// Снимок последнего сохранённого / загруженного состояния — база для
+  /// [isDirty]. Обновляется при `saveCurrentToLibrary`, `loadDish`,
+  /// `createNewDish` и при восстановлении черновика с диска.
+  Dish? _lastCleanSnapshot;
+
+  /// Есть ли несохранённые правки относительно последнего сохранения.
+  ///
+  /// Сравнение идёт по сериализации без `updatedAt` (это метка времени
+  /// каждого автодействия, она меняется и при отмене правки обратно) и без
+  /// `id` (после «Открыть как копию» это уже другое блюдо, но раскладка та
+  /// же).
+  bool get isDirty {
+    final clean = _lastCleanSnapshot;
+    if (clean == null) {
+      return state.ingredients.isNotEmpty || state.title.isNotEmpty;
+    }
+    return _contentSignature(clean) != _contentSignature(state);
+  }
+
+  String _contentSignature(Dish dish) => jsonEncode(<String, Object?>{
+        'title': dish.title,
+        'ingredients': dish.ingredients.map((i) => i.toJson()).toList(),
+        'customYieldGrams': dish.customYieldGrams,
+        'retention': [
+          dish.retentionProtein,
+          dish.retentionFat,
+          dish.retentionCarbs,
+        ],
+        'blankMode': dish.blankMode.name,
+        'showTitle': dish.showTitleInExport,
+        'showPer100g': dish.showPer100gRowInExport,
+      });
+
+  /// Отметить текущее состояние как сохранённое (сбрасывает [isDirty]).
+  void markClean() => _lastCleanSnapshot = _snapshot(state);
+
   Future<void> flushPendingSaves() async {
     await _ready;
     await _saveQueue;
@@ -155,6 +192,7 @@ class DishNotifier extends StateNotifier<Dish> {
         state.title.isEmpty) {
       state = data.activeDraft!;
     }
+    _lastCleanSnapshot = _snapshot(state);
   }
 
   void _persist() {
@@ -303,11 +341,13 @@ class DishNotifier extends StateNotifier<Dish> {
     _persist();
   }
 
+  /// Сохранить текущее блюдо в библиотеку и пометить состояние чистым.
   Future<void> saveCurrentToLibrary() {
     final snapshot = state;
     _saveQueue = _saveQueue.then((_) async {
       await _ready;
       await _savedDishesNotifier?.saveDish(snapshot);
+      _lastCleanSnapshot = _snapshot(snapshot);
       lastPersistenceError = null;
     }).catchError((Object error, StackTrace stack) {
       lastPersistenceError = error;
@@ -316,9 +356,36 @@ class DishNotifier extends StateNotifier<Dish> {
     return flushPendingSaves();
   }
 
+  /// Безусловная замена состояния (поведение сохранено — его проверяют
+  /// тесты). Экран редактора перед вызовом обязан спросить пользователя.
   void loadDish(Dish dish) {
     CalculationValidation.dish(dish);
     state = _snapshot(dish);
+    markClean();
+    _persist();
+  }
+
+  /// Открыть рецептуру **как копию в черновик**: получает новый `id`, поэтому
+  /// текущий черновик не перезаписывается и остаётся в истории черновиков.
+  ///
+  /// Вызывается только после явного выбора пользователя («Открыть как
+  /// копию в черновик») — это и есть защита от тихого уничтожения работы
+  /// (аудит P0-3).
+  void loadDishAsCopy(Dish dish) {
+    CalculationValidation.dish(dish);
+    final now = DateTime.now();
+    state = dish.copyWith(
+      id: _newId(),
+      ingredients: dish.ingredients
+          .map((i) => i.copyWith(
+                id: _newId(),
+                product: Product.fromJson(i.product.toJson()),
+              ))
+          .toList(),
+      createdAt: now,
+      updatedAt: now,
+    );
+    markClean();
     _persist();
   }
 
@@ -329,6 +396,7 @@ class DishNotifier extends StateNotifier<Dish> {
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
+    markClean();
     _persist();
   }
 

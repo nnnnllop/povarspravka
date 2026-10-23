@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:povarspravka/core/theme/app_theme.dart';
 import 'package:povarspravka/data/repositories/dish_storage_repository.dart';
 import 'package:povarspravka/presentation/providers/dish_provider.dart';
 import 'package:povarspravka/presentation/screens/recipe_editor_screen.dart';
@@ -46,7 +47,7 @@ void main() {
     }
     await tester.pumpWidget(ProviderScope(
         overrides: [dishProvider.overrideWith((ref) => n)],
-        child: const MaterialApp(home: RecipeEditorScreen())));
+        child: MaterialApp(theme: AppTheme.light, home: const RecipeEditorScreen())));
     await tester.pumpAndSettle();
     for (var i = 0; i < 5; i++) {
       final card = find.byType(Dismissible).first;

@@ -412,9 +412,13 @@ void main() {
                   saved = g;
                   gross = b;
                 }))));
-    final toggle = find.byType(SwitchListTile);
+    // Редизайн (docs/DESIGN_UX_AUDIT.md P0-2): «Брутто/Нетто» — это единица
+    // измерения, её переключает SegmentedButton, а не SwitchListTile. Проверяем
+    // ровно то же поведение: 50 г нетто → 100 г брутто при отходах 50 %.
+    expect(find.byType(SwitchListTile), findsNothing);
+    final toggle = find.byType(SegmentedButton<bool>);
     await tester.ensureVisible(toggle);
-    await tester.tap(toggle);
+    await tester.tap(find.text('Брутто'));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Добавить в блюдо'));
     await tester.tap(find.text('Добавить в блюдо'));

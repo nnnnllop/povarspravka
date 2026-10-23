@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
 
 enum NutrientType {
@@ -9,9 +9,16 @@ enum NutrientType {
   kcal,
 }
 
-/// Чистая пастельная плашка макронутриента
-/// Создана по канонам минимализма: мягкий фон, контрастный читаемый текст,
-/// моноширинные табличные цифры (tabular figures).
+/// Показатель макронутриента: **текст + 2-dp маркер**, без цветной плашки.
+///
+/// Правило R2 аудита: ни одной заливки цветом-акцентом площадью > 48 dp².
+/// Пастельные плашки БЖУ в каждой карточке (4 цветные заливки × 8 ингредиентов
+/// = 32 пятна) и были тем самым «визуальным дребезгом». Цвет остаётся ровно
+/// там, где он несёт смысл: тонкий маркер слева и цвет цифры.
+///
+/// API не изменён (`type`, `value`, `compact`, `labelOverride`, `valueKey`) —
+/// все вызывающие места и тестовые ключи (`macro-Белки`, `macro-Энергия`)
+/// продолжают работать.
 class NutrientChip extends StatelessWidget {
   final NutrientType type;
   final String value;
@@ -30,11 +37,9 @@ class NutrientChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = Palette.of(context);
 
-    final Color bg;
-    final Color text;
-    final Color border;
+    final Color tint;
     final String label;
     final String unit;
 
@@ -42,95 +47,56 @@ class NutrientChip extends StatelessWidget {
       case NutrientType.protein:
         label = labelOverride ?? 'Б';
         unit = 'г';
-        bg = isDark ? AppColors.proteinBgDark : AppColors.proteinBgLight;
-        text = isDark ? AppColors.proteinTextDark : AppColors.proteinTextLight;
-        border = isDark ? AppColors.proteinBorderDark : AppColors.proteinBorderLight;
+        tint = p.protein;
         break;
       case NutrientType.fat:
         label = labelOverride ?? 'Ж';
         unit = 'г';
-        bg = isDark ? AppColors.fatBgDark : AppColors.fatBgLight;
-        text = isDark ? AppColors.fatTextDark : AppColors.fatTextLight;
-        border = isDark ? AppColors.fatBorderDark : AppColors.fatBorderLight;
+        tint = p.fat;
         break;
       case NutrientType.carbs:
         label = labelOverride ?? 'У';
         unit = 'г';
-        bg = isDark ? AppColors.carbsBgDark : AppColors.carbsBgLight;
-        text = isDark ? AppColors.carbsTextDark : AppColors.carbsTextLight;
-        border = isDark ? AppColors.carbsBorderDark : AppColors.carbsBorderLight;
+        tint = p.carbs;
         break;
       case NutrientType.kcal:
         label = labelOverride ?? 'ккал';
         unit = labelOverride != null ? 'ккал' : '';
-        bg = isDark ? AppColors.kcalBgDark : AppColors.kcalBgLight;
-        text = isDark ? AppColors.kcalTextDark : AppColors.kcalTextLight;
-        border = isDark ? AppColors.kcalBorderDark : AppColors.kcalBorderLight;
+        tint = p.kcal;
         break;
     }
 
-    if (compact) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: border, width: 0.8),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            Text(
-              '$label: ',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: text.withOpacity(0.85),
-              ),
-            ),
-            Text(
-              valueKey != null ? value : (unit.isNotEmpty && !value.endsWith(unit) ? '$value $unit' : value),
-              key: valueKey,
-              style: AppTypography.numericSmall.copyWith(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: text,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
+    final text = unit.isNotEmpty && !value.endsWith(unit) ? '$value $unit' : value;
+    final markerHeight = compact ? 12.0 : 14.0;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: border, width: 1),
-      ),
+    return Semantics(
+      label: '$label $text',
+      excludeSemantics: true,
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.baseline,
-        textBaseline: TextBaseline.alphabetic,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(
-            '$label: ',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: text.withOpacity(0.85),
+          // 2-dp маркер: единственный носитель цвета макроса.
+          Container(
+            width: 2,
+            height: markerHeight,
+            decoration: BoxDecoration(
+              color: tint,
+              borderRadius: BorderRadius.circular(1),
             ),
           ),
+          SizedBox(width: compact ? 5 : 6),
           Text(
-            unit.isNotEmpty && !value.endsWith(unit) ? '$value $unit' : value,
+            '$label ',
+            style: (compact ? AppTypography.caption : AppTypography.label)
+                .copyWith(color: p.inkMuted),
+          ),
+          Text(
+            text,
             key: valueKey,
-            style: AppTypography.numeric.copyWith(
-              fontSize: 13,
+            style: (compact ? AppTypography.numSm : AppTypography.num).copyWith(
+              color: p.ink,
               fontWeight: FontWeight.w700,
-              color: text,
             ),
           ),
         ],

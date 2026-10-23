@@ -178,9 +178,13 @@ void main() {
                   gross = b;
                 }))));
     for (var i = 0; i < 20; i++) {
-      final toggle = find.byType(Switch);
+      // Редизайн (docs/DESIGN_UX_AUDIT.md P0-2): единицу «Брутто/Нетто» теперь
+      // переключает SegmentedButton; проверяемое свойство прежнее — 20 циклов
+      // переключения не накапливают ошибку округления (33,333 % отходов).
+      final toggle = find.byType(SegmentedButton<bool>);
       await tester.ensureVisible(toggle);
-      await tester.tap(toggle);
+      final target = (i + 2) % 2 == 0 ? 'Брутто' : 'Нетто';
+      await tester.tap(find.text(target));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     }

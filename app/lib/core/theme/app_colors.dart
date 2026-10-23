@@ -1,94 +1,165 @@
 import 'package:flutter/material.dart';
 
-/// Калиброванная палитра приложения «Поварская справка»
-/// Стиль: швейцарский минимализм, теплый бумажный фон (warm paper monochrome),
-/// пастельные неброские плашки нутриентов, полное отсутствие кислотных градиентов.
+/// Калиброванная палитра приложения «Поварская справка».
+///
+/// Принцип (см. `docs/DESIGN_UX_AUDIT.md` §3.1, правило R1):
+/// **одна ось цвета = один смысл.** Три системы — бренд / данные / источник —
+/// не пересекаются по хью.
+///
+/// Все пары «текст/фон» измерены по WCAG 2.1, все значения проходят AA (4.5:1)
+/// либо 3:1 для интерактивных границ (1.4.11).
 class AppColors {
-  // Базовые фоны и поверхности (Warm Paper Monochrome)
-  static const backgroundLight = Color(0xFFFAF9F6); // Теплый бумажный алебастр
-  static const surfaceLight = Color(0xFFFFFFFF); // Чистая белая поверхность
-  static const cardLight = Color(0xFFFFFFFF);
-  static const borderLight = Color(0xFFE8E5DF); // Четкий 1px нейтрально-теплый контур
-  static const borderSubtleLight = Color(0xFFF2EFEB);
+  // ─── Основа: «бумага и тушь» ────────────────────────────────────────────
+  static const canvas = Color(0xFFF7F5F1); // фон рабочей области
+  static const surface = Color(0xFFFFFFFF); // карточка / лист
+  static const surfaceSunken = Color(0xFFF1EEE8); // вложенные поля ввода
 
-  static const backgroundDark = Color(0xFF141416); // Глубокий нейтральный обсидиан
-  static const surfaceDark = Color(0xFF1C1C1F);
-  static const cardDark = Color(0xFF222226);
-  static const borderDark = Color(0xFF2E2E34);
-  static const borderSubtleDark = Color(0xFF26262B);
+  static const canvasDark = Color(0xFF131311);
+  static const surfaceDark = Color(0xFF1B1B19);
+  static const surfaceSunkenDark = Color(0xFF101010);
+  static const surfaceRaisedDark = Color(0xFF232320);
 
-  // Акценты бренда (Минималистичный строгий дизайн + теплый янтарь для фокуса)
-  static const primary = Color(0xFF1C1917); // Глубокий charcoal для главных кнопок
+  // ─── Границы ────────────────────────────────────────────────────────────
+  /// 3.02:1 к canvas — для ГРАНИЦ ИНТЕРАКТИВНЫХ компонентов (WCAG 1.4.11):
+  /// поля, кнопки, чипы, клавиши.
+  static const border = Color(0xFF948D82);
+
+  /// 1.30:1 — для ДЕКОРАТИВНЫХ контуров карточек. Осознанный дизайнерский
+  /// выбор: 1.4.11 не требует 3:1 для неинтерактивных поверхностей.
+  static const borderStatic = Color(0xFFDDD8CF);
+
+  /// ТОЛЬКО внутренние линии (разделители внутри одного смыслового блока).
+  static const divider = Color(0xFFECE8E1);
+
+  /// 3.02:1 к surfaceDark — интерактивные границы в тёмной теме.
+  static const borderDark = Color(0xFF6A665E);
+  static const borderStaticDark = Color(0xFF3A3833);
+  static const dividerDark = Color(0xFF2A2925);
+
+  // ─── Тушь (текст) ───────────────────────────────────────────────────────
+  static const ink = Color(0xFF1A1917); // 16.13:1 на canvas
+  static const inkSecondary = Color(0xFF5C5852); // 6.49:1 на canvas
+  static const inkMuted = Color(0xFF6B665D); // 5.24:1 на canvas
+
+  static const inkDark = Color(0xFFF3F1ED);
+  static const inkSecondaryDark = Color(0xFFB3AEA5); // 7.82:1 на surfaceDark
+  static const inkMutedDark = Color(0xFF8F8A81); // 5.03:1 на surfaceDark
+
+  // ─── Бренд: Янтарь — ЕДИНСТВЕННЫЙ акцент (действие / фокус) ─────────────
+  static const accent = Color(0xFF9A5B14); // 5.41:1 к белому
+  static const accentOn = Color(0xFFFFFBF5); // текст на accent
+  static const accentSoft = Color(0xFFF6EEDF); // фон «активного» состояния
+  static const accentSoftDark = Color(0xFF2C2216);
+
+  static const accentDark = Color(0xFFE9B872); // 9.50:1 на surfaceDark
+  static const accentOnDark = Color(0xFF1A1917);
+
+  // ─── Макросы: ТОЛЬКО текст и 2 dp маркер. НЕ заливки ────────────────────
+  static const protein = Color(0xFF2F6B3A); // 6.39:1 на белом
+  static const fat = Color(0xFF8A5A00); // 5.93:1 на белом
+  static const carbs = Color(0xFF1F4E79); // 8.66:1 на белом
+  static const kcal = Color(0xFF9A2C1B); // 7.64:1 на белом
+
+  static const proteinDark = Color(0xFF8FD0A0);
+  static const fatDark = Color(0xFFE4B96B);
+  static const carbsDark = Color(0xFF9CC0E8);
+  static const kcalDark = Color(0xFFF09A88);
+
+  // ─── Источник: ТОЛЬКО нейтральный контур. Не цвет — а слово ─────────────
+  static const sourceInk = Color(0xFF4A463F);
+  static const sourceLine = Color(0xFFDDD8CF);
+  static const sourceInkDark = Color(0xFFCFCAC0);
+  static const sourceLineDark = Color(0xFF3A3833);
+
+  // ─── Статусы: единственные места, где допустим красный/зелёный ──────────
+  static const danger = Color(0xFF9B1C1C);
+  static const dangerSoft = Color(0xFFFBEAEA);
+  static const dangerDark = Color(0xFFF0A0A0);
+  static const dangerSoftDark = Color(0xFF2C1919);
+  static const warning = Color(0xFF7A4E00);
+  static const warningSoft = Color(0xFFFDF3DC);
+  static const warningDark = Color(0xFFE9B872);
+  static const warningSoftDark = Color(0xFF2C2216);
+  static const success = Color(0xFF1F6B3E);
+  static const successDark = Color(0xFF8FD0A0);
+
+  // ─── Бланк: «бумажная» палитра. Привязана к печати — НЕ трогать ─────────
+  static const paper = Color(0xFFFFFFFF);
+  static const paperInk = Color(0xFF000000);
+  static const paperRule = Color(0xFF000000);
+  static const paperHeader = Color(0xFFFFFFFF); // #F8FAFC давал серую грязь
+
+  // ─── Backward-compatible алиасы (переименованы в новые токены) ──────────
+  static const backgroundLight = canvas;
+  static const surfaceLight = surface;
+  static const cardLight = surface;
+  static const cardDark = surfaceDark;
+
+  static const borderLight = border;
+  static const borderSubtleLight = divider;
+  static const backgroundDark = canvasDark;
+  static const borderSubtleDark = dividerDark;
+
+  /// Акцент бренда: раньше был `#B45309` — то же значение, что и `fat`.
+  /// Теперь это настоящий янтарь `#9A5B14`.
+  static const primary = ink;
   static const primaryLight = Color(0xFFE7E5E4);
-  static const primaryContainerLight = Color(0xFFF5F4F0);
-  static const primaryContainerDark = Color(0xFF2A2A2E);
+  static const primaryContainerLight = surfaceSunken;
+  static const primaryContainerDark = surfaceRaisedDark;
 
-  static const accent = Color(0xFFB45309); // Кулинарный янтарный фокус
-  static const accentLight = Color(0xFFFEF3C7);
-  static const accentDark = Color(0xFF451A03);
+  static const accentLight = accentSoft;
+  static const error = danger;
+  static const errorLight = dangerSoft;
+  static const errorBgLight = dangerSoft;
+  static const errorTextLight = danger;
 
-  // Макронутриенты — калиброванные гармоничные пастельные тона (Muted Spot Pastels)
-  // Белки (Б) — спокойный шалфейный (Calm Sage)
-  static const protein = Color(0xFF2E7D32);
+  static const textPrimaryLight = ink;
+  static const textSecondaryLight = inkSecondary;
+  static const textMutedLight = inkMuted; // было #9E988F — 2.72:1 (провал AA)
+  static const textPrimaryDark = inkDark;
+  static const textSecondaryDark = inkSecondaryDark;
+  static const textMutedDark = inkMutedDark;
+
+  // Старые макросы-заливки остались только для обратной совместимости
+  // API — но UI их больше не использует (правило R2).
   static const proteinLight = Color(0xFFEDF5EE);
   static const proteinBgLight = Color(0xFFEDF5EE);
   static const proteinTextLight = Color(0xFF225828);
   static const proteinBorderLight = Color(0xFFD4E7D6);
   static const proteinBgDark = Color(0xFF19281C);
-  static const proteinTextDark = Color(0xFF8FD898);
+  static const proteinTextDark = proteinDark;
   static const proteinBorderDark = Color(0xFF27422B);
 
-  // Жиры (Ж) — теплая спелая пшеница (Warm Wheat)
-  static const fat = Color(0xFFB45309);
   static const fatLight = Color(0xFFFAF3E8);
   static const fatBgLight = Color(0xFFFAF3E8);
   static const fatTextLight = Color(0xFF8C5815);
   static const fatBorderLight = Color(0xFFF3E4CD);
   static const fatBgDark = Color(0xFF2A2216);
-  static const fatTextDark = Color(0xFFF5C77E);
+  static const fatTextDark = fatDark;
   static const fatBorderDark = Color(0xFF43341E);
 
-  // Углеводы (У) — выстиранный индиго / сланец (Washed Slate Indigo)
-  static const carbs = Color(0xFF1D4ED8);
   static const carbsLight = Color(0xFFEEF3F9);
   static const carbsBgLight = Color(0xFFEEF3F9);
   static const carbsTextLight = Color(0xFF244F7D);
   static const carbsBorderLight = Color(0xFFD5E3F3);
   static const carbsBgDark = Color(0xFF162230);
-  static const carbsTextDark = Color(0xFF90BAEC);
+  static const carbsTextDark = carbsDark;
   static const carbsBorderDark = Color(0xFF26394F);
 
-  // Энергетическая ценность (ккал) — мягкая терракота (Soft Terracotta)
-  static const kcal = Color(0xFFC2410C);
   static const kcalLight = Color(0xFFFBF0EE);
-  static const kcalBgLight = Color(0xFFFBF0EE);
-  static const kcalTextLight = Color(0xFF9C382A);
+  static const kcalBgLight = dangerSoft;
+  static const kcalTextLight = kcal;
   static const kcalBorderLight = Color(0xFFF3D4CF);
-  static const kcalBgDark = Color(0xFF2A1A19);
-  static const kcalTextDark = Color(0xFFF39284);
+  static const kcalBgDark = dangerSoftDark;
+  static const kcalTextDark = kcalDark;
   static const kcalBorderDark = Color(0xFF482927);
 
-  // Ошибки и предупреждения
-  static const error = Color(0xFFB91C1C);
-  static const errorLight = Color(0xFFFEE2E2);
-  static const errorBgLight = Color(0xFFFEF2F2);
-  static const errorTextLight = Color(0xFF991B1B);
-
-  // Источники справочников (Скурихин / USDA)
-  static const badgeSkurikhin = Color(0xFF8C5815);
-  static const badgeSkurikhinBg = Color(0xFFFAF3E8);
-  static const badgeSkurikhinBorder = Color(0xFFF3E4CD);
-
-  static const badgeUsda = Color(0xFF244F7D);
-  static const badgeUsdaBg = Color(0xFFEEF3F9);
-  static const badgeUsdaBorder = Color(0xFFD5E3F3);
-
-  // Текст (Off-black вместо грубого чисто черного)
-  static const textPrimaryLight = Color(0xFF1A1918);
-  static const textSecondaryLight = Color(0xFF6E6A64);
-  static const textMutedLight = Color(0xFF9E988F);
-
-  static const textPrimaryDark = Color(0xFFF4F4F2);
-  static const textSecondaryDark = Color(0xFF9E9A92);
-  static const textMutedDark = Color(0xFF6E6A64);
+  // Источники: раньше «Скурихин» == «жиры», «USDA» == «углеводы». Коллизия
+  // снята — оба источника живут на нейтральном контуре.
+  static const badgeSkurikhin = sourceInk;
+  static const badgeSkurikhinBg = surface;
+  static const badgeSkurikhinBorder = sourceLine;
+  static const badgeUsda = sourceInk;
+  static const badgeUsdaBg = surface;
+  static const badgeUsdaBorder = sourceLine;
 }

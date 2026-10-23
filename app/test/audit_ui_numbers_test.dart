@@ -105,8 +105,10 @@ void main() {
 
     final editorTexts = texts(tester);
 
-    // Open the calculation inspector from the summary card.
-    await tester.tap(find.text('Инспектор расчёта').first);
+    // Open the calculation inspector from the summary dock.
+    // Редизайн (docs/DESIGN_UX_AUDIT.md P1-6): нижний док компактный,
+    // подпись «Инспектор расчёта» — в tooltip/semantics его кнопки.
+    await tester.tap(find.byTooltip('Инспектор расчёта'));
     await tester.pumpAndSettle();
     final inspectorTexts = texts(tester);
 

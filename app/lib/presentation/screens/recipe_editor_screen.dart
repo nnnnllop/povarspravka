@@ -3,10 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/calculation/calculation_engine.dart';
 import '../../core/calculation/calculation_math.dart';
 import '../../core/calculation/models/blank_mode.dart';
+import '../../core/calculation/models/calculation_result.dart';
 import '../../core/calculation/models/dish.dart';
 import '../../core/calculation/models/ingredient.dart';
 import '../../core/calculation/yield_explanation.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_haptics.dart';
+import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
 import '../../data/masters_recipes.dart';
 import '../providers/dish_provider.dart';
@@ -22,6 +25,10 @@ class RecipeEditorScreen extends ConsumerStatefulWidget {
   @override
   ConsumerState<RecipeEditorScreen> createState() => _RecipeEditorScreenState();
 }
+
+enum _MasterLoadChoice { copy, replace, cancel }
+
+enum _ExitChoice { stay, discard, saveAndExit }
 
 class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
   final TextEditingController _titleCtrl = TextEditingController();
@@ -82,107 +89,161 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
     final separateActions = MediaQuery.sizeOf(context).width < 380 ||
         MediaQuery.textScalerOf(context).scale(1) > 1.2;
     final actions = _buildActions(dish);
+    final isDirty = ref.read(dishProvider.notifier).isDirty;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Калькулятор',
-            softWrap: true, overflow: TextOverflow.visible),
-        titleSpacing: 0,
-        actions: separateActions ? null : actions,
-        bottom: separateActions
-            ? PreferredSize(
-                preferredSize: const Size.fromHeight(56),
-                child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: actions))
-            : null,
-      ),
-      body: ReorderableListView.builder(
-        padding: const EdgeInsets.all(16),
-        header: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildParameters(dish, isDark),
-            const SizedBox(height: 20),
-            Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text(
-                  'Ингредиенты · ${dish.ingredients.length}',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                if (dish.ingredients.isNotEmpty)
-                  TextButton.icon(
-                    onPressed: () => _showMastersCatalogSheet(context),
-                    icon: const Icon(Icons.auto_stories_outlined, size: 16),
-                    label: const Text('Рецепты мастеров', style: TextStyle(fontSize: 12)),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      visualDensity: VisualDensity.compact,
-                      foregroundColor: isDark ? AppColors.accentLight : AppColors.accent,
-                    ),
+    // Защита от тихой потери работы (аудит P0-3): системный «назад»,
+    // жестовый back и кнопка в AppBar проходят через один и тот же вопрос.
+    return PopScope(
+      canPop: !isDirty,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final leave = await _confirmDiscardChanges();
+        if (!mounted || !leave) return;
+        final nav = Navigator.of(context);
+        if (nav.canPop()) {
+          nav.pop();
+        } else {
+          // Экран смонтирован как корень (домашняя) — «выйти» некуда,
+          // но и терять нечего: сохраняем черновик и сообщаем.
+          await ref.read(dishProvider.notifier).saveCurrentToLibrary();
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Черновик сохранён')));
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(
+            dish.title.trim().isEmpty ? 'Новое блюдо' : dish.title.trim(),
+            softWrap: true,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          titleSpacing: 0,
+          // Единственная точка входа к мастерам — эта кнопка в AppBar.
+          actions: separateActions ? null : actions,
+          bottom: separateActions
+              ? PreferredSize(
+                  preferredSize: const Size.fromHeight(kToolbarHeight),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    reverse: true,
+                    padding: const EdgeInsets.symmetric(horizontal: Space.x2),
+                    child: Row(children: actions),
                   ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Удерживайте карточку для перестановки. Смахните влево для удаления.',
-              style: AppTypography.bodySmall.copyWith(
-                color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                )
+              : null,
+        ),
+        body: Column(
+          children: [
+            Expanded(
+              child: ReorderableListView.builder(
+                padding: const EdgeInsets.fromLTRB(
+                    Space.x4, Space.x3, Space.x4, Space.x6 + 72),
+                header: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildParameters(dish, isDark),
+                    const SizedBox(height: Space.x5),
+                    Text(
+                      'Ингредиенты · ${dish.ingredients.length}',
+                      style: AppTypography.headline.copyWith(
+                        color: isDark ? AppColors.inkDark : AppColors.ink,
+                      ),
+                    ),
+                    const SizedBox(height: Space.x1),
+                    if (dish.ingredients.isNotEmpty)
+                      Text(
+                        '⟷ перетащить · ← смахнуть, чтобы удалить',
+                        style: AppTypography.caption.copyWith(
+                          color: isDark
+                              ? AppColors.inkMutedDark
+                              : AppColors.inkMuted,
+                        ),
+                      ),
+                    const SizedBox(height: Space.x3),
+                    if (dish.ingredients.isEmpty)
+                      _buildEmptyState(context, isDark),
+                  ],
+                ),
+                itemCount: dish.ingredients.length,
+                onReorder: (a, b) => ref
+                    .read(dishProvider.notifier)
+                    .reorderIngredients(a, b),
+                itemBuilder: (context, index) {
+                  final ing = dish.ingredients[index];
+                  return Dismissible(
+                    key: ValueKey(ing.id),
+                    direction: DismissDirection.endToStart,
+                    background: Container(
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.all(Space.x6),
+                      decoration: BoxDecoration(
+                        color: AppColors.dangerSoft,
+                        borderRadius: Radii.cardAll,
+                      ),
+                      child: const Icon(Icons.delete_outline,
+                          color: AppColors.danger),
+                    ),
+                    onDismissed: (_) => _removeIngredient(ing, index),
+                    child: IngredientCard(
+                      index: index + 1,
+                      ingredient: ing,
+                      // Явная ручка перестановки, а не «удерживайте карточку»:
+                      // жест перетаскивания больше не конкурирует с тапом
+                      // «изменить» и свайпом «удалить» (аудит P1-6).
+                      dragHandleIndex: index,
+                      onTap: () => _editIngredient(context, ing),
+                      onDelete: () => _removeIngredient(ing, index),
+                    ),
+                  );
+                },
               ),
             ),
-            const SizedBox(height: 12),
-            if (dish.ingredients.isEmpty) _buildEmptyState(context, isDark),
+            // Закреплённая итоговая полоса: цифры не уезжают за край ленты
+            // и не прячутся под клавиатурой (аудит P1-6).
+            _buildSummaryRail(calc, dish),
           ],
         ),
-        footer: Padding(
-          padding: const EdgeInsets.only(top: 12, bottom: 24),
-          child: MacroSummaryBar(key: ValueKey(dish.id), result: calc),
-        ),
-        itemCount: dish.ingredients.length,
-        onReorder: (a, b) =>
-            ref.read(dishProvider.notifier).reorderIngredients(a, b),
-        itemBuilder: (context, index) {
-          final ing = dish.ingredients[index];
-          return Dismissible(
-            key: ValueKey(ing.id),
-            direction: DismissDirection.endToStart,
-            background: Container(
-              alignment: Alignment.centerRight,
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.errorContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.delete_outline),
-            ),
-            onDismissed: (_) => _removeIngredient(ing, index),
-            child: IngredientCard(
-              index: index + 1,
-              ingredient: ing,
-              onTap: () => _editIngredient(context, ing),
-              onDelete: () => _removeIngredient(ing, index),
-            ),
-          );
-        },
-      ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: FilledButton.icon(
-            onPressed: () => SearchProductModal.show(
+        // FAB в зоне большого пальца — над итоговой полосой.
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: () async {
+            AppHaptics.commit();
+            await SearchProductModal.show(
               context,
               mode: SearchMode.pickForRecipe,
-            ),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(48),
-              backgroundColor: isDark ? AppColors.primaryLight : AppColors.primary,
-              foregroundColor: isDark ? AppColors.backgroundDark : Colors.white,
-            ),
-            icon: const Icon(Icons.add_rounded, size: 20),
-            label: const Text('Добавить продукт', style: TextStyle(fontWeight: FontWeight.w700)),
+            );
+          },
+          icon: const Icon(Icons.add_rounded, size: 22),
+          label: const Text('Добавить продукт'),
+        ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      ),
+    );
+  }
+
+  /// Нижний док итогов (аудит P1-6).
+  ///
+  /// Всегда компактный: одна строка «После т.о. · Б Ж У · ккал» + кнопка
+  /// «Инспектор расчёта», которая открывает те же три ступени
+  /// (Сырьё → После т.о. → Порция) полностью. Развёрнутая карточка в доке
+  /// на экране 640 dp отнимала треть высоты и выталкивала ингредиенты из
+  /// ленты — цена, которую не стоит платить за повтор уже посчитанных цифр.
+  Widget _buildSummaryRail(CalculationResult calc, Dish dish) {
+    final p = Palette.of(context);
+    return Material(
+      elevation: 8,
+      color: p.surface,
+      child: SafeArea(
+        top: false,
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: p.divider)),
+          ),
+          child: MacroSummaryBar(
+            key: ValueKey(dish.id),
+            result: calc,
+            compact: true,
           ),
         ),
       ),
@@ -192,18 +253,30 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
   List<Widget> _buildActions(Dish dish) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return [
+      // Единственная кнопка каталога мастеров в AppBar (остальные удалены).
+      IconButton(
+        icon: const Icon(Icons.auto_stories_outlined),
+        tooltip: 'Рецептуры мастеров',
+        onPressed: () => _showMastersCatalogSheet(context),
+      ),
       IconButton(
         icon: const Icon(Icons.tune_rounded),
         tooltip: 'Параметры',
         onPressed: () => _showRetentionSettingsDialog(context, dish),
       ),
       Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: Space.x1),
         child: FilledButton(
           onPressed: _openBlank,
+          // `styleFrom` перекрывает тему целиком, поэтому минимум 48 dp
+          // задаём явно (WCAG 2.5.5).
           style: FilledButton.styleFrom(
             backgroundColor: isDark ? AppColors.primaryLight : AppColors.primary,
-            foregroundColor: isDark ? AppColors.backgroundDark : Colors.white,
+            foregroundColor:
+                isDark ? AppColors.backgroundDark : Colors.white,
+            minimumSize: const Size(0, kMinTapTarget),
+            tapTargetSize: MaterialTapTargetSize.padded,
+            padding: const EdgeInsets.symmetric(horizontal: Space.x3),
           ),
           child: const Text('Бланк'),
         ),
@@ -211,12 +284,11 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
       PopupMenuButton<String>(
         tooltip: 'Другие действия',
         onSelected: (value) async {
-          if (value == 'masters') {
-            _showMastersCatalogSheet(context);
-          } else if (value == 'save') {
+          if (value == 'save') {
             try {
               await ref.read(dishProvider.notifier).saveCurrentToLibrary();
               if (!mounted) return;
+              AppHaptics.commit();
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                   content: Text('Блюдо сохранено в список рецептов')));
             } catch (_) {
@@ -230,7 +302,6 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
           }
         },
         itemBuilder: (_) => const [
-          PopupMenuItem(value: 'masters', child: Text('Рецептуры мастеров (Марчук)')),
           PopupMenuItem(value: 'save', child: Text('Сохранить в мои блюда')),
           PopupMenuItem(value: 'clear', child: Text('Очистить рецепт')),
         ],
@@ -304,7 +375,8 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
           const SizedBox(height: 8),
           SwitchListTile.adaptive(
             contentPadding: EdgeInsets.zero,
-            dense: true,
+            // 48 dp цель (WCAG 2.5.5): `dense: true` давала только 40 dp.
+            materialTapTargetSize: MaterialTapTargetSize.padded,
             title: const Text('Печатать название в заголовке бланка'),
             value: dish.showTitleInExport,
             onChanged: (value) =>
@@ -342,7 +414,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
           ),
           SwitchListTile.adaptive(
             contentPadding: EdgeInsets.zero,
-            dense: true,
+            materialTapTargetSize: MaterialTapTargetSize.padded,
             title: const Text('Задать фактический выход'),
             subtitle: Text(
               custom
@@ -464,37 +536,14 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Нажмите «Добавить продукт», чтобы найти ингредиенты в справочнике Скурихина и базе USDA, либо выберите готовую раскладку мастера.',
+            'Нажмите «Добавить продукт», чтобы найти ингредиенты в справочнике '
+            'Скурихина и базе USDA, или откройте готовую раскладку мастера '
+            'кнопкой «Рецептуры мастеров» в шапке.',
             textAlign: TextAlign.center,
-            style: AppTypography.bodySmall.copyWith(
-              color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+            style: AppTypography.bodySm.copyWith(
+              color: isDark ? AppColors.inkSecondaryDark : AppColors.inkSecondary,
               height: 1.5,
             ),
-          ),
-          const SizedBox(height: 18),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            alignment: WrapAlignment.center,
-            children: [
-              ElevatedButton.icon(
-                onPressed: () => SearchProductModal.show(
-                  context,
-                  mode: SearchMode.pickForRecipe,
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: isDark ? AppColors.primaryLight : AppColors.primary,
-                  foregroundColor: isDark ? AppColors.backgroundDark : Colors.white,
-                ),
-                icon: const Icon(Icons.search_rounded, size: 18),
-                label: const Text('Поиск продуктов'),
-              ),
-              OutlinedButton.icon(
-                onPressed: () => _showMastersCatalogSheet(context),
-                icon: const Icon(Icons.auto_stories_outlined, size: 18),
-                label: const Text('Рецепты мастеров (Марчук)'),
-              ),
-            ],
           ),
         ],
       ),
@@ -675,16 +724,104 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
     );
   }
 
-  void _loadMasterRecipe(MasterRecipe master) {
+  /// Загрузка эталонной рецептуры (аудит P0-3).
+  ///
+  /// Раньше мастер молча заменял текущее блюдо: `loadDish(newDish)` поверх
+  /// всех ингредиентов. Теперь, если в блюде уже что-то есть, сначала
+  /// спрашиваем: «Открыть как копию в черновик» / «Заменить текущий» /
+  /// «Отмена». Ни один из путей не уничтожает данные молча.
+  Future<void> _loadMasterRecipe(MasterRecipe master) async {
+    final current = ref.read(dishProvider);
+    final hasContent =
+        current.ingredients.isNotEmpty || current.title.trim().isNotEmpty;
+
+    var openAsCopy = true;
+    if (hasContent) {
+      final choice = await showDialog<_MasterLoadChoice>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Открыть рецептуру мастера?'),
+          content: Text(
+            'В текущем блюде ${current.ingredients.length} ингр. '
+            '(«${current.title.trim().isEmpty ? 'Без названия' : current.title.trim()}»).\n\n'
+            'Рецептура «${master.name}» может открыться как новый черновик '
+            'или заменить текущую раскладку.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () =>
+                  Navigator.pop(ctx, _MasterLoadChoice.cancel),
+              child: const Text('Отмена'),
+            ),
+            TextButton(
+              onPressed: () =>
+                  Navigator.pop(ctx, _MasterLoadChoice.replace),
+              child: const Text('Заменить текущий'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, _MasterLoadChoice.copy),
+              child: const Text('Открыть как копию в черновик'),
+            ),
+          ],
+        ),
+      );
+      if (choice == null || choice == _MasterLoadChoice.cancel) return;
+      openAsCopy = choice == _MasterLoadChoice.copy;
+    }
+
+    if (!mounted) return;
+    final notifier = ref.read(dishProvider.notifier);
     final newDish = master.toDish();
-    ref.read(dishProvider.notifier).loadDish(newDish);
-    _syncControllers(newDish);
+    if (openAsCopy) {
+      notifier.loadDishAsCopy(newDish);
+    } else {
+      notifier.loadDish(newDish);
+    }
+    final loaded = ref.read(dishProvider);
+    _syncControllers(loaded);
+    AppHaptics.commit();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Загружена эталонная рецептура: «${master.name}»'),
+        content: Text(
+          'Загружена эталонная рецептура: «${master.name}»'
+          '${openAsCopy ? ' (как копия)' : ''}',
+        ),
         duration: const Duration(seconds: 3),
       ),
     );
+  }
+
+  /// Подтверждение выхода с несохранёнными правками (аудит P0-3).
+  Future<bool> _confirmDiscardChanges() async {
+    final choice = await showDialog<_ExitChoice>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Не сохранять изменения?'),
+        content: const Text(
+          'В блюде есть несохранённые правки. Если выйти сейчас, они пропадут.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, _ExitChoice.stay),
+            child: const Text('Продолжить редактирование'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, _ExitChoice.discard),
+            child: const Text('Выйти без сохранения'),
+          ),
+          TextButton(
+            onPressed: () async {
+              await ref.read(dishProvider.notifier).saveCurrentToLibrary();
+              if (ctx.mounted) Navigator.pop(ctx, _ExitChoice.saveAndExit);
+            },
+            child: const Text('Сохранить и выйти'),
+          ),
+        ],
+      ),
+    );
+    if (choice == null || choice == _ExitChoice.stay) return false;
+    AppHaptics.commit();
+    return true;
   }
 
   void _showRetentionSettingsDialog(BuildContext context, Dish dish) {
@@ -828,6 +965,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                   const SizedBox(height: 14),
                   SwitchListTile.adaptive(
                     contentPadding: EdgeInsets.zero,
+                    materialTapTargetSize: MaterialTapTargetSize.padded,
                     title: const Text(
                       'Строка «В 100 г блюда» в бланке',
                       style: TextStyle(fontSize: 13.5),
@@ -915,3 +1053,4 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
     );
   }
 }
+
