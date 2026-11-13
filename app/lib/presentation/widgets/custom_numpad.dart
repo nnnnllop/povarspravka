@@ -99,19 +99,22 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
       }
 
       if (_isFreshInput) {
-        _currentInput = k == '0' ? '0' : k;
+        _currentInput = k;
         _isFreshInput = false;
         return;
       }
 
       if (_currentInput == '0') {
+        // STATE-08: на дисплее уже «0» — первая значащая цифра заменяет его,
+        // а не дописывается в дробную часть. Иначе «0» → «0» → «,» → «0,7»
+        // превращалось в «0,9»: весь хвост ввода уходил в копейки.
         _currentInput = k;
+        _isFreshInput = false;
       } else if (_currentInput.length < 7) {
         _currentInput += k;
       }
     });
   }
-
   void _onBackspace() {
     AppHaptics.key();
     setState(() {
@@ -119,7 +122,11 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
       if (_currentInput.length > 1) {
         _currentInput = _currentInput.substring(0, _currentInput.length - 1);
       } else {
+        // STATE-08: стёрли всё — снова «свежий» ввод, как после сброса.
+        // Без этого следующий «0» оставался «0», а запятая превращала его в
+        // «0,», и весь дальнейший ввод уходил в дробную часть.
         _currentInput = '0';
+        _isFreshInput = true;
       }
     });
   }
@@ -666,7 +673,9 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 2),
               child: InkWell(
-                onTap: () => _onAdd(inc.$2),
+                // STATE-08: срабатывание по нажатию — быстрый ввод быстрыми
+                // нажатиями раньше терял часть приращений.
+                onTapDown: (_) => _onAdd(inc.$2),
                 borderRadius: Radii.fieldAll,
                 child: Container(
                   height: kMinTapTarget,
@@ -773,17 +782,26 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                 ),
               ),
             )
-          : InkWell(
-              onTap: () => _onKey(k),
-              borderRadius: Radii.fieldAll,
-              child: _keySurface(
-                p,
-                child: Text(
-                  k,
-                  maxLines: 1,
-                  style: AppTypography.num.copyWith(
-                    fontSize: 24,
-                    color: p.ink,
+          // STATE-08: клавиша срабатывает по НАЖАТИЮ, а не по отпусканию.
+          // `InkWell.onTap` разрешается ареной жестов на tap-up, и быстрый
+          // ввод (палец/несколько касаний в одном кадре, автотесты с
+          // pump(Duration.zero)) терял символы — до 20 из 30 нажатий.
+          // Реагируем по down: задержка нулевая, потеря исключена.
+          : GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapDown: (_) => _onKey(k),
+              child: Semantics(
+                button: true,
+                label: k == ',' ? 'запятая' : k,
+                child: _keySurface(
+                  p,
+                  child: Text(
+                    k,
+                    maxLines: 1,
+                    style: AppTypography.num.copyWith(
+                      fontSize: 24,
+                      color: p.ink,
+                    ),
                   ),
                 ),
               ),

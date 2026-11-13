@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/calculation/calculation_engine.dart';
+import '../../core/calculation/loss_table.dart';
 import '../../core/calculation/models/blank_mode.dart';
 import '../../core/calculation/models/calculation_result.dart';
 import '../../core/calculation/models/dish.dart';
@@ -9,6 +10,7 @@ import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
 import '../providers/dish_provider.dart';
+import '../widgets/calc_error_banner.dart';
 
 /// Просмотр бланка (аудит P1-8).
 ///
@@ -165,11 +167,22 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
               boundaryMargin: const EdgeInsets.all(80),
               child: Container(
                 padding: const EdgeInsets.all(Space.x4),
-                child: _BlankPreviewDocument(
-                  dish: dish,
-                  calc: calc,
-                  scale: MediaQuery.textScalerOf(context).scale(9.5) / 9.5,
-                ),
+                child: calc == null
+                    // STATE-01: невычислимое блюдо не роняет бланк.
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CalcErrorBanner(
+                              detail: ref.watch(calculationErrorProvider)),
+                        ],
+                      )
+                    : _BlankPreviewDocument(
+                        dish: dish,
+                        calc: calc,
+                        scale:
+                            MediaQuery.textScalerOf(context).scale(9.5) / 9.5,
+                      ),
               ),
             ),
           ),
@@ -467,6 +480,9 @@ class _BlankPreviewDocument extends StatelessWidget {
     final pPct = CalculationEngine.formatPercent(calc.retentionProtein);
     final fPct = CalculationEngine.formatPercent(calc.retentionFat);
     final cPct = CalculationEngine.formatPercent(calc.retentionCarbs);
+    // Новый расчёт без веса готового блюда: выход и «в 100 г» не
+    // определены — печатаем прочерк, а не «0».
+    final noYield = calc.usesLossTable && !calc.hasYield;
 
     final leftNineRows = <Widget>[];
     for (int i = 0; i < totalRows; i++) {
@@ -620,7 +636,11 @@ class _BlankPreviewDocument extends StatelessWidget {
             children: [
               _cell('После тепловой обработки', _w01, rowH + 2,
                   bold: true, align: Alignment.centerLeft),
-              _cell(CalculationEngine.formatGrams(calc.yieldGrams), _w2,
+              _cell(
+                  noYield
+                      ? '—'
+                      : CalculationEngine.formatGrams(calc.yieldGrams),
+                  _w2,
                   rowH + 2),
               _cell(CalculationEngine.formatMacro(calc.cookedProtein), _w34,
                   rowH + 2,
@@ -643,16 +663,33 @@ class _BlankPreviewDocument extends StatelessWidget {
                 _cell('В 100 г блюда', _w01, rowH,
                     bold: true, align: Alignment.centerLeft),
                 _cell('100', _w2, rowH, bold: true),
-                _cell(CalculationEngine.formatMacro(calc.per100gProtein), _w34,
+                _cell(
+                    noYield
+                        ? '—'
+                        : CalculationEngine.formatMacro(calc.per100gProtein),
+                    _w34,
                     rowH,
                     bold: true),
                 _cell(
-                    CalculationEngine.formatMacro(calc.per100gFat), _w56, rowH,
-                    bold: true),
-                _cell(CalculationEngine.formatMacro(calc.per100gCarbs), _w78,
+                    noYield
+                        ? '—'
+                        : CalculationEngine.formatMacro(calc.per100gFat),
+                    _w56,
                     rowH,
                     bold: true),
-                _cell(CalculationEngine.formatKcal(calc.per100gKcal), _w9, rowH,
+                _cell(
+                    noYield
+                        ? '—'
+                        : CalculationEngine.formatMacro(calc.per100gCarbs),
+                    _w78,
+                    rowH,
+                    bold: true),
+                _cell(
+                    noYield
+                        ? '—'
+                        : CalculationEngine.formatKcal(calc.per100gKcal),
+                    _w9,
+                    rowH,
                     bold: true),
               ],
             ),
@@ -806,14 +843,29 @@ class _BlankPreviewDocument extends StatelessWidget {
     final fPct = CalculationEngine.formatPercent(calc.retentionFat);
     final cPct = CalculationEngine.formatPercent(calc.retentionCarbs);
     final hasItems = dish.ingredients.isNotEmpty;
+    // Новый расчёт: потери применяются к КАЖДОМУ продукту по его группе,
+    // одного умножения суммы нет; процент — итоговая доля готовое/сырьё.
+    final table = calc.usesLossTable;
+    String tableLine(String what, String pct, double raw, double cooked) =>
+        hasItems
+            ? '= Σ $what продукта × (100 − потери группы) / 100 = '
+                '${CalculationEngine.formatMacro(raw)} → '
+                '${CalculationEngine.formatMacro(cooked)} г (в среднем $pct %)'
+            : '= Σ $what продукта × (100 − потери группы) / 100';
 
-    final pLine = hasItems
+    final pLine = table
+        ? tableLine('белков', pPct, calc.rawTotalProtein, calc.cookedProtein)
+        : hasItems
         ? '= Сумма белков *$pPct /100 = ${CalculationEngine.formatMacro(calc.rawTotalProtein)} * $pPct / 100 = ${CalculationEngine.formatMacro(calc.cookedProtein)} г'
         : '= Сумма белков *$pPct /100';
-    final fLine = hasItems
+    final fLine = table
+        ? tableLine('жиров', fPct, calc.rawTotalFat, calc.cookedFat)
+        : hasItems
         ? '= Сумма жиров *$fPct/100 = ${CalculationEngine.formatMacro(calc.rawTotalFat)} * $fPct / 100 = ${CalculationEngine.formatMacro(calc.cookedFat)} г'
         : '= Сумма жиров *$fPct/100';
-    final cLine = hasItems
+    final cLine = table
+        ? tableLine('углеводов', cPct, calc.rawTotalCarbs, calc.cookedCarbs)
+        : hasItems
         ? '= Сумма углеводов *$cPct/100 = ${CalculationEngine.formatMacro(calc.rawTotalCarbs)} * $cPct / 100 = ${CalculationEngine.formatMacro(calc.cookedCarbs)} г'
         : '= Сумма углеводов *$cPct/100';
     final kcalLine = hasItems
@@ -826,9 +878,12 @@ class _BlankPreviewDocument extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Сохранность после тепловой обработки:',
-            style: TextStyle(
+          Text(
+            table
+                ? 'Потери при тепловой обработке — по группам продуктов '
+                    '(${calc.process.label}):'
+                : 'Сохранность после тепловой обработки:',
+            style: const TextStyle(
               color: Colors.black,
               fontSize: 11,
               fontWeight: FontWeight.w700,
@@ -863,6 +918,14 @@ class _BlankPreviewDocument extends StatelessWidget {
             kcalLine,
             style: const TextStyle(color: Colors.black, fontSize: 10.5),
           ),
+          if (table) ...[
+            const SizedBox(height: 6),
+            const Text(
+              kNotGostNotice,
+              key: ValueKey('blank-not-gost'),
+              style: TextStyle(color: Colors.black, fontSize: 10.5),
+            ),
+          ],
         ],
       ),
     );

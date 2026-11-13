@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/calculation/calculation_engine.dart';
+import '../../core/calculation/loss_table.dart';
 import '../../core/calculation/models/dish.dart';
 import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
 import '../../data/masters_recipes.dart';
 import '../providers/dish_provider.dart';
+import '../widgets/loss_clarity_hints.dart';
+import '../widgets/persistence_error_banner.dart';
 import 'recipe_editor_screen.dart';
 import 'search_product_modal.dart';
 
@@ -32,6 +36,10 @@ class HomeScreen extends ConsumerWidget {
     final p = Palette.of(context);
     final activeDish = ref.watch(dishProvider);
     final savedDishes = ref.watch(savedDishesProvider);
+    final recoveryNotice = ref.watch(storageRecoveryNoticeProvider);
+    final compatibilityNotice = ref.watch(storageCompatibilityNoticeProvider);
+    final persistenceError = ref.watch(persistenceErrorProvider);
+    final savedDishesError = ref.watch(savedDishesErrorProvider);
 
     return Scaffold(
       backgroundColor: p.canvas,
@@ -58,10 +66,56 @@ class HomeScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(
-            Space.x4, Space.x2, Space.x4, Space.x6),
+      body: Column(
         children: [
+          if (persistenceError != null || savedDishesError != null)
+            PersistenceErrorBanner(
+              margin: const EdgeInsets.fromLTRB(
+                  Space.x4, Space.x2, Space.x4, Space.x2),
+              onRetry: () async {
+                var ok = true;
+                if (ref.read(persistenceErrorProvider) != null) {
+                  ok = await ref
+                          .read(dishProvider.notifier)
+                          .retryPersistence() &&
+                      ok;
+                }
+                if (ref.read(savedDishesErrorProvider) != null) {
+                  ok = await ref
+                          .read(savedDishesProvider.notifier)
+                          .retryLastOperation() &&
+                      ok;
+                }
+                return ok;
+              },
+            ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(
+                  Space.x4, Space.x2, Space.x4, Space.x6),
+              children: [
+                if (recoveryNotice != null) ...[
+                  _NoticeBanner(
+                    bannerKey: const Key('storage-recovery-banner'),
+                    icon: Icons.restore_rounded,
+                    message: recoveryNotice,
+                    onDismiss: () => ref
+                        .read(storageRecoveryNoticeProvider.notifier)
+                        .state = null,
+                  ),
+                  const SizedBox(height: Space.x3),
+                ],
+                if (compatibilityNotice != null) ...[
+                  _NoticeBanner(
+                    bannerKey: const Key('storage-compatibility-banner'),
+                    icon: Icons.info_outline_rounded,
+                    message: compatibilityNotice,
+                    onDismiss: () => ref
+                        .read(storageCompatibilityNoticeProvider.notifier)
+                        .state = null,
+                  ),
+                  const SizedBox(height: Space.x3),
+                ],
           _ActiveDraftCard(
             dish: activeDish,
             onOpen: () => _openEditor(context),
@@ -92,6 +146,9 @@ class HomeScreen extends ConsumerWidget {
               _openEditor(context);
             },
           ),
+              ],
+            ),
+          ),
         ],
       ),
       bottomNavigationBar: _HomeDock(
@@ -108,14 +165,27 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  void _newCalculation(BuildContext context, WidgetRef ref) {
+  Future<void> _newCalculation(BuildContext context, WidgetRef ref) async {
     AppHaptics.commit();
     final notifier = ref.read(dishProvider.notifier);
     // Черновик с ингредиентами не теряем: он уходит в библиотеку.
     if (ref.read(dishProvider).ingredients.isNotEmpty) {
-      notifier.saveCurrentToLibrary();
+      try {
+        await notifier.saveCurrentToLibrary();
+      } catch (_) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Не удалось сохранить текущий расчёт. Повторите попытку.',
+            ),
+          ),
+        );
+        return;
+      }
     }
     notifier.createNewDish();
+    if (!context.mounted) return;
     _openEditor(context);
   }
 
@@ -132,6 +202,7 @@ class HomeScreen extends ConsumerWidget {
   /// сохранённые блюда вниз (аудит P1-7).
   void _showHowItWorks(BuildContext context) {
     final p = Palette.of(context);
+    final container = ProviderScope.containerOf(context, listen: false);
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -139,69 +210,236 @@ class HomeScreen extends ConsumerWidget {
       showDragHandle: true,
       backgroundColor: p.surface,
       shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
-      builder: (ctx) => SizedBox(
-        height: MediaQuery.sizeOf(ctx).height * 0.85,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(
-              Space.x5, 0, Space.x5, Space.x6),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('Как считается',
-                  style: AppTypography.title.copyWith(color: p.ink)),
-              const SizedBox(height: Space.x1),
-              Text(
-                'Справочник Скурихина (2002) · USDA FDC. Всё считается на '
-                'устройстве, без интернета.',
-                style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
-              ),
-              const SizedBox(height: Space.x4),
-              _InfoBlock(
-                palette: p,
-                icon: Icons.functions_rounded,
-                title: 'Формула энергетической ценности',
-                body: 'Коэффициенты Этуотера:\n'
-                    '• 1 г белков = 4,0 ккал\n'
-                    '• 1 г жиров = 9,0 ккал\n'
-                    '• 1 г углеводов = 4,0 ккал\n\n'
-                    'ЭЦ = Б × 4 + Ж × 9 + У × 4. Расчёт идёт по нутриентам с '
-                    'учётом сохранности; вклад алкоголя, пищевых волокон и '
-                    'органических кислот формулой не учитывается.',
-              ),
-              const SizedBox(height: Space.x2),
-              _InfoBlock(
-                palette: p,
-                icon: Icons.thermostat_rounded,
-                title: 'Коэффициенты сохранности',
-                body: 'По умолчанию: белки 94 %, жиры 88 %, углеводы 91 % '
-                    '(табл. 13 Скурихина). Для блюд без т.о. — 100 / 100 / 100 %.',
-              ),
-              const SizedBox(height: Space.x2),
-              _InfoBlock(
-                palette: p,
-                icon: Icons.splitscreen_rounded,
-                title: 'Два режима бланка',
-                body: '1. «Бланк с крестом (учебный)» — диагональный крест в '
-                    'колонке ккал сырья, калорийность только после т.о.\n'
-                    '2. «Подробный расчёт» — калории рассчитаны для каждого продукта.',
-              ),
-              const SizedBox(height: Space.x2),
-              _InfoBlock(
-                palette: p,
-                icon: Icons.file_download_outlined,
-                title: 'Форматы экспорта',
-                body: 'PDF (векторный, идентичен типовому бланку), Word (.docx) '
-                    'и Excel (.xlsx) с живыми формулами — файлы сохраняются на '
-                    'телефоне и печатаются оттуда.',
-              ),
-              const SizedBox(height: Space.x4),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx),
+      builder: (ctx) => UncontrolledProviderScope(
+        container: container,
+        child: SizedBox(
+          height: MediaQuery.sizeOf(ctx).height * 0.85,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(
+                Space.x5, 0, Space.x5, Space.x6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Как считается',
+                    style: AppTypography.title.copyWith(color: p.ink)),
+                const SizedBox(height: Space.x1),
+                Text(
+                  'Справочник Скурихина (2002) · Немецкий справочник BLS 4.0. '
+                  'Всё считается на устройстве, без интернета.',
+                  style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
+                ),
+                const SizedBox(height: Space.x4),
+                _InfoBlock(
+                  palette: p,
+                  icon: Icons.functions_rounded,
+                  title: 'Формула энергетической ценности',
+                  body: 'Коэффициенты Этуотера:\n'
+                      '• 1 г белков = 4,0 ккал\n'
+                      '• 1 г жиров = 9,0 ккал\n'
+                      '• 1 г углеводов = 4,0 ккал\n\n'
+                      'ЭЦ = Б × 4 + Ж × 9 + У × 4. Расчёт идёт по нутриентам '
+                      'после тепловой обработки; вклад алкоголя, пищевых волокон и '
+                      'органических кислот формулой не учитывается.',
+                ),
+                const SizedBox(height: Space.x2),
+                _InfoBlock(
+                  palette: p,
+                  icon: Icons.thermostat_rounded,
+                  title: 'Потери при тепловой обработке',
+                  body: 'Б, Ж и У каждого продукта уменьшаются на процент потерь '
+                      'для его группы и способа обработки (варка, тушение, жарка, '
+                      'запекание, на пару, бульон); без тепловой обработки потерь '
+                      'нет. Энергия считается от готовых Б/Ж/У. Вес готового блюда '
+                      'вводит повар; без него итог дан на всё блюдо. Расчёты, '
+                      'сохранённые прежней версией (сохранность 94 / 88 / 91 %), '
+                      'открываются с прежними числами.\n\n'
+                      'Ключевые допущения модели:\n'
+                      '${LossClarityHints.overviewBullets}\n\n'
+                      '$kNotGostNotice',
+                ),
+                const SizedBox(height: Space.x2),
+                _InfoBlock(
+                  palette: p,
+                  icon: Icons.splitscreen_rounded,
+                  title: 'Два режима бланка',
+                  body: '1. «Бланк с крестом (учебный)» — диагональный крест в '
+                      'колонке ккал сырья, калорийность только после т.о.\n'
+                      '2. «Подробный расчёт» — калории рассчитаны для каждого продукта.',
+                ),
+                const SizedBox(height: Space.x2),
+                _InfoBlock(
+                  palette: p,
+                  icon: Icons.file_download_outlined,
+                  title: 'Форматы экспорта',
+                  body: 'PDF (векторный, идентичен типовому бланку), Word (.docx) '
+                      'и Excel (.xlsx) с живыми формулами — файлы сохраняются на '
+                      'телефоне и печатаются оттуда.',
+                ),
+                const SizedBox(height: Space.x2),
+                _StorageLocationBlock(palette: p),
+                const SizedBox(height: Space.x4),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Понятно'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Информационный баннер хранилища (восстановление из копии или совместимость).
+class _NoticeBanner extends StatelessWidget {
+  const _NoticeBanner({
+    required this.bannerKey,
+    required this.icon,
+    required this.message,
+    required this.onDismiss,
+  });
+
+  final Key bannerKey;
+  final IconData icon;
+  final String message;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    return Semantics(
+      liveRegion: true,
+      container: true,
+      child: Container(
+        key: bannerKey,
+        padding: const EdgeInsets.all(Space.x3),
+        decoration: BoxDecoration(
+          color: p.surface,
+          borderRadius: Radii.cardAll,
+          border: Border.all(color: p.accent, width: 1),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(icon, size: 20, color: p.accent),
+                const SizedBox(width: Space.x2),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: AppTypography.bodySm.copyWith(color: p.ink),
+                  ),
+                ),
+              ],
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: onDismiss,
                 child: const Text('Понятно'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// IO-07: отображение каталога и файла хранения рецептов в справке.
+class _StorageLocationBlock extends ConsumerWidget {
+  final Palette palette;
+
+  const _StorageLocationBlock({required this.palette});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final p = palette;
+    final fileName = ref.read(dishStorageRepositoryProvider).storageFileName;
+    final dirAsync = ref.watch(storageDirectoryPathProvider);
+    return Container(
+      key: const ValueKey('storage-location-block'),
+      padding: const EdgeInsets.all(Space.x3),
+      decoration: BoxDecoration(
+        color: p.sunken,
+        borderRadius: Radii.fieldAll,
+        border: Border.all(color: p.borderStatic),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.folder_open_rounded, size: 18, color: p.inkSecondary),
+              const SizedBox(width: Space.x2),
+              Expanded(
+                child: Text(
+                  'Папка хранения данных',
+                  style: AppTypography.label.copyWith(color: p.ink),
+                ),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: Space.x1),
+          Text(
+            'Файл рецептов: $fileName',
+            style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
+          ),
+          const SizedBox(height: Space.x1),
+          dirAsync.when(
+            loading: () => Text(
+              'Определение каталога хранения…',
+              style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
+            ),
+            error: (_, __) => Text(
+              'Каталог хранения недоступен на этой платформе.',
+              style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
+            ),
+            data: (dirPath) {
+              if (dirPath == null || dirPath.trim().isEmpty) {
+                return Text(
+                  'Каталог хранения недоступен в текущей среде запуска.',
+                  style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SelectableText(
+                    dirPath,
+                    key: const ValueKey('storage-dir-path'),
+                    style: AppTypography.numSm.copyWith(color: p.ink),
+                  ),
+                  const SizedBox(height: Space.x1),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      key: const ValueKey('copy-storage-dir-btn'),
+                      onPressed: () async {
+                        await Clipboard.setData(ClipboardData(text: dirPath));
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                          const SnackBar(
+                            content: Text('Путь к папке скопирован'),
+                          ),
+                        );
+                      },
+                      style: TextButton.styleFrom(
+                        minimumSize: const Size(0, kMinTapTarget),
+                        tapTargetSize: MaterialTapTargetSize.padded,
+                      ),
+                      icon: const Icon(Icons.copy_rounded, size: 16),
+                      label: const Text('Скопировать путь'),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
       ),
     );
   }
@@ -268,7 +506,9 @@ class _ActiveDraftCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     final hasContent = dish.ingredients.isNotEmpty;
-    final calc = CalculationEngine.calculate(dish);
+    // STATE-01: карточка черновика не имеет права ронять домашний экран —
+    // невычислимое блюдо показывает прочерки.
+    final calc = CalculationEngine.tryCalculate(dish);
     final title = dish.title.trim().isEmpty
         ? (hasContent ? 'Черновик без названия' : 'Новый расчёт')
         : dish.title.trim();
@@ -301,8 +541,11 @@ class _ActiveDraftCard extends StatelessWidget {
           if (hasContent) ...[
             const SizedBox(height: Space.x1),
             Text(
-              '${dish.ingredients.length} инг. · выход ${CalculationEngine.formatGrams(calc.yieldGrams)} г · '
-              '${CalculationEngine.formatKcal(calc.cookedKcal)} ккал',
+              calc == null
+                  ? '${dish.ingredients.length} инг. · выход — г · — ккал'
+                  : '${dish.ingredients.length} инг. · '
+                      '${calc.usesLossTable && !calc.hasYield ? 'вес готового блюда не указан' : 'выход ${CalculationEngine.formatGrams(calc.yieldGrams)} г'} · '
+                      '${CalculationEngine.formatKcal(calc.cookedKcal)} ккал',
               style: AppTypography.numSm.copyWith(color: p.inkSecondary),
             ),
           ],
@@ -392,8 +635,10 @@ class _SavedDishCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final p = Palette.of(context);
-    final calc = CalculationEngine.calculate(dish);
-    final title = dish.title.trim().isEmpty ? 'Блюдо без названия' : dish.title.trim();
+    // STATE-01: карточка сохранённого блюда тоже не имеет права ронять экран.
+    final calc = CalculationEngine.tryCalculate(dish);
+    final title =
+        dish.title.trim().isEmpty ? 'Блюдо без названия' : dish.title.trim();
 
     return Container(
       margin: const EdgeInsets.only(bottom: Space.x2),
@@ -431,9 +676,11 @@ class _SavedDishCard extends ConsumerWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${dish.ingredients.length} инг. · выход '
-                        '${CalculationEngine.formatGrams(calc.yieldGrams)} г · '
-                        '${CalculationEngine.formatKcal(calc.cookedKcal)} ккал',
+                        calc == null
+                            ? '${dish.ingredients.length} инг. · выход — г · — ккал'
+                            : '${dish.ingredients.length} инг. · '
+                                '${calc.usesLossTable && !calc.hasYield ? 'вес готового блюда не указан' : 'выход ${CalculationEngine.formatGrams(calc.yieldGrams)} г'} · '
+                                '${CalculationEngine.formatKcal(calc.cookedKcal)} ккал',
                         style: AppTypography.numSm.copyWith(color: p.inkSecondary),
                       ),
                     ],

@@ -1,8 +1,32 @@
 import 'package:flutter/material.dart';
 import '../../core/calculation/calculation_engine.dart';
+import '../../core/calculation/loss_table.dart';
+import '../../core/calculation/models/heat_process.dart';
 import '../../core/calculation/models/ingredient.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
+
+/// Строка потерь ингредиента в блюде со способом [dishProcess]:
+/// «Потери: мясо · варка — Б 10 %, Ж 25 %, У 0 %».
+///
+/// Числа — из [LossTable.lossFor] (источники — `docs/COEFFICIENT_SOURCES.md`);
+/// «(вручную)» — группа или способ заданы поваром, «оценка» — значение
+/// не подтверждено таблицей источника (список UNVERIFIED).
+String lossLabelFor(Ingredient ing, HeatProcess dishProcess) {
+  final group = ing.lossGroup;
+  final process = ing.processIn(dishProcess);
+  final loss = LossTable.lossFor(group, process);
+  final g = '${group.label}${ing.groupOverride != null ? ' (вручную)' : ''}';
+  final p = '${process.label}${ing.processOverride != null ? ' (вручную)' : ''}';
+  final none = loss.protein == 0 && loss.fat == 0 && loss.carbs == 0;
+  final numbers = none
+      ? 'нет'
+      : 'Б ${CalculationEngine.formatGrams(loss.protein)} %, '
+          'Ж ${CalculationEngine.formatGrams(loss.fat)} %, '
+          'У ${CalculationEngine.formatGrams(loss.carbs)} %'
+          '${loss.isVerified ? '' : ' (оценка)'}';
+  return 'Потери: $g · $p — $numbers';
+}
 
 /// Карточка ингредиента (аудит P1-6).
 ///
@@ -27,15 +51,29 @@ class IngredientCard extends StatelessWidget {
     required this.onTap,
     required this.onDelete,
     this.dragHandleIndex,
+    this.lossLabel,
+    this.onLossTap,
   });
+
+  /// Строка «Потери: группа · способ» нового расчёта (таблица потерь по
+  /// группам продуктов). `null` — старый расчёт (legacy), строки нет.
+  final String? lossLabel;
+
+  /// Выбор группы и способа обработки ингредиента (тап по [lossLabel]).
+  final VoidCallback? onLossTap;
 
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     final ing = ingredient;
 
-    final formattedIndex = index.toString().padLeft(2, '0');
-    final netGramsStr = CalculationEngine.formatGrams(ing.netGramsRounded);
+    final indexLabel = index.toString().padLeft(2, '0');
+    // MATH-04: при больших отходах печатаем больше знаков, иначе обратный
+    // пересчёт брутто теряет десятки граммов.
+    // Сохранённый документ может содержать отход 100 % — тогда нетто не
+    // вычисляется; карточка показывает «—», а не роняет экран.
+    final netGramsStr = _orDash(() => CalculationEngine.formatNetGrams(
+        ing.netGramsRounded, ing.product.wastePct));
     final grossGramsStr = CalculationEngine.formatGrams(ing.weightGrams);
     final showGross = ing.product.wastePct > 0;
 
@@ -75,7 +113,7 @@ class IngredientCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '$formattedIndex  ',
+                            '$indexLabel  ',
                             style: AppTypography.numSm.copyWith(
                               color: p.inkMuted,
                               fontWeight: FontWeight.w700,
@@ -129,30 +167,60 @@ class IngredientCard extends StatelessWidget {
                             tint: p.protein,
                             label: 'Б',
                             value:
-                                CalculationEngine.formatMacro(ing.proteinInDish),
+                                _orDash(() => CalculationEngine.formatMacro(ing.proteinInDish)),
                             palette: p,
                           ),
                           _MacroCell(
                             tint: p.fat,
                             label: 'Ж',
-                            value: CalculationEngine.formatMacro(ing.fatInDish),
+                            value: _orDash(() => CalculationEngine.formatMacro(ing.fatInDish)),
                             palette: p,
                           ),
                           _MacroCell(
                             tint: p.carbs,
                             label: 'У',
-                            value: CalculationEngine.formatMacro(ing.carbsInDish),
+                            value: _orDash(() => CalculationEngine.formatMacro(ing.carbsInDish)),
                             palette: p,
                           ),
                           _MacroCell(
                             tint: p.kcal,
                             label: 'ккал',
                             value:
-                                CalculationEngine.formatKcal(ing.blankKcalInDish),
+                                _orDash(() => CalculationEngine.formatKcal(ing.blankKcalInDish)),
                             palette: p,
                           ),
                         ],
                       ),
+                      if (lossLabel != null)
+                        // Высота строки — 48 dp (WCAG 2.5.5): это отдельная
+                        // цель нажатия, а не часть тапа «изменить массу».
+                        InkWell(
+                          key: ValueKey('loss-${ing.id}'),
+                          onTap: onLossTap,
+                          borderRadius: BorderRadius.circular(6),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(
+                                minHeight: kMinTapTarget),
+                            child: Row(
+                              children: [
+                                Icon(Icons.local_fire_department_outlined,
+                                    size: 16, color: p.inkMuted),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    lossLabel!,
+                                    style: AppTypography.caption
+                                        .copyWith(color: p.inkSecondary),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                Icon(Icons.edit_outlined,
+                                    size: 16, color: p.inkMuted),
+                              ],
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -266,5 +334,16 @@ class _MacroCell extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+/// Значение из сохранённого документа, которое отвергает валидатор
+/// (например, отход 100 %), печатается как «—»: карточка не роняет экран,
+/// а причину показывает баннер ошибки расчёта.
+String _orDash(String Function() format) {
+  try {
+    return format();
+  } on ArgumentError {
+    return '—';
   }
 }

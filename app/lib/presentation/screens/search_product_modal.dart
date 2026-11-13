@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/calculation/calculation_engine.dart';
 import '../../core/calculation/calculation_validation.dart';
 import '../../core/calculation/models/product.dart';
+import '../../core/calculation/models/source_label.dart';
 import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
@@ -14,6 +15,31 @@ import '../widgets/nutrient_chip.dart';
 enum SearchMode {
   pickForRecipe,
   browseCatalog,
+}
+
+/// Нейтральная метка «Готовое блюдо» (этап 6).
+///
+/// Не акцентная и не «предупреждающая»: готовое блюдо — нормальная запись
+/// справочника, метка лишь отличает его от сырья в общем списке.
+class _DishBadge extends StatelessWidget {
+  const _DishBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: p.border),
+      ),
+      child: Text(
+        'Готовое блюдо',
+        style: AppTypography.caption.copyWith(color: p.inkSecondary),
+      ),
+    );
+  }
 }
 
 /// Поиск и выбор продукта (аудит P1-5).
@@ -67,6 +93,15 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
   void initState() {
     super.initState();
     _searchCtrl.text = ref.read(searchProvider).query;
+    // Этап 6: в калькуляторе рецепта по умолчанию ищутся ПРОДУКТЫ, а не
+    // готовые блюда — иначе по запросу «гречка» первым шёл готовый гарнир.
+    // В каталоге по умолчанию видны все.
+    final defaultIsDish =
+        widget.mode == SearchMode.pickForRecipe ? false : null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(searchProvider.notifier).setIsDishFilter(defaultIsDish);
+    });
   }
 
   @override
@@ -102,6 +137,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
           child: Column(
             children: [
               _buildHeader(context, isCatalog),
+              _buildDishSegment(context, isCatalog),
               _buildSourceSegment(context),
               _buildSearchField(context),
               Divider(height: 1, color: Palette.of(context).divider),
@@ -143,8 +179,58 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
   }
 
   /// Источник — сегментированный фильтр в шапке с количеством продуктов.
-  /// Раньше источник показывался 10-px плашкой в каждой строке из 9235
-  /// продуктов — невидимый шум. Теперь это одно решение на весь поиск.
+  /// Раньше источник показывался 10-px плашкой в каждой строке из 8255
+  /// продуктов (1108 Скурихина + 7140 BLS + 13 дополнений = 8261) — невидимый шум.
+  /// Теперь это одно решение на весь поиск.
+  /// Переключатель «Продукты | Готовые блюда | Все» (этап 6).
+  ///
+  /// В калькуляторе рецепта по умолчанию `Продукты`, в каталоге — `Все`:
+  /// технолог подбирает ингредиент, а посмотреть состав готового блюда
+  /// (например, «Борща украинского») можно в справочнике.
+  Widget _buildDishSegment(BuildContext context, bool isCatalog) {
+    final p = Palette.of(context);
+    final current = ref.watch(searchProvider).selectedIsDish;
+    final autoFocus = ref.watch(searchProvider.select((s) => s.query.isEmpty)) &&
+        mounted;
+
+    Widget item(String text) => Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Space.x4, Space.x1, Space.x4, 0),
+      child: SizedBox(
+        width: double.infinity,
+        child: SegmentedButton<bool?>(
+          showSelectedIcon: false,
+          style: SegmentedButton.styleFrom(
+            minimumSize: const Size(0, kMinTapTarget),
+            backgroundColor: p.surface,
+            foregroundColor: p.inkSecondary,
+            selectedBackgroundColor: p.accentSoft,
+            selectedForegroundColor: p.accent,
+            side: BorderSide(color: p.border),
+            shape: RoundedRectangleBorder(borderRadius: Radii.fieldAll),
+            textStyle: AppTypography.label,
+          ),
+          segments: [
+            ButtonSegment(value: false, label: item('Продукты')),
+            ButtonSegment(value: true, label: item('Готовые блюда')),
+            if (isCatalog) ButtonSegment(value: null, label: item('Все')),
+          ],
+          selected: {current},
+          onSelectionChanged: (value) {
+            AppHaptics.toggle();
+            ref.read(searchProvider.notifier).setIsDishFilter(value.single);
+            setState(() => _expandedProductId = null);
+          },
+        ),
+      ),
+    ).unfocusSuffix(autoFocus);
+  }
+
   Widget _buildSourceSegment(BuildContext context) {
     final p = Palette.of(context);
     final current = ref.watch(searchProvider).selectedSource;
@@ -181,12 +267,12 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
             ),
             ButtonSegment(
               value: 'skurikhin',
-              label: Text(label('Скурихин', counts.skurikhin),
+              label: Text(label(SourceLabel.of('skurikhin'), counts.skurikhin),
                   maxLines: 1, overflow: TextOverflow.ellipsis),
             ),
             ButtonSegment(
-              value: 'usda',
-              label: Text(label('USDA', counts.usda),
+              value: 'bls',
+              label: Text(label(SourceLabel.of('bls'), counts.bls),
                   maxLines: 1, overflow: TextOverflow.ellipsis),
             ),
           ],
@@ -319,9 +405,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             Text(
-                              product.source.toLowerCase() == 'skurikhin'
-                                  ? 'Скурихин'
-                                  : 'USDA',
+                              product.sourceLabel,
                               style: AppTypography.caption
                                   .copyWith(color: p.sourceInk),
                             ),
@@ -343,6 +427,11 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                                 style: AppTypography.caption
                                     .copyWith(color: p.inkSecondary),
                               ),
+                            // Этап 6: нейтральная метка готового блюда —
+                            // чтобы в общем списке не путать «Гречку
+                            // варёную» с крупой.
+                            if (product.isDishOnly)
+                              _DishBadge(),
                           ],
                         ),
                       ],
@@ -377,6 +466,13 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
     );
   }
 
+  /// Продукт, отредактированный в открытом шите клавиатуры (STATE-11).
+  ///
+  /// `CustomNumpadSheet` позволяет изменить процент отходов, и он же
+  /// сообщает об этом через `onProductUpdated`. Держим последнюю версию,
+  /// чтобы `onConfirm` добавлял в блюдо именно её, а не исходный продукт.
+  Product? _sheetProduct;
+
   Widget _buildInlineEditor(BuildContext context, Product product) {
     // Тот же кейпад, что и в отдельном шите — единый компонент. Модалка
     // поиска при этом не закрывается, контекст не теряется.
@@ -388,9 +484,16 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
           key: ValueKey('numpad-${product.id}'),
           product: product,
           initialGrams: 100,
-          onProductUpdated: (updated) {},
+          onProductUpdated: (updated) {
+            // STATE-11: введённый в шите процент отходов раньше выбрасывался —
+            // `_addToRecipe` получал ИСХОДНЫЙ продукт, хотя шит уже применил
+            // новые % для пересчёта брутто→нетто. Запоминаем и передаём его
+            // дальше, чтобы блюдо считалось по тому же проценту, что видел
+            // повар.
+            _sheetProduct = updated;
+          },
           onConfirm: (grams, isGross) {
-            _addToRecipe(product, grams, isGross);
+            _addToRecipe(_sheetProduct ?? product, grams, isGross);
           },
         ),
       ),
@@ -410,7 +513,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
           Expanded(
             child: Text(
               'Продукт «${product.name}» недоступен для расчёта '
-              '(сумма БЖУ превышает 100 г в исходных данных USDA).',
+              '(сумма БЖУ превышает 100 г в исходных данных BLS).',
               style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
             ),
           ),
@@ -534,16 +637,22 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
 /// Счётчики продуктов по источникам для сегментированного фильтра.
 class SourceCounts {
   final int skurikhin;
-  final int usda;
-  const SourceCounts({this.skurikhin = 0, this.usda = 0});
+  final int bls;
+
+  /// Приправы и питьевая вода, которых нет в книге (дефект D3).
+  final int supplement;
+  const SourceCounts({this.skurikhin = 0, this.bls = 0, this.supplement = 0});
 }
 
 final sourceCountsProvider = FutureProvider<SourceCounts>((ref) async {
   final repo = ref.watch(productRepositoryProvider);
-  final all = await repo.searchProducts(query: '', limit: 100000);
+  // Дефект D3: раньше здесь считалось `!isSkurikhin`, и `supplement`
+  // («Дополнено») попадал в счётчик BLS. Теперь — по фактическому источнику.
+  final bySource = await repo.getCountBySource();
   return SourceCounts(
-    skurikhin: all.where((p) => p.source.toLowerCase() == 'skurikhin').length,
-    usda: all.where((p) => p.source.toLowerCase() == 'usda').length,
+    skurikhin: bySource['skurikhin'] ?? 0,
+    bls: bySource['bls'] ?? 0,
+    supplement: bySource['supplement'] ?? 0,
   );
 });
 
@@ -609,9 +718,7 @@ class ProductInfoCardSheet extends ConsumerWidget {
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             Text(
-                              product.source.toLowerCase() == 'skurikhin'
-                                  ? 'Скурихин'
-                                  : 'USDA',
+                              product.sourceLabel,
                               style: AppTypography.caption
                                   .copyWith(color: p.sourceInk),
                             ),
@@ -623,6 +730,7 @@ class ProductInfoCardSheet extends ConsumerWidget {
                               Text('Стр. ${product.pageNum}',
                                   style: AppTypography.caption
                                       .copyWith(color: p.inkMuted)),
+                            if (product.isDishOnly) _DishBadge(),
                           ],
                         ),
                       ],
@@ -794,7 +902,7 @@ class ProductInfoCardSheet extends ConsumerWidget {
                       const SizedBox(width: Space.x2),
                       Expanded(
                         child: Text(
-                          'Сумма нутриентов в данных USDA превышает 100 г '
+                          'Сумма нутриентов в исходных данных превышает 100 г '
                           '(${(product.protein + product.fat + product.carbs).toStringAsFixed(2)} г). '
                           'Продукт доступен только для справки.',
                           style: AppTypography.caption.copyWith(color: p.danger),
@@ -815,7 +923,7 @@ class ProductInfoCardSheet extends ConsumerWidget {
                   label: Text(
                     isValid
                         ? 'Добавить в расчет'
-                        : 'Недоступно для расчёта (ошибка БЖУ в USDA)',
+                        : 'Недоступно для расчёта (ошибка БЖУ в источнике)',
                     textAlign: TextAlign.center,
                   ),
                 ),

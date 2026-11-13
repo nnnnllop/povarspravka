@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../core/calculation/calculation_engine.dart';
+import '../../core/calculation/calculation_validation.dart';
+import '../../core/calculation/loss_table.dart';
 import '../../core/calculation/models/calculation_result.dart';
 import '../../core/calculation/yield_explanation.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
+import 'loss_clarity_hints.dart';
+import 'yield_density_warning.dart';
 
 /// Итоги блюда как **жизненный цикл** (аудит P1-6).
 ///
@@ -98,10 +102,13 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
               palette: p,
               number: 2,
               title: 'После т.о.',
-              subtitle:
-                  'сохранность ${CalculationEngine.formatPercent(r.retentionProtein)} / '
-                  '${CalculationEngine.formatPercent(r.retentionFat)} / '
-                  '${CalculationEngine.formatPercent(r.retentionCarbs)} %',
+              // Новый расчёт: потери — по группе каждого продукта, одной
+              // тройки на блюдо нет (детали — в инспекторе расчёта).
+              subtitle: r.usesLossTable
+                  ? '${r.process.label} · потери по группам продуктов'
+                  : 'сохранность ${CalculationEngine.formatPercent(r.retentionProtein)} / '
+                      '${CalculationEngine.formatPercent(r.retentionFat)} / '
+                      '${CalculationEngine.formatPercent(r.retentionCarbs)} %',
               cells: [
                 ('Б', m(r.cookedProtein), p.protein),
                 ('Ж', m(r.cookedFat), p.fat),
@@ -137,7 +144,13 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
   /// Ступень 3: «Порция» — переключатель «на всё блюдо / на 100 г» верхней
   /// строкой, затем 4 значения в ряд и калькулятор произвольной массы.
   Widget _buildPortionStage(BuildContext context, Palette p, CalculationResult r) {
-    final totalLabel = 'На всё блюдо (${g(r.yieldGrams)} г)';
+    // Новый расчёт без веса готового блюда: итог — только на всё блюдо,
+    // «на 100 г» и «на порцию» не показываются (вес не угадываем).
+    // Старый расчёт (legacy) показывается как раньше.
+    final needsYield = r.usesLossTable && !r.hasYield;
+    final per100 = _showPer100g && !needsYield;
+    final totalLabel =
+        needsYield ? 'На всё блюдо' : 'На всё блюдо (${g(r.yieldGrams)} г)';
     final per100Label = 'На 100 г готового блюда';
 
     return Container(
@@ -178,6 +191,17 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
             ],
           ),
           const SizedBox(height: Space.x2),
+          if (needsYield)
+            Text(
+              'На всё блюдо. Укажите вес готового блюда, чтобы увидеть '
+              '«на 100 г» и «на порцию».',
+              key: const ValueKey('yield-needed-hint'),
+              style: AppTypography.caption.copyWith(
+                color: p.inkSecondary,
+                fontWeight: FontWeight.w700,
+              ),
+            )
+          else
           // Выбор ответа: «на всё блюдо» или «на 100 г».
           SegmentedButton<bool>(
             showSelectedIcon: false,
@@ -211,6 +235,13 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
             onSelectionChanged: (value) =>
                 setState(() => _showPer100g = value.single),
           ),
+          if (!needsYield && CalculationValidation.warnsImpossiblePer100g(r)) ...[
+            const SizedBox(height: Space.x2),
+            YieldDensityWarning(
+              key: const ValueKey('portion-yield-density-warning'),
+              result: r,
+            ),
+          ],
           const SizedBox(height: Space.x3),
           // Четыре числа — одна строка, tabular figures, 2-dp маркеры.
           Wrap(
@@ -220,28 +251,28 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
               _ValueCell(
                 tint: p.protein,
                 title: 'Белки',
-                value: m(_showPer100g ? r.per100gProtein : r.cookedProtein),
+                value: m(per100 ? r.per100gProtein : r.cookedProtein),
                 unit: 'г',
                 palette: p,
               ),
               _ValueCell(
                 tint: p.fat,
                 title: 'Жиры',
-                value: m(_showPer100g ? r.per100gFat : r.cookedFat),
+                value: m(per100 ? r.per100gFat : r.cookedFat),
                 unit: 'г',
                 palette: p,
               ),
               _ValueCell(
                 tint: p.carbs,
                 title: 'Углеводы',
-                value: m(_showPer100g ? r.per100gCarbs : r.cookedCarbs),
+                value: m(per100 ? r.per100gCarbs : r.cookedCarbs),
                 unit: 'г',
                 palette: p,
               ),
               _ValueCell(
                 tint: p.kcal,
                 title: 'Энергия',
-                value: k(_showPer100g ? r.per100gKcal : r.cookedKcal),
+                value: k(per100 ? r.per100gKcal : r.cookedKcal),
                 unit: 'ккал',
                 palette: p,
               ),
@@ -397,6 +428,10 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                 ),
               ),
               const SizedBox(height: Space.x2),
+              // Новый расчёт: потери по каждому ингредиенту (группа × способ).
+              if (r.usesLossTable)
+                _buildLossLinesCard(p, r)
+              else
               _buildStepCard(
                 palette: p,
                 title: '2. Потери при т.о. — применяем сохранность',
@@ -445,7 +480,9 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
               const SizedBox(height: Space.x2),
               _buildStepCard(
                 palette: p,
-                title: '4. Выход готового блюда: ${g(r.yieldGrams)} г',
+                title: r.usesLossTable && !r.hasYield
+                    ? '4. Вес готового блюда не указан'
+                    : '4. Выход готового блюда: ${g(r.yieldGrams)} г',
                 content: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -466,6 +503,13 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                         '${macros(r.per100gProtein, r.per100gFat, r.per100gCarbs)} · ${k(r.per100gKcal)} ккал',
                         style: AppTypography.num.copyWith(color: p.ink),
                       ),
+                      if (CalculationValidation.warnsImpossiblePer100g(r)) ...[
+                        const SizedBox(height: 8),
+                        YieldDensityWarning(
+                          key: const ValueKey('inspector-yield-density-warning'),
+                          result: r,
+                        ),
+                      ],
                     ],
                   ],
                 ),
@@ -473,7 +517,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
               const SizedBox(height: Space.x4),
               Text(
                 'Сырой состав и готовое блюдо — разные стадии, а не противоречащие значения. '
-                'Сохранность задаётся в параметрах и не определяет уварку. Округление как в бланке: '
+                '${r.usesLossTable ? 'Потери берутся из таблицы по группе каждого продукта; вес готового блюда вводит повар. $kNotGostNotice ' : 'Сохранность задаётся в параметрах и не определяет уварку. '}Округление как в бланке: '
                 'БЖУ до 0,01 г, энергия до 0,1 ккал; энергия считается по округлённым БЖУ.',
                 style:
                     AppTypography.bodySm.copyWith(color: p.inkSecondary),
@@ -489,6 +533,77 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// Шаг 2 нового расчёта: потери по каждому ингредиенту — группа, способ,
+  /// проценты из таблицы и «сырьё → после т.о.» для Б/Ж/У (как в движке).
+  Widget _buildLossLinesCard(Palette p, CalculationResult r) {
+    String pct(double v) => CalculationEngine.formatGrams(v);
+    return _buildStepCard(
+      palette: p,
+      title: '2. Потери при т.о. — по таблице для группы продукта',
+      content: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final line in r.lines)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${line.productName.isEmpty ? 'Ингредиент' : line.productName}: '
+                    '${line.group.label}${line.groupIsManual ? ' (вручную)' : ''} · '
+                    '${line.process.label}${line.processIsManual ? ' (вручную)' : ''} — '
+                    'потери Б ${pct(line.loss.protein)} %, Ж ${pct(line.loss.fat)} %, '
+                    'У ${pct(line.loss.carbs)} %'
+                    '${line.loss.isVerified ? '' : ' (оценка)'}',
+                    style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
+                  ),
+                  Text(
+                    'Б ${m(line.rawProtein)} → ${m(line.cookedProtein)} · '
+                    'Ж ${m(line.rawFat)} → ${m(line.cookedFat)} · '
+                    'У ${m(line.rawCarbs)} → ${m(line.cookedCarbs)} г',
+                    style: AppTypography.num.copyWith(color: p.ink),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 6),
+          Text(
+            'Итого после т.о.: ${macros(r.cookedProtein, r.cookedFat, r.cookedCarbs)}',
+            key: const ValueKey('inspector-loss-total'),
+            style: AppTypography.num
+                .copyWith(color: p.ink, fontWeight: FontWeight.w700),
+          ),
+          Text(
+            'Источник потерь: МР 2.3.0419-26, прил. 4–5; «оценка» — '
+            'ближайший аналог, строки в источнике нет.',
+            style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
+          ),
+          if (LossClarityHints.forLines(
+            r.lines.map((l) => (group: l.group, process: l.process)),
+          )
+              case final clarityNotes when clarityNotes.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Column(
+              key: const ValueKey('inspector-loss-clarity-hints'),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final note in clarityNotes)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      '• $note',
+                      style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }

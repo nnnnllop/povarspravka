@@ -16,8 +16,9 @@ final foodGroupsProvider = FutureProvider<List<FoodGroup>>((ref) async {
 
   if (selectedSource == 'skurikhin') {
     return allGroups.where((g) => g.id >= 1 && g.id <= 12).toList();
-  } else if (selectedSource == 'usda') {
-    return allGroups.where((g) => g.id >= 101 && g.id <= 128).toList();
+  } else if (selectedSource == 'bls' || selectedSource == 'usda') {
+    // BLS 4.0: 20 категорий, группы 101…120
+    return allGroups.where((g) => g.id >= 101 && g.id <= 120).toList();
   }
   return allGroups;
 });
@@ -31,7 +32,11 @@ final productNutrientsProvider =
 class SearchState {
   final String query;
   final int? selectedGroupId;
-  final String? selectedSource; // 'skurikhin' or 'usda' or null
+  final String? selectedSource; // 'skurikhin' | 'bls' | null
+
+  /// `false` — только продукты/сырьё, `true` — только готовые блюда,
+  /// `null` — без фильтра (этап 6).
+  final bool? selectedIsDish;
   final List<Product> results;
   final bool isLoading;
   final Object? error;
@@ -40,6 +45,7 @@ class SearchState {
     this.query = '',
     this.selectedGroupId,
     this.selectedSource,
+    this.selectedIsDish,
     this.results = const [],
     this.isLoading = false,
     this.error,
@@ -53,6 +59,8 @@ class SearchState {
     bool clearGroupId = false,
     String? selectedSource,
     bool clearSource = false,
+    bool? selectedIsDish,
+    bool clearIsDish = false,
     List<Product>? results,
     bool? isLoading,
     Object? error,
@@ -64,6 +72,8 @@ class SearchState {
           clearGroupId ? null : (selectedGroupId ?? this.selectedGroupId),
       selectedSource:
           clearSource ? null : (selectedSource ?? this.selectedSource),
+      selectedIsDish:
+          clearIsDish ? null : (selectedIsDish ?? this.selectedIsDish),
       results: results ?? this.results,
       isLoading: isLoading ?? this.isLoading,
       error: clearError ? null : (error ?? this.error),
@@ -127,6 +137,7 @@ class SearchNotifier extends StateNotifier<SearchState> {
         query: query,
         groupId: state.selectedGroupId,
         source: state.selectedSource,
+        isDish: state.selectedIsDish,
         limit: 60,
       );
       if (!mounted || reqId != _requestId) return;
@@ -147,6 +158,16 @@ class SearchNotifier extends StateNotifier<SearchState> {
     search(state.query, immediate: true);
   }
 
+  /// Переключение фильтра «Продукты | Готовые блюда | Все» (этап 6).
+  void setIsDishFilter(bool? isDish) {
+    if (state.selectedIsDish == isDish) return;
+    state = state.copyWith(
+      selectedIsDish: isDish,
+      clearIsDish: isDish == null,
+    );
+    search(state.query, immediate: true);
+  }
+
   void setSourceFilter(String? source) {
     final nextSource = state.selectedSource == source ? null : source;
     bool shouldClearGroup = false;
@@ -155,8 +176,8 @@ class SearchNotifier extends StateNotifier<SearchState> {
       if (nextSource == 'skurikhin' &&
           (currentGroup < 1 || currentGroup > 12)) {
         shouldClearGroup = true;
-      } else if (nextSource == 'usda' &&
-          (currentGroup < 101 || currentGroup > 128)) {
+      } else if ((nextSource == 'bls' || nextSource == 'usda') &&
+          (currentGroup < 101 || currentGroup > 120)) {
         shouldClearGroup = true;
       }
     }
