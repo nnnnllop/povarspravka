@@ -51,6 +51,7 @@ coverage/
 # ==============================================================================
 # Large Downloaded Datasets & Raw Caches
 # ==============================================================================
+data/bls_v4/raw/
 tools/usda/cache/*.zip
 tools/usda/cache/*.db
 tools/usda/cache/foundation/

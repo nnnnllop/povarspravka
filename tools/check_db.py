@@ -11,7 +11,7 @@ for c in check_codes:
 syn_queries = ['картошка*', 'гречка*', 'геркулес*', 'курица*', 'свекла*']
 print("\nTesting FTS synonym queries:")
 for sq in syn_queries:
-    res = cur.execute("SELECT p.code, p.name FROM product_fts fts JOIN product p ON p.id = fts.rowid WHERE product_fts MATCH ? LIMIT 2", (sq,)).fetchall()
+    res = cur.execute("SELECT p.code, p.name FROM product_fts fts JOIN product p ON p.id = CAST(fts.product_id AS INTEGER) WHERE product_fts MATCH ? LIMIT 2", (sq,)).fetchall()
     print(sq, [(r[0], r[1].encode('unicode_escape').decode()) for r in res])
 
 con.close()

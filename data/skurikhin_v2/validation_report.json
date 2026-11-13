@@ -1,0 +1,105 @@
+{
+ "source": "Скурихин, Тутельян (2002)",
+ "products": 1108,
+ "nutrients_per_product": 29,
+ "errors_total": 0,
+ "warnings_total": 16,
+ "errors": [],
+ "warnings": [
+  {
+   "check": "energy_mismatch",
+   "code": "3.5.2.13",
+   "detail": "расч 35 vs книга 108"
+  },
+  {
+   "check": "energy_mismatch",
+   "code": "3.5.2.14",
+   "detail": "расч 348 vs книга 244"
+  },
+  {
+   "check": "energy_mismatch",
+   "code": "3.5.2.15",
+   "detail": "расч 422 vs книга 214"
+  },
+  {
+   "check": "energy_mismatch",
+   "code": "3.5.3.3",
+   "detail": "расч 438 vs книга 208"
+  },
+  {
+   "check": "energy_mismatch",
+   "code": "3.5.10.2",
+   "detail": "расч 151 vs книга 303"
+  },
+  {
+   "check": "energy_mismatch",
+   "code": "3.6.4.2",
+   "detail": "расч 263 vs книга 132"
+  },
+  {
+   "check": "energy_mismatch",
+   "code": "4.1.6.5",
+   "detail": "расч 136 vs книга 68"
+  },
+  {
+   "check": "energy_mismatch",
+   "code": "4.1.6.6",
+   "detail": "расч 133 vs книга 65"
+  },
+  {
+   "check": "energy_mismatch",
+   "code": "6.1.3.5.2",
+   "detail": "расч 250 vs книга 122"
+  },
+  {
+   "check": "energy_mismatch",
+   "code": "6.1.3.5.4",
+   "detail": "расч 266 vs книга 130"
+  },
+  {
+   "check": "energy_mismatch",
+   "code": "8.1.4.16",
+   "detail": "расч 37 vs книга 91"
+  },
+  {
+   "check": "energy_mismatch",
+   "code": "8.1.5.21",
+   "detail": "расч 50 vs книга 95"
+  },
+  {
+   "check": "energy_mismatch",
+   "code": "10.11.5",
+   "detail": "расч 258 vs книга 147"
+  },
+  {
+   "check": "energy_mismatch",
+   "code": "12.1.5",
+   "detail": "расч 248 vs книга 165"
+  },
+  {
+   "check": "energy_mismatch",
+   "code": "12.2.11",
+   "detail": "расч 522 vs книга 276"
+  },
+  {
+   "check": "energy_mismatch",
+   "code": "12.2.13",
+   "detail": "расч 468 vs книга 268"
+  }
+ ],
+ "checks": {
+  "duplicate_codes": 0,
+  "missing_left": 0,
+  "missing_right": 0,
+  "mass_balance": 0,
+  "lactose_in_starch": 0,
+  "typo_name": 0,
+  "bare_adjective": 0,
+  "iron_unit": 0
+ },
+ "stats": {
+  "with_waste": 126,
+  "with_measures": 115,
+  "recalculated_to_100g": 7
+ }
+}

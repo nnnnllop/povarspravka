@@ -1,0 +1,349 @@
+{
+ "source": {
+  "source": "BLS 4.0 (Bundeslebensmittelschlüssel), декабрь 2025",
+  "license": "CC BY 4.0",
+  "url": "https://www.blsdb.de/download",
+  "count": 7140,
+  "nutrient_count": 32,
+  "translated": 7140,
+  "missing_translation": 0,
+  "polished": {
+   "renamed_categories": {
+    "E": {
+     "from": "Безалкогольные напитки (BLS: E)",
+     "to": "Яйца и макаронные изделия",
+     "products": 104
+    },
+    "U": {
+     "from": "Говядина",
+     "to": "Говядина, телятина, баранина",
+     "products": 685
+    },
+    "V": {
+     "from": "Свинина",
+     "to": "Птица, дичь, субпродукты",
+     "products": 462
+    },
+    "W": {
+     "from": "Птица, дичь, субпродукты, колбасы",
+     "to": "Колбасные и мясные изделия",
+     "products": 375
+    }
+   },
+   "capitalized_names": 5761,
+   "products_changed": 5985
+  }
+ },
+ "products_total": 7140,
+ "translated": 7140,
+ "translated_pct": 100.0,
+ "with_synonyms": 7140,
+ "errors_total": 0,
+ "errors": [],
+ "errors_by_kind": {},
+ "warnings_total": 21,
+ "warnings_by_kind": {
+  "mass_balance": 17,
+  "rounding_over_100": 4
+ },
+ "warnings": [
+  {
+   "code": "E430062",
+   "kind": "mass_balance",
+   "detail": "сумма компонентов 109.7 г"
+  },
+  {
+   "code": "E430082",
+   "kind": "mass_balance",
+   "detail": "сумма компонентов 109.7 г"
+  },
+  {
+   "code": "E432032",
+   "kind": "mass_balance",
+   "detail": "сумма компонентов 109.7 г"
+  },
+  {
+   "code": "F402100",
+   "kind": "mass_balance",
+   "detail": "сумма компонентов 112.5 г"
+  },
+  {
+   "code": "H480100",
+   "kind": "mass_balance",
+   "detail": "сумма компонентов 110.7 г"
+  },
+  {
+   "code": "H739400",
+   "kind": "mass_balance",
+   "detail": "сумма компонентов 108.5 г"
+  },
+  {
+   "code": "H764400",
+   "kind": "mass_balance",
+   "detail": "сумма компонентов 116.3 г"
+  },
+  {
+   "code": "N311000",
+   "kind": "rounding_over_100",
+   "detail": "water = 100.16 г/100 г (округление)"
+  },
+  {
+   "code": "N316000",
+   "kind": "rounding_over_100",
+   "detail": "water = 100.53 г/100 г (округление)"
+  },
+  {
+   "code": "N331000",
+   "kind": "rounding_over_100",
+   "detail": "water = 100.585 г/100 г (округление)"
+  },
+  {
+   "code": "N352000",
+   "kind": "rounding_over_100",
+   "detail": "water = 100.585 г/100 г (округление)"
+  },
+  {
+   "code": "P530000",
+   "kind": "mass_balance",
+   "detail": "сумма компонентов 109.0 г"
+  },
+  {
+   "code": "R459000",
+   "kind": "mass_balance",
+   "detail": "сумма компонентов 117.4 г"
+  },
+  {
+   "code": "S170000",
+   "kind": "mass_balance",
+   "detail": "сумма компонентов 18.7 г"
+  },
+  {
+   "code": "T104100",
+   "kind": "mass_balance",
+   "detail": "сумма компонентов 111.0 г"
+  },
+  {
+   "code": "T104162",
+   "kind": "mass_balance",
+   "detail": "сумма компонентов 111.0 г"
+  },
+  {
+   "code": "T104172",
+   "kind": "mass_balance",
+   "detail": "сумма компонентов 110.9 г"
+  },
+  {
+   "code": "T104182",
+   "kind": "mass_balance",
+   "detail": "сумма компонентов 111.0 г"
+  },
+  {
+   "code": "T104400",
+   "kind": "mass_balance",
+   "detail": "сумма компонентов 109.6 г"
+  },
+  {
+   "code": "T104702",
+   "kind": "mass_balance",
+   "detail": "сумма компонентов 108.2 г"
+  },
+  {
+   "code": "T860100",
+   "kind": "mass_balance",
+   "detail": "сумма компонентов 108.2 г"
+  }
+ ],
+ "energy_formula_warnings": [
+  {
+   "code": "S151000",
+   "kind": "energy_formula",
+   "detail": "расч 318 vs BLS 413 ккал (Δ -95)"
+  },
+  {
+   "code": "S162000",
+   "kind": "energy_formula",
+   "detail": "расч 392 vs BLS 235 ккал (Δ +157)"
+  },
+  {
+   "code": "S163000",
+   "kind": "energy_formula",
+   "detail": "расч 396 vs BLS 238 ккал (Δ +158)"
+  },
+  {
+   "code": "S164000",
+   "kind": "energy_formula",
+   "detail": "расч 400 vs BLS 240 ккал (Δ +160)"
+  },
+  {
+   "code": "S341000",
+   "kind": "energy_formula",
+   "detail": "расч 407 vs BLS 275 ккал (Δ +132)"
+  },
+  {
+   "code": "S342000",
+   "kind": "energy_formula",
+   "detail": "расч 343 vs BLS 220 ккал (Δ +123)"
+  }
+ ],
+ "coverage_28": {
+  "energy_kcal": {
+   "products": 7140,
+   "pct": 100.0
+  },
+  "energy_kj": {
+   "products": 7140,
+   "pct": 100.0
+  },
+  "water": {
+   "products": 7096,
+   "pct": 99.4
+  },
+  "protein": {
+   "products": 7117,
+   "pct": 99.7
+  },
+  "fat": {
+   "products": 7112,
+   "pct": 99.6
+  },
+  "fat_saturated": {
+   "products": 7117,
+   "pct": 99.7
+  },
+  "fat_polyunsaturated": {
+   "products": 7102,
+   "pct": 99.5
+  },
+  "cholesterol": {
+   "products": 7059,
+   "pct": 98.9
+  },
+  "carbs": {
+   "products": 7140,
+   "pct": 100.0
+  },
+  "sugars": {
+   "products": 7140,
+   "pct": 100.0
+  },
+  "starch": {
+   "products": 6904,
+   "pct": 96.7
+  },
+  "fiber": {
+   "products": 7087,
+   "pct": 99.3
+  },
+  "alcohol": {
+   "products": 6964,
+   "pct": 97.5
+  },
+  "organic_acids": {
+   "products": 7011,
+   "pct": 98.2
+  },
+  "ash": {
+   "products": 7052,
+   "pct": 98.8
+  },
+  "sodium": {
+   "products": 7097,
+   "pct": 99.4
+  },
+  "potassium": {
+   "products": 7121,
+   "pct": 99.7
+  },
+  "calcium": {
+   "products": 7121,
+   "pct": 99.7
+  },
+  "magnesium": {
+   "products": 7113,
+   "pct": 99.6
+  },
+  "phosphorus": {
+   "products": 7111,
+   "pct": 99.6
+  },
+  "iron": {
+   "products": 7113,
+   "pct": 99.6
+  },
+  "iodine": {
+   "products": 6228,
+   "pct": 87.2
+  },
+  "vitamin_a_re": {
+   "products": 7134,
+   "pct": 99.9
+  },
+  "beta_carotene": {
+   "products": 6325,
+   "pct": 88.6
+  },
+  "vitamin_e": {
+   "products": 6958,
+   "pct": 97.5
+  },
+  "vitamin_d": {
+   "products": 7004,
+   "pct": 98.1
+  },
+  "vitamin_b1": {
+   "products": 7066,
+   "pct": 99.0
+  },
+  "niacin": {
+   "products": 7063,
+   "pct": 98.9
+  }
+ },
+ "mass_balance_checked": 17,
+ "energy_formula_checked": 7041,
+ "energy_formula_mismatch": 6,
+ "categories": {
+  "Хлеб": 186,
+  "Крупы, мука, макароны": 231,
+  "Кондитерские изделия": 466,
+  "Яйца и макаронные изделия": 104,
+  "Фрукты": 275,
+  "Овощи и грибы": 560,
+  "Бобовые, орехи, семена, соевые продукты": 142,
+  "Картофель": 157,
+  "Молоко и сыры": 279,
+  "Безалкогольные напитки": 114,
+  "Алкогольные напитки": 119,
+  "Масла и жиры": 65,
+  "Специи, соусы, соль": 97,
+  "Сладости, сахар, мёд, мороженое": 253,
+  "Рыба и морепродукты": 520,
+  "Говядина, телятина, баранина": 685,
+  "Птица, дичь, субпродукты": 462,
+  "Колбасные и мясные изделия": 375,
+  "Готовые блюда": 1165,
+  "Сложные блюда, супы": 885
+ },
+ "letters": {
+  "B": 186,
+  "C": 231,
+  "D": 466,
+  "E": 104,
+  "F": 275,
+  "G": 560,
+  "H": 142,
+  "K": 157,
+  "M": 279,
+  "N": 114,
+  "P": 119,
+  "Q": 65,
+  "R": 97,
+  "S": 253,
+  "T": 520,
+  "U": 685,
+  "V": 462,
+  "W": 375,
+  "X": 1165,
+  "Y": 885
+ }
+}

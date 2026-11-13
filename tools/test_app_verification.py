@@ -13,19 +13,19 @@ class TestPovarSpravka(unittest.TestCase):
         
         # Check total count
         total = cur.execute('SELECT COUNT(*) FROM product').fetchone()[0]
-        self.assertGreaterEqual(total, 9200, "Should have 9200+ products")
+        self.assertGreaterEqual(total, 8000, "Should have 8000+ products")
 
         # Check Skurikhin count
         sk_count = cur.execute("SELECT COUNT(*) FROM product WHERE source = 'skurikhin'").fetchone()[0]
-        self.assertGreaterEqual(sk_count, 1050, "Should have 1050+ Skurikhin products")
+        self.assertEqual(sk_count, 1108, "Skurikhin reference has 1108 products")
 
-        # Check USDA count
-        usda_count = cur.execute("SELECT COUNT(*) FROM product WHERE source = 'usda'").fetchone()[0]
-        self.assertGreaterEqual(usda_count, 8100, "Should have 8100+ USDA products")
+        # Check BLS 4.0 count
+        bls_count = cur.execute("SELECT COUNT(*) FROM product WHERE source = 'bls'").fetchone()[0]
+        self.assertEqual(bls_count, 7140, "BLS 4.0 reference has 7140 products")
 
-        # Check food groups
+        # Check food groups: 12 Skurikhin tables + 20 BLS categories
         groups = cur.execute('SELECT COUNT(*) FROM food_group').fetchone()[0]
-        self.assertGreaterEqual(groups, 25, "Should have at least 25 food groups")
+        self.assertEqual(groups, 32, "12 tables + 20 BLS categories")
 
         con.close()
 
@@ -39,7 +39,7 @@ class TestPovarSpravka(unittest.TestCase):
             sql = """
                 SELECT p.name, p.source
                 FROM product_fts fts
-                JOIN product p ON p.id = fts.rowid
+                JOIN product p ON p.id = CAST(fts.product_id AS INTEGER)
                 WHERE product_fts MATCH ?
                 ORDER BY CASE WHEN p.source = 'skurikhin' THEN 0 ELSE 1 END, bm25(product_fts) ASC
                 LIMIT 5
@@ -48,6 +48,13 @@ class TestPovarSpravka(unittest.TestCase):
             self.assertTrue(len(rows) > 0, f"Query '{q}' should return results")
             # First result for classic Russian staple should be from Skurikhin
             self.assertEqual(rows[0][1], 'skurikhin', f"Top hit for '{q}' should be from Skurikhin")
+
+        # FTS rowid is not required to match product.id; the join uses product_id
+        self.assertEqual(
+            cur.execute('SELECT COUNT(*) FROM product_fts WHERE NOT EXISTS ('
+                        'SELECT 1 FROM product p '
+                        'WHERE p.id = CAST(product_fts.product_id AS INTEGER))'
+                        ).fetchone()[0], 0)
 
         con.close()
 
