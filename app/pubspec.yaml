@@ -1,5 +1,5 @@
 name: povarspravka
-description: "Поварская справка — офлайн калькулятор пищевой ценности блюд по справочнику Скурихина и USDA"
+description: "Поварская справка — офлайн калькулятор пищевой ценности блюд по справочнику Скурихина и BLS 4.0"
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -33,6 +33,7 @@ dev_dependencies:
   flutter_lints: ^3.0.0
   # Used only by tests/tool to parse the generated OOXML (docx/xlsx) documents
   xml: ^6.5.0
+  sqflite_common_ffi: ^2.3.4+4
 
 flutter:
   uses-material-design: true

@@ -14,7 +14,16 @@ class YieldExplanation {
   double get concentration => hasBasis ? rawGrams / yieldGrams : 1;
   double get delta => yieldGrams - rawGrams;
   bool get changed => hasBasis && delta.abs() >= 0.05;
+
+  /// Сырьё есть, а вес готового блюда не указан. Приложение его не угадывает
+  /// (задача 2026-11-03): итог показывается на всё блюдо.
+  bool get needsYield =>
+      rawGrams.isFinite &&
+      rawGrams > 0 &&
+      !(yieldGrams.isFinite && yieldGrams > 0);
+
   String get badge {
+    if (needsYield) return 'Укажите вес готового блюда';
     if (!changed) return 'Выход равен сумме нетто';
     final factor = concentration.toStringAsFixed(2).replaceAll('.', ',');
     if (delta > 0)
@@ -23,6 +32,8 @@ class YieldExplanation {
   }
 
   String get description {
+    if (needsYield)
+      return 'Укажите вес готового блюда: без него пищевая ценность показана на всё блюдо, а «на 100 г» и «на порцию» не рассчитываются. Приложение вес готового блюда не угадывает.';
     if (!hasBasis)
       return 'Добавьте ингредиенты с положительным весом для расчёта на 100 г.';
     if (!changed)

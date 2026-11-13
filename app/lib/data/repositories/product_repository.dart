@@ -27,7 +27,10 @@ class FoodGroup {
 }
 
 class ProductRepository {
-  static const String _schemaVersionPrefix = 'v3';
+  /// v5: в базе появилась колонка `product.is_dish` (этап 6). Префикс
+  /// входит в маркер версии, поэтому у пользователей с прежней копией база
+  /// перекопируется из ассета.
+  static const String _schemaVersionPrefix = 'v5';
   Database? _db;
   Future<Database>? _opening;
 
@@ -97,6 +100,7 @@ class ProductRepository {
     required String query,
     int? groupId,
     String? source,
+    bool? isDish,
     int limit = 50,
   }) async {
     final db = await database;
@@ -116,21 +120,40 @@ class ProductRepository {
         whereClause += ' AND source = ?';
         whereArgs.add(source);
       }
+      if (isDish != null) {
+        whereClause += ' AND is_dish = ?';
+        whereArgs.add(isDish ? 1 : 0);
+      }
 
       rows = await db.query(
         'product',
         where: whereClause,
         whereArgs: whereArgs,
-        orderBy: "CASE WHEN source = 'skurikhin' THEN 0 ELSE 1 END, name ASC",
+        orderBy: "is_dish ASC, "
+            "CASE WHEN source = 'skurikhin' THEN 0 ELSE 1 END, name ASC",
         limit: limit,
       );
     } else {
-      // Подготовка FTS5 запроса с префиксным поиском по каждому слову
-      final tokens = cleanQuery.split(' ').where((t) => t.isNotEmpty).toList();
-      final ftsMatch = tokens.map((t) => '"$t"*').join(' ');
+      // Подготовка FTS5 запроса с префиксным поиском по каждому слову.
+      //
+      // Усечённая основа нужна для беглых гласных: префикс "сырок"* НЕ
+      // находит «сырки» (другая основа — «сырк»), из-за чего поиск «сырок»
+      // отдавал «Колбасу сырокопченую» вместо творожных сырков.
+      final tokens =
+          cleanQuery.split(' ').where((t) => t.isNotEmpty).toList();
+      final stemmed = tokens.map(_stemToken).toList();
+      // Дефект D10: префикс «морс*» цепляет «морской» («Окунь морской»).
+      // Поэтому для запросов длиной ≥ 4 в первом проходе ищется ЦЕЛОЕ слово
+      // (без `*`), а префиксный проход по усечённой основе остаётся вторым —
+      // он дотягивается до словоформ («сырок» → «сырки»).
+      final firstPassExact = tokens.every((t) => t.length >= 4);
+      final ftsMatchExact = tokens
+          .map((t) => firstPassExact ? '"$t"' : '"$t"*')
+          .join(' ');
+      final ftsMatchStem = stemmed.map((t) => '"$t"*').join(' ');
 
       String filterSql = '';
-      List<dynamic> args = [ftsMatch];
+      List<dynamic> args = [];
 
       if (groupId != null && groupId > 0) {
         filterSql += ' AND p.group_id = ?';
@@ -140,22 +163,66 @@ class ProductRepository {
         filterSql += ' AND p.source = ?';
         args.add(source);
       }
+      if (isDish != null) {
+        filterSql += ' AND p.is_dish = ?';
+        args.add(isDish ? 1 : 0);
+      }
 
+      // Ранжирование (дефект H3): сначала продукт, чьё НАЗВАНИЕ равно
+      // запросу; затем целое слово в названии; затем целое слово в
+      // синониме («сырок» → «Сырки глазированные»); затем начало слова;
+      // затем подстрока. Внутри группы — Скурихин раньше BLS, bm25, длина.
+      // Этап 6: `is_dish ASC` стоит ВПЕРВЫЕ и срабатывает даже без фильтра —
+      // сырьё выше готовых блюд.
       final sql = '''
         SELECT p.*
         FROM product_fts fts
         JOIN product p ON p.id = CAST(fts.product_id AS INTEGER)
         WHERE product_fts MATCH ? $filterSql
-        ORDER BY 
+        ORDER BY
+          p.is_dish ASC,
+          CASE
+            WHEN p.name_norm = ? THEN 0
+            WHEN (' ' || p.name_norm || ' ') LIKE ? THEN 1
+            WHEN (' ' || fts.name_norm || ' ') LIKE ? THEN 2
+            WHEN p.name_norm LIKE ? THEN 3
+            WHEN p.name_norm LIKE ? THEN 4
+            ELSE 5
+          END ASC,
+          CASE WHEN p.name_norm LIKE ? THEN 0 ELSE 1 END ASC,
           CASE WHEN p.source = 'skurikhin' THEN 0 ELSE 1 END,
-          bm25(product_fts) ASC,
+          bm25(product_fts, 10.0, 1.0) ASC,
           LENGTH(p.name) ASC
         LIMIT ?
       ''';
-      args.add(limit);
+
+      Future<List<Map<String, Object?>>> runMatch(String match) {
+        final orderArgs = <dynamic>[
+          match,
+          ...args,
+          cleanQuery,
+          '% $cleanQuery %',
+          '% $cleanQuery %',
+          '$cleanQuery %',
+          '%$cleanQuery%',
+          '%$cleanQuery%',
+          limit,
+        ];
+        return db.rawQuery(sql, orderArgs);
+      }
 
       try {
-        rows = await db.rawQuery(sql, args);
+        // 1) как написано: «сода» не должна цеплять «содержанием»
+        rows = List<Map<String, dynamic>>.of(await runMatch(ftsMatchExact));
+        // 2) добираем прочие словоформы, если первый проход не набрал лимит
+        if (rows.length < limit && ftsMatchStem != ftsMatchExact) {
+          final seen = rows.map((r) => r['id'] as int).toSet();
+          final more = await runMatch(ftsMatchStem);
+          for (final row in more) {
+            if (seen.add(row['id'] as int)) rows.add(row);
+            if (rows.length >= limit) break;
+          }
+        }
       } catch (_) {
         rows = [];
       }
@@ -180,13 +247,19 @@ class ProductRepository {
           fallbackWhere += ' AND p.source = ?';
           fallbackArgs.add(source);
         }
+        if (isDish != null) {
+          fallbackWhere += ' AND p.is_dish = ?';
+          fallbackArgs.add(isDish ? 1 : 0);
+        }
 
         fallbackArgs.add(limit);
 
         rows = await db.rawQuery('''
           SELECT p.* FROM product p
           WHERE $fallbackWhere
-          ORDER BY CASE WHEN p.source = 'skurikhin' THEN 0 ELSE 1 END, LENGTH(p.name) ASC, p.name ASC
+          ORDER BY p.is_dish ASC,
+                   CASE WHEN p.source = 'skurikhin' THEN 0 ELSE 1 END,
+                   LENGTH(p.name) ASC, p.name ASC
           LIMIT ?
         ''', fallbackArgs);
       }
@@ -246,14 +319,59 @@ class ProductRepository {
     return result;
   }
 
-  /// Получение всех категорий продуктов
-  Future<List<FoodGroup>> getFoodGroups() async {
+  /// Получение всех категорий продуктов.
+  ///
+  /// `isDish`: `false` — только группы, где есть продукты-сырьё, `true` —
+  /// только группы с готовыми блюдами, `null` — все группы (этап 6).
+  Future<List<FoodGroup>> getFoodGroups({bool? isDish}) async {
     final db = await database;
-    final rows = await db.query(
-      'food_group',
-      orderBy: 'id ASC',
+    if (isDish == null) {
+      final rows = await db.query('food_group', orderBy: 'id ASC');
+      return rows.map((r) => FoodGroup.fromMap(r)).toList();
+    }
+    final rows = await db.rawQuery(
+      'SELECT g.* FROM food_group g '
+      'WHERE EXISTS (SELECT 1 FROM product p '
+      '              WHERE p.group_id = g.id AND p.is_dish = ?) '
+      'ORDER BY g.id ASC',
+      [isDish ? 1 : 0],
     );
     return rows.map((r) => FoodGroup.fromMap(r)).toList();
+  }
+
+  /// Сколько продуктов всего (этап 6: с учётом фильтра «блюдо/сырьё»).
+  Future<int> getTotalCount({bool? isDish, String? source}) async {
+    final db = await database;
+    final where = StringBuffer('1=1');
+    final args = <dynamic>[];
+    if (isDish != null) {
+      where.write(' AND is_dish = ?');
+      args.add(isDish ? 1 : 0);
+    }
+    if (source != null && source.isNotEmpty) {
+      where.write(' AND source = ?');
+      args.add(source);
+    }
+    final rows =
+        await db.rawQuery('SELECT COUNT(*) AS n FROM product WHERE $where',
+            args);
+    return (rows.first['n'] as num?)?.toInt() ?? 0;
+  }
+
+  /// Сколько продуктов по каждому источнику (этап 6).
+  Future<Map<String, int>> getCountBySource({bool? isDish}) async {
+    final db = await database;
+    final sql = isDish == null
+        ? 'SELECT source, COUNT(*) AS n FROM product GROUP BY source'
+        : 'SELECT source, COUNT(*) AS n FROM product WHERE is_dish = ? '
+            'GROUP BY source';
+    final rows = isDish == null
+        ? await db.rawQuery(sql)
+        : await db.rawQuery(sql, [isDish ? 1 : 0]);
+    return {
+      for (final row in rows)
+        (row['source'] as String? ?? ''): (row['n'] as num?)?.toInt() ?? 0,
+    };
   }
 
   static String _normalizeQuery(String q) {
@@ -264,4 +382,36 @@ class ProductRepository {
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
   }
+
+  /// Усечение токена для FTS5-префикса (зеркало `_fts_tokens` в
+  /// `tools/data_pipeline/build_reference_db.py`).
+  ///
+  /// FTS5-префикс "сырок"* НЕ находит «сырки»: у слова беглое гласное и
+  /// другая основа — «сырк». Поэтому отбрасывается конечное окончание
+  /// (гласные/«й»/«ь» подряд) («гречка» → «гречк») и беглое гласное перед «к»
+  /// («сырок» → «сырк», и «сырок», и «сырки» дают одну основу). Короткие
+  /// токены (≤ 3) не трогаются, иначе «сыр» совпадёт с «сырок».
+  ///
+  /// Этап 6.6: окончание отсекается ЦИКЛОМ, а не одним символом. Раньше
+  /// «куриный» → «курины» (в базе только «куриная»/«куриное»), «говяжий» →
+  /// «говяжи» (в базе «говяжья»), «свиная» → «свина» (в базе «свиной»), и
+  /// запрос «окорочок куриный» отдавал ПУСТО. Теперь прилагательные всех
+  /// родов сходятся к одной основе: «куриный»/«куриная»/«куриное» → «курин»,
+  /// «говяжий»/«говяжья»/«говяжье» → «говяж», «свиной»/«свиная» → «свин».
+  static String _stemToken(String token) {
+    if (token.length <= 3) return token;
+    if (token.length > 4 &&
+        _fleeting.indexOf(token[token.length - 2]) >= 0 &&
+        token.endsWith('к')) {
+      return '${token.substring(0, token.length - 2)}к';
+    }
+    var res = token;
+    while (res.length > 3 && _vowels.indexOf(res[res.length - 1]) >= 0) {
+      res = res.substring(0, res.length - 1);
+    }
+    return res;
+  }
+
+  static const String _vowels = 'аеёиоуыэюяйь';
+  static const String _fleeting = 'оеё';
 }

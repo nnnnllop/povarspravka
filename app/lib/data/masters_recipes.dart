@@ -1,4 +1,5 @@
-import '../core/calculation/models/dish.dart';
+﻿import '../core/calculation/models/dish.dart';
+import '../core/calculation/models/heat_process.dart';
 import '../core/calculation/models/ingredient.dart';
 import '../core/calculation/models/product.dart';
 
@@ -10,9 +11,6 @@ class MasterRecipe {
   final String category;
   final String description;
   final double expectedYieldGrams;
-  final double retentionProtein;
-  final double retentionFat;
-  final double retentionCarbs;
   final String culinaryProcess;
   final List<MasterIngredientItem> ingredients;
 
@@ -23,24 +21,45 @@ class MasterRecipe {
     required this.category,
     required this.description,
     required this.expectedYieldGrams,
-    this.retentionProtein = 0.94,
-    this.retentionFat = 0.88,
-    this.retentionCarbs = 0.91,
     required this.culinaryProcess,
     required this.ingredients,
   });
 
+  /// Способ тепловой обработки карты — строка таблицы потерь (`LossTable`).
+  ///
+  /// Выводится из [culinaryProcess]: карты Сборника уже описывают способ
+  /// обработки словами, дублировать его отдельным полем не нужно. Супы, каши
+  /// и припускание — варка; вес готового блюда — выход карты
+  /// ([expectedYieldGrams]), он не вычисляется.
+  HeatProcess get heatProcess {
+    final c = culinaryProcess.toLowerCase();
+    if (c.contains('суп')) return HeatProcess.boil;
+    if (c.contains('каш') || c.contains('круп')) return HeatProcess.boil;
+    if (c.contains('жарк')) return HeatProcess.fry;
+    if (c.contains('запек')) return HeatProcess.bake;
+    if (c.contains('тушен')) return HeatProcess.stew;
+    if (c.contains('пар')) return HeatProcess.steam;
+    if (c.contains('отварив') ||
+        c.contains('отварн') ||
+        c.contains('варк') ||
+        c.contains('припуск') ||
+        c.contains('соус')) {
+      return HeatProcess.boil;
+    }
+    if (c.contains('бульон') || c.contains('отвар')) return HeatProcess.stock;
+    if (c.contains('холод') || c.contains('салат')) return HeatProcess.cold;
+    return HeatProcess.cold;
+  }
+
   /// Создает объект Dish, готовый для расчета в калькуляторе
   Dish toDish() {
     final now = DateTime.now();
-    return Dish(
+    return Dish.withProcess(
       id: 'master_${id}_${now.millisecondsSinceEpoch}',
+      process: heatProcess,
       title: name,
       customYieldGrams: expectedYieldGrams,
       showTitleInExport: true,
-      retentionProtein: retentionProtein,
-      retentionFat: retentionFat,
-      retentionCarbs: retentionCarbs,
       ingredients: ingredients.map((item) => item.toIngredient()).toList(),
       createdAt: now,
       updatedAt: now,
@@ -73,11 +92,26 @@ class MasterIngredientItem {
     this.source = 'skurikhin',
   });
 
+  /// `group_id` продуктов карт в `assets/db/reference.db` (таблица `product`,
+  /// группы Скурихина 1…12). Неизвестный продукт → `0` (группа по названию).
+  static const Map<int, int> referenceGroupIds = {
+    53: 1, 82: 1, // молоко, творог
+    159: 2, // яйцо
+    174: 3, 183: 3, // говядина, свинина
+    509: 5, 533: 5, // масло сливочное, подсолнечное
+    561: 6, 562: 6, 654: 6, // мука, хлеб, крупа гречневая
+    712: 8, 738: 8, 742: 8, 768: 8, 779: 8, 818: 8, // овощи, картофель
+    930: 10, // сахар
+    20002: 12, // вода
+  };
+
   Ingredient toIngredient() {
     final product = Product(
       id: productId,
       code: '$productId',
-      groupId: 1,
+      // Группа справочника — основа классификатора потерь. Раньше здесь стояла
+      // группа 1 («Молоко») для всех ингредиентов.
+      groupId: referenceGroupIds[productId] ?? 0,
       name: name,
       source: source,
       protein: protein,
@@ -104,15 +138,12 @@ class MastersRecipesCatalog {
       name: 'Борщ с капустой и картофелем',
       standardCode: 'Марчук, рец. № 165',
       category: 'Супы',
-      description: 'Классический борщ по 2-й колонке сборника рецептур. Потери при варке 15-20%, сохранность 94/88/91%.',
+      description: 'Классический борщ по 2-й колонке сборника рецептур. Потери массы при варке 15-20%; потери Б/Ж/У — по таблице для каждого продукта.',
       expectedYieldGrams: 1000.0,
-      retentionProtein: 0.94,
-      retentionFat: 0.88,
-      retentionCarbs: 0.91,
       culinaryProcess: 'Варка супов',
       ingredients: [
         MasterIngredientItem(
-          productId: 80105012,
+          productId: 779,
           name: 'Свекла',
           weightGrams: 200.0,
           isGross: true,
@@ -121,32 +152,35 @@ class MastersRecipesCatalog {
           fat: 0.1,
           carbs: 8.8,
           kcal: 42.0,
+          source: 'skurikhin',
         ),
         MasterIngredientItem(
-          productId: 801020101,
-          name: 'Капуста белокочанная свежая',
+          productId: 712,
+          name: 'Капуста белокочанная',
           weightGrams: 150.0,
           isGross: true,
           wastePct: 20.0,
           protein: 1.8,
           fat: 0.1,
           carbs: 4.7,
-          kcal: 27.0,
+          kcal: 28.0,
+          source: 'skurikhin',
         ),
         MasterIngredientItem(
-          productId: 80104001,
+          productId: 742,
           name: 'Картофель',
           weightGrams: 160.0,
           isGross: true,
-          wastePct: 25.0,
+          wastePct: 28.0,
           protein: 2.0,
           fat: 0.4,
           carbs: 16.3,
           kcal: 77.0,
+          source: 'skurikhin',
         ),
         MasterIngredientItem(
-          productId: 80105001,
-          name: 'Морковь красная',
+          productId: 768,
+          name: 'Морковь',
           weightGrams: 50.0,
           isGross: true,
           wastePct: 20.0,
@@ -154,9 +188,10 @@ class MastersRecipesCatalog {
           fat: 0.1,
           carbs: 6.9,
           kcal: 35.0,
+          source: 'skurikhin',
         ),
         MasterIngredientItem(
-          productId: 80103001,
+          productId: 738,
           name: 'Лук репчатый',
           weightGrams: 48.0,
           isGross: true,
@@ -165,10 +200,11 @@ class MastersRecipesCatalog {
           fat: 0.2,
           carbs: 8.2,
           kcal: 41.0,
+          source: 'skurikhin',
         ),
         MasterIngredientItem(
-          productId: 12020005,
-          name: 'Томатная паста 25-28%',
+          productId: 818,
+          name: 'Томатная паста. Консервы',
           weightGrams: 30.0,
           isGross: false,
           wastePct: 0.0,
@@ -176,9 +212,10 @@ class MastersRecipesCatalog {
           fat: 0.0,
           carbs: 19.0,
           kcal: 102.0,
+          source: 'skurikhin',
         ),
         MasterIngredientItem(
-          productId: 5040001,
+          productId: 533,
           name: 'Масло подсолнечное',
           weightGrams: 20.0,
           isGross: false,
@@ -187,9 +224,10 @@ class MastersRecipesCatalog {
           fat: 99.9,
           carbs: 0.0,
           kcal: 899.0,
+          source: 'skurikhin',
         ),
         MasterIngredientItem(
-          productId: 10070001,
+          productId: 930,
           name: 'Сахар-песок',
           weightGrams: 10.0,
           isGross: false,
@@ -198,9 +236,10 @@ class MastersRecipesCatalog {
           fat: 0.0,
           carbs: 99.8,
           kcal: 399.0,
+          source: 'skurikhin',
         ),
         MasterIngredientItem(
-          productId: 13010001,
+          productId: 20002,
           name: 'Вода питьевая',
           weightGrams: 700.0,
           isGross: false,
@@ -209,6 +248,7 @@ class MastersRecipesCatalog {
           fat: 0.0,
           carbs: 0.0,
           kcal: 0.0,
+          source: 'supplement',
         ),
       ],
     ),
@@ -219,24 +259,22 @@ class MastersRecipesCatalog {
       category: 'Гарниры',
       description: 'Готовится из отварного горячего картофеля с добавлением растопленного сливочного масла и прогретого молока. Уварка картофеля около 3%.',
       expectedYieldGrams: 250.0,
-      retentionProtein: 0.94,
-      retentionFat: 0.88,
-      retentionCarbs: 0.91,
       culinaryProcess: 'Варка / припускание',
       ingredients: [
         MasterIngredientItem(
-          productId: 80104001,
+          productId: 742,
           name: 'Картофель',
           weightGrams: 320.0,
           isGross: true,
-          wastePct: 25.0, // 240 г нетто
+          wastePct: 28.0,
           protein: 2.0,
           fat: 0.4,
           carbs: 16.3,
           kcal: 77.0,
+          source: 'skurikhin',
         ),
         MasterIngredientItem(
-          productId: 10101001,
+          productId: 53,
           name: 'Молоко пастеризованное 3,2% жирности',
           weightGrams: 38.0,
           isGross: false,
@@ -244,18 +282,20 @@ class MastersRecipesCatalog {
           protein: 2.9,
           fat: 3.2,
           carbs: 4.7,
-          kcal: 59.0,
+          kcal: 60.0,
+          source: 'skurikhin',
         ),
         MasterIngredientItem(
-          productId: 5010005,
+          productId: 509,
           name: 'Масло сливочное несоленое «Крестьянское»',
           weightGrams: 15.0,
           isGross: false,
           wastePct: 0.0,
           protein: 0.8,
           fat: 72.5,
-          carbs: 1.4,
+          carbs: 1.3,
           kcal: 661.0,
+          source: 'skurikhin',
         ),
       ],
     ),
@@ -266,24 +306,22 @@ class MastersRecipesCatalog {
       category: 'Каши',
       description: 'Приварок гречневой крупы ядрицы составляет +110%. На 100 г крупы расходуется 150 г воды. Выход 210 г.',
       expectedYieldGrams: 210.0,
-      retentionProtein: 0.94,
-      retentionFat: 0.88,
-      retentionCarbs: 0.91,
       culinaryProcess: 'Варка каш',
       ingredients: [
         MasterIngredientItem(
-          productId: 60101001,
+          productId: 654,
           name: 'Крупа гречневая ядрица',
           weightGrams: 100.0,
           isGross: false,
           wastePct: 0.0,
           protein: 12.6,
           fat: 3.3,
-          carbs: 62.1,
-          kcal: 313.0,
+          carbs: 57.1,
+          kcal: 308.0,
+          source: 'skurikhin',
         ),
         MasterIngredientItem(
-          productId: 13010001,
+          productId: 20002,
           name: 'Вода питьевая',
           weightGrams: 150.0,
           isGross: false,
@@ -292,17 +330,19 @@ class MastersRecipesCatalog {
           fat: 0.0,
           carbs: 0.0,
           kcal: 0.0,
+          source: 'supplement',
         ),
         MasterIngredientItem(
-          productId: 5010005,
+          productId: 509,
           name: 'Масло сливочное несоленое «Крестьянское»',
           weightGrams: 10.0,
           isGross: false,
           wastePct: 0.0,
           protein: 0.8,
           fat: 72.5,
-          carbs: 1.4,
+          carbs: 1.3,
           kcal: 661.0,
+          source: 'skurikhin',
         ),
       ],
     ),
@@ -313,14 +353,11 @@ class MastersRecipesCatalog {
       category: 'Мясные блюда',
       description: 'Котлетная масса из говядины и свинины с пшеничным хлебом. Потери массы при жарке основным способом — 19%.',
       expectedYieldGrams: 150.0,
-      retentionProtein: 0.92,
-      retentionFat: 0.95,
-      retentionCarbs: 0.93,
       culinaryProcess: 'Жарка основным способом',
       ingredients: [
         MasterIngredientItem(
-          productId: 30101001,
-          name: 'Говядина 1 категории',
+          productId: 174,
+          name: 'Говядина 1 кат.',
           weightGrams: 90.0,
           isGross: false,
           wastePct: 0.0,
@@ -328,31 +365,34 @@ class MastersRecipesCatalog {
           fat: 16.0,
           carbs: 0.0,
           kcal: 218.0,
+          source: 'skurikhin',
         ),
         MasterIngredientItem(
-          productId: 30301001,
+          productId: 183,
           name: 'Свинина мясная',
           weightGrams: 50.0,
           isGross: false,
-          wastePct: 0.0,
-          protein: 14.6,
-          fat: 33.0,
+          wastePct: 15.0,
+          protein: 14.3,
+          fat: 33.3,
           carbs: 0.0,
-          kcal: 355.0,
+          kcal: 357.0,
+          source: 'skurikhin',
         ),
         MasterIngredientItem(
-          productId: 110101001,
-          name: 'Хлеб пшеничный из муки 1 сорта',
+          productId: 562,
+          name: 'Хлеб пшеничный формовой',
           weightGrams: 28.0,
           isGross: false,
           wastePct: 0.0,
-          protein: 7.7,
-          fat: 1.2,
-          carbs: 48.3,
-          kcal: 242.0,
+          protein: 7.6,
+          fat: 0.8,
+          carbs: 49.2,
+          kcal: 235.0,
+          source: 'skurikhin',
         ),
         MasterIngredientItem(
-          productId: 13010001,
+          productId: 20002,
           name: 'Вода питьевая',
           weightGrams: 35.0,
           isGross: false,
@@ -361,9 +401,10 @@ class MastersRecipesCatalog {
           fat: 0.0,
           carbs: 0.0,
           kcal: 0.0,
+          source: 'supplement',
         ),
         MasterIngredientItem(
-          productId: 5040001,
+          productId: 533,
           name: 'Масло подсолнечное',
           weightGrams: 10.0,
           isGross: false,
@@ -372,6 +413,7 @@ class MastersRecipesCatalog {
           fat: 99.9,
           carbs: 0.0,
           kcal: 899.0,
+          source: 'skurikhin',
         ),
       ],
     ),
@@ -382,25 +424,27 @@ class MastersRecipesCatalog {
       category: 'Блюда из творога',
       description: 'Творог растирают с мукой, сахаром и яйцом. Жарят с двух сторон до золотистой корочки. Потери при жарке около 10%.',
       expectedYieldGrams: 175.0,
-      retentionProtein: 0.92,
-      retentionFat: 0.95,
-      retentionCarbs: 0.93,
       culinaryProcess: 'Жарка основным способом',
       ingredients: [
         MasterIngredientItem(
-          productId: 10401001,
-          name: 'Творог полужирный 9% жирности',
+          productId: 82,
+          name: 'Творог полужирный 9,0% жирности',
           weightGrams: 150.0,
           isGross: false,
           wastePct: 0.0,
-          protein: 16.7,
+          protein: 18.0,
           fat: 9.0,
-          carbs: 2.0,
-          kcal: 159.0,
+          carbs: 3.0,
+          kcal: 169.0,
+          source: 'skurikhin',
         ),
         MasterIngredientItem(
-          productId: 60201001,
-          name: 'Мука пшеничная высшего сорта',
+          // Дефект D13: в пекарском рецепте стояла мука высшего сорта для
+          // МАКАРОННЫХ изделий (6.1.2.1), у неё другой состав. Для хлеба —
+          // 6.1.3.1 «Мука высшего сорта (хлеб)»: Б 10,3 / Ж 1,1 / У 70,6 /
+          // 334 ккал на 100 г.
+          productId: 561,
+          name: 'Мука высшего сорта (хлеб)',
           weightGrams: 22.0,
           isGross: false,
           wastePct: 0.0,
@@ -408,20 +452,22 @@ class MastersRecipesCatalog {
           fat: 1.1,
           carbs: 70.6,
           kcal: 334.0,
+          source: 'skurikhin',
         ),
         MasterIngredientItem(
-          productId: 20101001,
+          productId: 159,
           name: 'Яйцо куриное',
-          weightGrams: 12.0, // четверть яйца
+          weightGrams: 12.0,
           isGross: false,
-          wastePct: 0.0,
+          wastePct: 13.0,
           protein: 12.7,
           fat: 11.5,
           carbs: 0.7,
           kcal: 157.0,
+          source: 'skurikhin',
         ),
         MasterIngredientItem(
-          productId: 10070001,
+          productId: 930,
           name: 'Сахар-песок',
           weightGrams: 15.0,
           isGross: false,
@@ -430,17 +476,19 @@ class MastersRecipesCatalog {
           fat: 0.0,
           carbs: 99.8,
           kcal: 399.0,
+          source: 'skurikhin',
         ),
         MasterIngredientItem(
-          productId: 5010005,
+          productId: 509,
           name: 'Масло сливочное несоленое «Крестьянское»',
           weightGrams: 10.0,
           isGross: false,
           wastePct: 0.0,
           protein: 0.8,
           fat: 72.5,
-          carbs: 1.4,
+          carbs: 1.3,
           kcal: 661.0,
+          source: 'skurikhin',
         ),
       ],
     ),
@@ -451,24 +499,22 @@ class MastersRecipesCatalog {
       category: 'Блюда из яиц',
       description: 'Яйца смешивают с молоком и солью, выливают на сковороду со сливочным маслом и запекают при 180°C.',
       expectedYieldGrams: 145.0,
-      retentionProtein: 0.92,
-      retentionFat: 0.90,
-      retentionCarbs: 0.95,
       culinaryProcess: 'Запекание',
       ingredients: [
         MasterIngredientItem(
-          productId: 20101001,
+          productId: 159,
           name: 'Яйцо куриное',
-          weightGrams: 110.0, // 2-3 яйца
+          weightGrams: 110.0,
           isGross: false,
-          wastePct: 0.0,
+          wastePct: 13.0,
           protein: 12.7,
           fat: 11.5,
           carbs: 0.7,
           kcal: 157.0,
+          source: 'skurikhin',
         ),
         MasterIngredientItem(
-          productId: 10101001,
+          productId: 53,
           name: 'Молоко пастеризованное 3,2% жирности',
           weightGrams: 35.0,
           isGross: false,
@@ -476,18 +522,20 @@ class MastersRecipesCatalog {
           protein: 2.9,
           fat: 3.2,
           carbs: 4.7,
-          kcal: 59.0,
+          kcal: 60.0,
+          source: 'skurikhin',
         ),
         MasterIngredientItem(
-          productId: 5010005,
+          productId: 509,
           name: 'Масло сливочное несоленое «Крестьянское»',
           weightGrams: 10.0,
           isGross: false,
           wastePct: 0.0,
           protein: 0.8,
           fat: 72.5,
-          carbs: 1.4,
+          carbs: 1.3,
           kcal: 661.0,
+          source: 'skurikhin',
         ),
       ],
     ),

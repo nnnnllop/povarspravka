@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import '../calculation/calculation_engine.dart';
 import '../calculation/calculation_math.dart';
+import '../calculation/loss_table.dart';
 import '../calculation/models/blank_mode.dart';
 import '../calculation/models/dish.dart';
 
@@ -22,6 +23,10 @@ class XlsxBlankGenerator {
   static double _productRounded(double a, double b, int digits,
           {bool divideBy100 = false}) =>
       CalculationMath.productRounded(a, b, digits, divideBy100: divideBy100);
+
+  /// Потери, % — как в таблице (`15`, `7.5`), для живой формулы Excel.
+  static String _pctLiteral(double v) =>
+      v == v.truncateToDouble() ? v.toInt().toString() : v.toString();
 
   /// Генерация бинарного файла .xlsx с объединением ячеек, диагональным крестом и живыми формулами Excel
   static Uint8List generate(Dish dish) {
@@ -275,12 +280,22 @@ class XlsxBlankGenerator {
     totalP = calc.rawTotalProtein;
     totalF = calc.rawTotalFat;
     totalC = calc.rawTotalCarbs;
-    final pPct = _productRounded(dish.retentionProtein, 100, 10);
-    final pPctText = CalculationEngine.formatPercent(dish.retentionProtein);
-    final fPct = _productRounded(dish.retentionFat, 100, 10);
-    final fPctText = CalculationEngine.formatPercent(dish.retentionFat);
-    final cPct = _productRounded(dish.retentionCarbs, 100, 10);
-    final cPctText = CalculationEngine.formatPercent(dish.retentionCarbs);
+    // Новый расчёт (не legacy): потери берутся по группе КАЖДОГО продукта.
+    // «Сохранность,%» — итоговая доля готовое/сырьё (в среднем, справочно),
+    // «После тепловой обработки» — сумма построчных значений.
+    final lossTable = calc.usesLossTable;
+    // Вес готового блюда не указан: выход и «в 100 г» не определены —
+    // печатаем прочерк, а не «0».
+    final noYield = lossTable && !calc.hasYield;
+    final retP = lossTable ? calc.retentionProtein : dish.retentionProtein;
+    final retF = lossTable ? calc.retentionFat : dish.retentionFat;
+    final retC = lossTable ? calc.retentionCarbs : dish.retentionCarbs;
+    final pPct = _productRounded(retP, 100, 10);
+    final pPctText = CalculationEngine.formatPercent(retP);
+    final fPct = _productRounded(retF, 100, 10);
+    final fPctText = CalculationEngine.formatPercent(retF);
+    final cPct = _productRounded(retC, 100, 10);
+    final cPctText = CalculationEngine.formatPercent(retC);
     final cookedP = calc.cookedProtein;
     final cookedF = calc.cookedFat;
     final cookedC = calc.cookedCarbs;
@@ -343,16 +358,50 @@ class XlsxBlankGenerator {
 
     // Строка 3: После тепловой обработки
     final cookedRow = rowIdx;
+    // legacy: одна тройка на сумму столбца. Новый расчёт: живая формула по
+    // строкам продуктов — Σ ROUND(сырьё_i × (100 − потери_i) / 100; 2),
+    // потери — из таблицы для группы и способа каждого продукта.
+    String cookedFormula(String col, String legacyFormula) {
+      if (!lossTable) return '<f>$legacyFormula</f>';
+      if (calc.lines.isEmpty) return '';
+      final terms = <String>[];
+      for (var i = 0; i < calc.lines.length; i++) {
+        final loss = calc.lines[i].loss;
+        final pct = switch (col) {
+          'E' => loss.protein,
+          'G' => loss.fat,
+          _ => loss.carbs,
+        };
+        terms.add(
+            'ROUND($col${firstDataRow + i}*(100-${_pctLiteral(pct)})/100,2)');
+      }
+      final formula = 'ROUND(${terms.join('+')},2)';
+      // Предел длины формулы Excel — 8192 символа: для очень длинных
+      // рецептур остаётся только значение.
+      return formula.length <= 8000 ? '<f>$formula</f>' : '';
+    }
+
+    final String yieldCell;
+    if (noYield) {
+      yieldCell =
+          '<c r="C$cookedRow" s="11" t="inlineStr"><is><t>—</t></is></c>';
+    } else if (lossTable || dish.hasCustomYield) {
+      yieldCell =
+          '<c r="C$cookedRow" s="11"><v>${calc.yieldGrams.toStringAsFixed(1)}</v></c>';
+    } else {
+      yieldCell =
+          '<c r="C$cookedRow" s="11"><f>SUM(C$firstDataRow:C$lastDataRow)</f><v>${calc.yieldGrams.toStringAsFixed(1)}</v></c>';
+    }
     sheetSb.write('''
     <row r="$cookedRow" ht="18" customHeight="1">
       <c r="A$cookedRow" s="6" t="inlineStr"><is><t>После тепловой обработки</t></is></c>
       <c r="B$cookedRow" s="6"/>
-      <c r="C$cookedRow" s="11">${dish.customYieldGrams == null ? '<f>SUM(C$firstDataRow:C$lastDataRow)</f>' : ''}<v>${calc.yieldGrams.toStringAsFixed(1)}</v></c>
-      <c r="D$cookedRow" s="8"><f>ROUND(E$totalRow*D$retRow/100,2)</f><v>${cookedP.toStringAsFixed(2)}</v></c>
+      $yieldCell
+      <c r="D$cookedRow" s="8">${cookedFormula('E', 'ROUND(E$totalRow*D$retRow/100,2)')}<v>${cookedP.toStringAsFixed(2)}</v></c>
       <c r="E$cookedRow" s="1"/>
-      <c r="F$cookedRow" s="8"><f>ROUND(G$totalRow*F$retRow/100,2)</f><v>${cookedF.toStringAsFixed(2)}</v></c>
+      <c r="F$cookedRow" s="8">${cookedFormula('G', 'ROUND(G$totalRow*F$retRow/100,2)')}<v>${cookedF.toStringAsFixed(2)}</v></c>
       <c r="G$cookedRow" s="1"/>
-      <c r="H$cookedRow" s="8"><f>ROUND(I$totalRow*H$retRow/100,2)</f><v>${cookedC.toStringAsFixed(2)}</v></c>
+      <c r="H$cookedRow" s="8">${cookedFormula('I', 'ROUND(I$totalRow*H$retRow/100,2)')}<v>${cookedC.toStringAsFixed(2)}</v></c>
       <c r="I$cookedRow" s="1"/>
       <c r="J$cookedRow" s="9"><f>ROUND(D$cookedRow*4+F$cookedRow*9+H$cookedRow*4,1)</f><v>${cookedKcal.toStringAsFixed(1)}</v></c>
     </row>
@@ -368,18 +417,23 @@ class XlsxBlankGenerator {
     // Опциональная строка 4: В 100 г блюда
     if (dish.showPer100gRowInExport) {
       final per100Row = rowIdx;
+      // Вес готового блюда не указан — «в 100 г» не определено: прочерк.
+      String per100(String col, String style, String formula, String value) =>
+          noYield
+              ? '<c r="$col$per100Row" s="$style" t="inlineStr"><is><t>—</t></is></c>'
+              : '<c r="$col$per100Row" s="$style"><f>$formula</f><v>$value</v></c>';
       sheetSb.write('''
     <row r="$per100Row" ht="18" customHeight="1">
       <c r="A$per100Row" s="6" t="inlineStr"><is><t>В 100 г блюда</t></is></c>
       <c r="B$per100Row" s="6"/>
       <c r="C$per100Row" s="1"><v>100</v></c>
-      <c r="D$per100Row" s="8"><f>IF(C$cookedRow&gt;0,ROUND(D$cookedRow*100/C$cookedRow,2),0)</f><v>${calc.per100gProtein.toStringAsFixed(2)}</v></c>
+      ${per100('D', '8', 'IF(C$cookedRow&gt;0,ROUND(D$cookedRow*100/C$cookedRow,2),0)', calc.per100gProtein.toStringAsFixed(2))}
       <c r="E$per100Row" s="1"/>
-      <c r="F$per100Row" s="8"><f>IF(C$cookedRow&gt;0,ROUND(F$cookedRow*100/C$cookedRow,2),0)</f><v>${calc.per100gFat.toStringAsFixed(2)}</v></c>
+      ${per100('F', '8', 'IF(C$cookedRow&gt;0,ROUND(F$cookedRow*100/C$cookedRow,2),0)', calc.per100gFat.toStringAsFixed(2))}
       <c r="G$per100Row" s="1"/>
-      <c r="H$per100Row" s="8"><f>IF(C$cookedRow&gt;0,ROUND(H$cookedRow*100/C$cookedRow,2),0)</f><v>${calc.per100gCarbs.toStringAsFixed(2)}</v></c>
+      ${per100('H', '8', 'IF(C$cookedRow&gt;0,ROUND(H$cookedRow*100/C$cookedRow,2),0)', calc.per100gCarbs.toStringAsFixed(2))}
       <c r="I$per100Row" s="1"/>
-      <c r="J$per100Row" s="9"><f>IF(C$cookedRow&gt;0,ROUND(J$cookedRow*100/C$cookedRow,1),0)</f><v>${calc.per100gKcal.toStringAsFixed(1)}</v></c>
+      ${per100('J', '9', 'IF(C$cookedRow&gt;0,ROUND(J$cookedRow*100/C$cookedRow,1),0)', calc.per100gKcal.toStringAsFixed(1))}
     </row>
 ''');
       merges.addAll([
@@ -394,18 +448,39 @@ class XlsxBlankGenerator {
     rowIdx++; // Пустая строка перед формулами
 
     // 6-строчный блок формул под таблицей (чистые символические формулы бланка 1:1)
-    final formulaLines = [
-      'Сохранность после тепловой обработки:',
-      '= Сумма белков *$pPctText/100',
-      '= Сумма жиров *$fPctText/100',
-      '= Сумма углеводов *$cPctText/100',
-      'Энергетическая ценность:',
-      'Белки (после т.о) х 4 + Жиры (после т.о) х 9 + Углеводы (после т.о) х 4',
-    ];
+    // Новый расчёт: одного умножения суммы нет — потери применяются к
+    // каждому продукту по его группе; процент — итоговая доля готовое/сырьё.
+    String tableLine(String what, String pct, double raw, double cooked) =>
+        dish.ingredients.isNotEmpty
+            ? '= Σ $what продукта × (100 − потери группы) / 100 = '
+                '${CalculationEngine.formatMacro(raw)} → '
+                '${CalculationEngine.formatMacro(cooked)} г (в среднем $pct %)'
+            : '= Σ $what продукта × (100 − потери группы) / 100';
+    final formulaLines = lossTable
+        ? [
+            'Потери при тепловой обработке — по группам продуктов '
+                '(${calc.process.label}):',
+            tableLine('белков', pPctText, calc.rawTotalProtein, cookedP),
+            tableLine('жиров', fPctText, calc.rawTotalFat, cookedF),
+            tableLine('углеводов', cPctText, calc.rawTotalCarbs, cookedC),
+            'Энергетическая ценность:',
+            'Белки (после т.о) х 4 + Жиры (после т.о) х 9 + Углеводы (после т.о) х 4',
+            kNotGostNotice,
+          ]
+        : [
+            'Сохранность после тепловой обработки:',
+            '= Сумма белков *$pPctText/100',
+            '= Сумма жиров *$fPctText/100',
+            '= Сумма углеводов *$cPctText/100',
+            'Энергетическая ценность:',
+            'Белки (после т.о) х 4 + Жиры (после т.о) х 9 + Углеводы (после т.о) х 4',
+          ];
 
     for (var lineIndex = 0; lineIndex < formulaLines.length; lineIndex++) {
       final line = formulaLines[lineIndex];
-      final nutrient = switch (lineIndex) {
+      final nutrient = lossTable
+          ? null
+          : switch (lineIndex) {
         1 => ('белков', 'D'),
         2 => ('жиров', 'F'),
         3 => ('углеводов', 'H'),

@@ -3,6 +3,7 @@ import 'unicode_pdf_font.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../calculation/calculation_engine.dart';
+import '../calculation/loss_table.dart';
 import '../calculation/models/blank_mode.dart';
 import '../calculation/models/calculation_result.dart';
 import '../calculation/models/dish.dart';
@@ -151,6 +152,9 @@ class PdfBlankGenerator {
     final totalRows = padTo18 ? 18 : end - start;
     final isCrossMode = dish.blankMode == BlankMode.photoCross;
     const double rowH = 15.5;
+    // Новый расчёт без веса готового блюда: выход и «в 100 г» не
+    // определены — печатаем прочерк, а не «0».
+    final noYield = calc.usesLossTable && !calc.hasYield;
 
     final pPct = _formatPercent(calc.retentionProtein);
     final fPct = _formatPercent(calc.retentionFat);
@@ -329,8 +333,13 @@ class PdfBlankGenerator {
               children: [
                 _cell('После тепловой обработки', _w01, rowH + 2, fontBold,
                     bold: true, align: pw.Alignment.centerLeft),
-                _cell(CalculationEngine.formatGrams(calc.yieldGrams), _w2,
-                    rowH + 2, fontRegular),
+                _cell(
+                    noYield
+                        ? '—'
+                        : CalculationEngine.formatGrams(calc.yieldGrams),
+                    _w2,
+                    rowH + 2,
+                    fontRegular),
                 _cell(CalculationEngine.formatMacro(calc.cookedProtein), _w34,
                     rowH + 2, fontBold,
                     bold: true),
@@ -353,16 +362,36 @@ class PdfBlankGenerator {
                 _cell('В 100 г блюда', _w01, rowH, fontBold,
                     bold: true, align: pw.Alignment.centerLeft),
                 _cell('100', _w2, rowH, fontBold, bold: true),
-                _cell(CalculationEngine.formatMacro(calc.per100gProtein), _w34,
-                    rowH, fontBold,
+                _cell(
+                    noYield
+                        ? '—'
+                        : CalculationEngine.formatMacro(calc.per100gProtein),
+                    _w34,
+                    rowH,
+                    fontBold,
                     bold: true),
-                _cell(CalculationEngine.formatMacro(calc.per100gFat), _w56,
-                    rowH, fontBold,
+                _cell(
+                    noYield
+                        ? '—'
+                        : CalculationEngine.formatMacro(calc.per100gFat),
+                    _w56,
+                    rowH,
+                    fontBold,
                     bold: true),
-                _cell(CalculationEngine.formatMacro(calc.per100gCarbs), _w78,
-                    rowH, fontBold,
+                _cell(
+                    noYield
+                        ? '—'
+                        : CalculationEngine.formatMacro(calc.per100gCarbs),
+                    _w78,
+                    rowH,
+                    fontBold,
                     bold: true),
-                _cell(CalculationEngine.formatKcal(calc.per100gKcal), _w9, rowH,
+                _cell(
+                    noYield
+                        ? '—'
+                        : CalculationEngine.formatKcal(calc.per100gKcal),
+                    _w9,
+                    rowH,
                     fontBold,
                     bold: true),
               ],
@@ -529,15 +558,30 @@ class PdfBlankGenerator {
     final cPct = _formatPercent(calc.retentionCarbs);
     final hasItems = dish.ingredients.isNotEmpty;
 
-    final pLine = hasItems
-        ? '= Сумма белков *$pPct /100 = ${CalculationEngine.formatMacro(calc.rawTotalProtein)} * $pPct / 100 = ${CalculationEngine.formatMacro(calc.cookedProtein)} г'
-        : '= Сумма белков *$pPct /100';
-    final fLine = hasItems
-        ? '= Сумма жиров *$fPct/100 = ${CalculationEngine.formatMacro(calc.rawTotalFat)} * $fPct / 100 = ${CalculationEngine.formatMacro(calc.cookedFat)} г'
-        : '= Сумма жиров *$fPct/100';
-    final cLine = hasItems
-        ? '= Сумма углеводов *$cPct/100 = ${CalculationEngine.formatMacro(calc.rawTotalCarbs)} * $cPct / 100 = ${CalculationEngine.formatMacro(calc.cookedCarbs)} г'
-        : '= Сумма углеводов *$cPct/100';
+    // Новый расчёт: потери применяются к КАЖДОМУ продукту по его группе,
+    // одного умножения суммы нет; процент — итоговая доля готовое/сырьё.
+    final table = calc.usesLossTable;
+    String tableLine(String what, String pct, double raw, double cooked) =>
+        hasItems
+            ? '= Σ $what продукта × (100 − потери группы) / 100 = '
+                '${CalculationEngine.formatMacro(raw)} → '
+                '${CalculationEngine.formatMacro(cooked)} г (в среднем $pct %)'
+            : '= Σ $what продукта × (100 − потери группы) / 100';
+    final pLine = table
+        ? tableLine('белков', pPct, calc.rawTotalProtein, calc.cookedProtein)
+        : hasItems
+            ? '= Сумма белков *$pPct /100 = ${CalculationEngine.formatMacro(calc.rawTotalProtein)} * $pPct / 100 = ${CalculationEngine.formatMacro(calc.cookedProtein)} г'
+            : '= Сумма белков *$pPct /100';
+    final fLine = table
+        ? tableLine('жиров', fPct, calc.rawTotalFat, calc.cookedFat)
+        : hasItems
+            ? '= Сумма жиров *$fPct/100 = ${CalculationEngine.formatMacro(calc.rawTotalFat)} * $fPct / 100 = ${CalculationEngine.formatMacro(calc.cookedFat)} г'
+            : '= Сумма жиров *$fPct/100';
+    final cLine = table
+        ? tableLine('углеводов', cPct, calc.rawTotalCarbs, calc.cookedCarbs)
+        : hasItems
+            ? '= Сумма углеводов *$cPct/100 = ${CalculationEngine.formatMacro(calc.rawTotalCarbs)} * $cPct / 100 = ${CalculationEngine.formatMacro(calc.cookedCarbs)} г'
+            : '= Сумма углеводов *$cPct/100';
     final kcalLine = hasItems
         ? 'Белки (после т.о) х 4 + Жиры (после т.о) х 9 + Углеводы (после т.о) х 4 = ${CalculationEngine.formatMacro(calc.cookedProtein)} х 4 + ${CalculationEngine.formatMacro(calc.cookedFat)} х 9 + ${CalculationEngine.formatMacro(calc.cookedCarbs)} х 4 = ${CalculationEngine.formatKcal(calc.cookedKcal)} ккал'
         : 'Белки (после т.о) х 4 + Жиры (после т.о) х 9 + Углеводы (после т.о) х 4';
@@ -556,7 +600,10 @@ class PdfBlankGenerator {
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.Text(
-            'Сохранность после тепловой обработки:',
+            table
+                ? 'Потери при тепловой обработке — по группам продуктов '
+                    '(${calc.process.label}):'
+                : 'Сохранность после тепловой обработки:',
             style: pw.TextStyle(
               font: fontBold,
               fontSize: 9.0,
@@ -583,6 +630,13 @@ class PdfBlankGenerator {
             kcalLine,
             style: pw.TextStyle(font: fontRegular, fontSize: 8.5),
           ),
+          if (table) ...[
+            pw.SizedBox(height: 3),
+            pw.Text(
+              kNotGostNotice,
+              style: pw.TextStyle(font: fontRegular, fontSize: 7.5),
+            ),
+          ],
           if (zeroWasteWarning != null) ...[
             pw.SizedBox(height: 3),
             pw.Text(

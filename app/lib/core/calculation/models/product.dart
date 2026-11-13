@@ -1,4 +1,5 @@
 import '../calculation_math.dart';
+import 'source_label.dart';
 
 class ProductMeasure {
   final int id;
@@ -60,6 +61,7 @@ class ProductNutrient {
     'MG': (name: 'Магний (Mg)', unit: 'мг', category: 'mineral'),
     'P': (name: 'Фосфор (P)', unit: 'мг', category: 'mineral'),
     'FE': (name: 'Железо (Fe)', unit: 'мг', category: 'mineral'),
+    'I': (name: 'Йод (I)', unit: 'мкг', category: 'mineral'),
     'ZN': (name: 'Цинк (Zn)', unit: 'мг', category: 'mineral'),
     'CU': (name: 'Медь (Cu)', unit: 'мг', category: 'mineral'),
     'SE': (name: 'Селен (Se)', unit: 'мкг', category: 'mineral'),
@@ -105,7 +107,7 @@ class Product {
   final String name;
   final String? nameNorm;
   final int groupId;
-  final String source; // 'skurikhin' or 'usda'
+  final String source; // 'skurikhin' или 'bls'
   final int? pageNum;
   final double wastePct; // процент отходов при холодной обработке
   final double protein; // белки на 100г
@@ -122,6 +124,9 @@ class Product {
   final double pufa;
   final double chol;
   final double alcohol;
+  /// Готовое блюдо (`1`) или сырьё/продукт (`0`). `null` — старая база без
+  /// колонки `is_dish` (этап 6).
+  final bool? isDish;
   final List<ProductMeasure> measures;
   final bool hasExplicitProtein;
   final bool hasExplicitFat;
@@ -151,6 +156,7 @@ class Product {
     this.pufa = 0.0,
     this.chol = 0.0,
     this.alcohol = 0.0,
+    this.isDish,
     this.measures = const [],
     this.hasExplicitProtein = true,
     this.hasExplicitFat = true,
@@ -158,29 +164,46 @@ class Product {
     this.hasExplicitKcal = true,
   });
 
-  /// Only manually checked Skurikhin measures are exposed: the legacy OCR
-  /// table has merged digits and substring-based assignments to unrelated dishes.
-  /// Page 207: cups 250/200 ml, spoons filled as specified in the book.
-  /// Page 210: edible egg mass; category is explicit, not a universal egg weight.
+  /// Проверка меры из приложений 1–3 Скурихина.
+  ///
+  /// Стаканы в книге — 200 или 250 мл, ложки — до 50 г, штучный вес яйца
+  /// задан категорией (25…120 г куриное, 6…25 г перепелиное). Меры вне
+  /// этих диапазонов — след слипшихся цифр OCR.
+  bool _isVerifiedSkurikhinMeasure(ProductMeasure m) {
+    if (!m.grams.isFinite || m.grams <= 0 || m.grams > 5000) return false;
+    final mLower = m.name.toLowerCase();
+    final pLower = name.toLowerCase();
+    final isEggContainer = mLower.contains('яйц') || pLower.contains('яйц');
+    if (isEggContainer) {
+      final isQuail = mLower.contains('перепел') || pLower.contains('перепел');
+      return isQuail ? m.grams >= 6.0 && m.grams <= 25.0
+          : m.grams >= 25.0 && m.grams <= 120.0;
+    }
+    if (mLower.contains('стакан')) {
+      return m.grams >= 50.0 && m.grams <= 450.0;
+    }
+    if (mLower.contains('столовая лож')) {
+      return m.grams >= 3.0 && m.grams <= 50.0;
+    }
+    if (mLower.contains('чайная лож')) {
+      return m.grams >= 0.5 && m.grams <= 25.0;
+    }
+    return true;
+  }
+
+  /// Меры, пригодные для пересчёта порции.
+  ///
+  /// Для Скурихина берутся меры из базы (`measure`), собранные из приложений
+  /// 1–3 книги и прошедшие полировку (`polish_products.py`). Если у продукта
+  /// мер в базе нет — например, объект собран в памяти в тестах — работает
+  /// встроенный словарь для базовых продуктов.
   List<ProductMeasure> get calculationMeasures {
     if (!isSkurikhin) {
       return measures.where((m) {
         if (!m.grams.isFinite || m.grams <= 0 || m.grams > 5000) return false;
         final mLower = m.name.toLowerCase();
-        final pLower = name.toLowerCase();
-        if (mLower.contains('egg') ||
-            pLower.contains('яйц') ||
-            mLower.contains('яйц')) {
-          final isQuail =
-              mLower.contains('quail') || pLower.contains('перепел');
-          if (isQuail) {
-            if (m.grams < 6.0 || m.grams > 25.0) return false;
-          } else {
-            if (m.grams < 25.0 || m.grams > 120.0) return false;
-          }
-        }
-        if (mLower.contains('cup') || mLower.contains('стакан')) {
-          if (m.grams < 50.0 || m.grams > 450.0) return false;
+        if (mLower.contains('cup') && (m.grams < 50.0 || m.grams > 450.0)) {
+          return false;
         }
         if (mLower.contains('tbsp') || mLower.contains('столовая лож')) {
           if (m.grams < 3.0 || m.grams > 50.0) return false;
@@ -188,9 +211,19 @@ class Product {
         if (mLower.contains('tsp') || mLower.contains('чайная лож')) {
           if (m.grams < 0.5 || m.grams > 25.0) return false;
         }
+        if (mLower.contains('egg') || mLower.contains('яйц') ||
+            name.toLowerCase().contains('яйц')) {
+          return _isVerifiedSkurikhinMeasure(m);
+        }
         return true;
       }).toList();
     }
+    // Меры из базы (`measure`) принимаются, только если это канонический
+    // набор из приложений 1–3 книги: стаканы 200/250 мл, ложки, штучный вес
+    // в разумных пределах. Всё остальное (слипшиеся цифры OCR вроде
+    // «стакан = 1160 г») отбрасывается.
+    final fromDb = measures.where(_isVerifiedSkurikhinMeasure).toList();
+    if (fromDb.isNotEmpty) return fromDb;
     final values = switch (name) {
       'Яйцо куриное' => {'1 шт. (1 категория, нетто)': 47.0},
       'Яйцо перепелиное' => {'1 шт. (нетто)': 9.0},
@@ -221,9 +254,39 @@ class Product {
   }
 
   bool get isSkurikhin => source.toLowerCase() == 'skurikhin';
+  bool get isBls => source.toLowerCase() == 'bls';
+
+  /// Заданы ли отходы для этого продукта в справочнике (IO-01).
+  ///
+  /// `reference.db` сертифицирована (Gold Master v5) и не меняется. Отходы
+  /// есть у 141 из 1108 продуктов Скурихина (12,7 %), у BLS — ни у одного.
+  /// Поэтому «wastePct == 0» неотличим от «отходов нет в источнике»:
+  /// геттер даёт UI и экспорту возможность честно подписать продукт
+  /// «отходы не заданы», вместо того чтобы молча подразумевать 0 %.
+  bool get wasteIsKnown => isSkurikhin && wastePct > 0;
+
+  /// Пометка для карточек и бланка: отходы в источнике отсутствуют.
+  bool get hasUnknownWaste => !wasteIsKnown && !isSupplement;
+
+  /// «Дополнения» — пряности и питьевая вода, которых нет ни в книге, ни в
+  /// BLS (дефект D3: раньше их подписывали как «BLS»).
+  bool get isSupplement => source.toLowerCase() == 'supplement';
+
+  /// Устаревшее имя: справочник USDA больше не поставляется, вместо него
+  /// BLS 4.0. Оставлено ради совместимости с сохранёнными рецептами.
   bool get isUsda => source.toLowerCase() == 'usda';
 
-  String get sourceLabel => isSkurikhin ? 'Скурихин' : 'USDA';
+  /// Подпись источника на карточке. Дефект D3: `supplement` не BLS.
+  /// Дефект D17: подпись берётся из единой таблицы `SourceLabel`, а не
+  /// повторяется здесь и в `SourceBadge`.
+  String get sourceLabel => SourceLabel.of(source, fallback: source);
+
+  /// Готовое блюдо (`is_dish = 1`), а не сырьё/продукт (этап 6).
+  ///
+  /// В калькуляторе рецепта по умолчанию ищутся продукты (`isDish == false`),
+  /// в каталоге видны все. Старые базы без колонки отдают `null` — считаем
+  /// такие записи сырьём, чтобы поведение не менялось.
+  bool get isDishOnly => isDish ?? false;
 
   double get proteinRounded => CalculationMath.round2(protein);
   double get fatRounded => CalculationMath.round2(fat);
@@ -257,6 +320,8 @@ class Product {
       pufa: (map['pufa'] as num?)?.toDouble() ?? 0.0,
       chol: (map['chol'] as num?)?.toDouble() ?? 0.0,
       alcohol: (map['alcohol'] as num?)?.toDouble() ?? 0.0,
+      // `is_dish` есть только в базе v5; в старых JSON его нет → `null`.
+      isDish: map['is_dish'] == null ? null : (map['is_dish'] as num) != 0,
       measures: measures,
       hasExplicitProtein: map.containsKey('protein') && map['protein'] != null,
       hasExplicitFat: map.containsKey('fat') && map['fat'] != null,
@@ -288,6 +353,7 @@ class Product {
         'pufa': pufa,
         'chol': chol,
         'alcohol': alcohol,
+        if (isDish != null) 'is_dish': isDish! ? 1 : 0,
         'measures': measures.map((m) => m.toJson()).toList(),
       };
 
@@ -323,6 +389,7 @@ class Product {
     double? pufa,
     double? chol,
     double? alcohol,
+    bool? isDish,
     List<ProductMeasure>? measures,
     bool? hasExplicitProtein,
     bool? hasExplicitFat,
@@ -352,6 +419,7 @@ class Product {
       pufa: pufa ?? this.pufa,
       chol: chol ?? this.chol,
       alcohol: alcohol ?? this.alcohol,
+      isDish: isDish ?? this.isDish,
       measures: measures ?? this.measures,
       hasExplicitProtein: hasExplicitProtein ?? this.hasExplicitProtein,
       hasExplicitFat: hasExplicitFat ?? this.hasExplicitFat,

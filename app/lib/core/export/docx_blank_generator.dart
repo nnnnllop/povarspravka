@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import '../calculation/calculation_engine.dart';
+import '../calculation/loss_table.dart';
 import '../calculation/models/blank_mode.dart';
 import '../calculation/models/dish.dart';
 
@@ -198,6 +199,12 @@ class DocxBlankGenerator {
       </w:tr>
 ''');
 
+    // Новый расчёт (не legacy): потери — по группе каждого продукта,
+    // «Сохранность,%» — итоговая доля готовое/сырьё (в среднем). Вес
+    // готового блюда не указан — выход и «в 100 г» не определены: прочерк.
+    final lossTable = calc.usesLossTable;
+    final noYield = lossTable && !calc.hasYield;
+
     // Сохранность,%
     final pPct = CalculationEngine.formatPercent(calc.retentionProtein);
     final fPct = CalculationEngine.formatPercent(calc.retentionFat);
@@ -220,7 +227,7 @@ class DocxBlankGenerator {
       <w:tr>
         <w:trPr><w:trHeight w:val="260" w:hRule="exact"/></w:trPr>
         ${_cellXml('После тепловой обработки', bold: true, align: 'left', gridSpan: 2)}
-        ${_cellXml(CalculationEngine.formatGrams(calc.yieldGrams), bold: true)}
+        ${_cellXml(noYield ? '—' : CalculationEngine.formatGrams(calc.yieldGrams), bold: true)}
         ${_cellXml(CalculationEngine.formatMacro(calc.cookedProtein), bold: true, gridSpan: 2)}
         ${_cellXml(CalculationEngine.formatMacro(calc.cookedFat), bold: true, gridSpan: 2)}
         ${_cellXml(CalculationEngine.formatMacro(calc.cookedCarbs), bold: true, gridSpan: 2)}
@@ -235,10 +242,10 @@ class DocxBlankGenerator {
         <w:trPr><w:trHeight w:val="260" w:hRule="exact"/></w:trPr>
         ${_cellXml('В 100 г блюда', bold: true, align: 'left', gridSpan: 2)}
         ${_cellXml('100', bold: true)}
-        ${_cellXml(CalculationEngine.formatMacro(calc.per100gProtein), bold: true, gridSpan: 2)}
-        ${_cellXml(CalculationEngine.formatMacro(calc.per100gFat), bold: true, gridSpan: 2)}
-        ${_cellXml(CalculationEngine.formatMacro(calc.per100gCarbs), bold: true, gridSpan: 2)}
-        ${_cellXml(CalculationEngine.formatKcal(calc.per100gKcal), bold: true)}
+        ${_cellXml(noYield ? '—' : CalculationEngine.formatMacro(calc.per100gProtein), bold: true, gridSpan: 2)}
+        ${_cellXml(noYield ? '—' : CalculationEngine.formatMacro(calc.per100gFat), bold: true, gridSpan: 2)}
+        ${_cellXml(noYield ? '—' : CalculationEngine.formatMacro(calc.per100gCarbs), bold: true, gridSpan: 2)}
+        ${_cellXml(noYield ? '—' : CalculationEngine.formatKcal(calc.per100gKcal), bold: true)}
       </w:tr>
 ''');
     }
@@ -247,15 +254,29 @@ class DocxBlankGenerator {
 
     // Блок формул под таблицей (6 строк точь-в-точь как на фото)
     final hasItems = dish.ingredients.isNotEmpty;
-    final pLine = hasItems
-        ? '= Сумма белков *$pPct /100 = ${CalculationEngine.formatMacro(calc.rawTotalProtein)} * $pPct / 100 = ${CalculationEngine.formatMacro(calc.cookedProtein)} г'
-        : '= Сумма белков *$pPct /100';
-    final fLine = hasItems
-        ? '= Сумма жиров *$fPct/100 = ${CalculationEngine.formatMacro(calc.rawTotalFat)} * $fPct / 100 = ${CalculationEngine.formatMacro(calc.cookedFat)} г'
-        : '= Сумма жиров *$fPct/100';
-    final cLine = hasItems
-        ? '= Сумма углеводов *$cPct/100 = ${CalculationEngine.formatMacro(calc.rawTotalCarbs)} * $cPct / 100 = ${CalculationEngine.formatMacro(calc.cookedCarbs)} г'
-        : '= Сумма углеводов *$cPct/100';
+    // Новый расчёт: потери применяются к КАЖДОМУ продукту по его группе,
+    // одного умножения суммы нет; процент — итоговая доля готовое/сырьё.
+    String tableLine(String what, String pct, double raw, double cooked) =>
+        hasItems
+            ? '= Σ $what продукта × (100 − потери группы) / 100 = '
+                '${CalculationEngine.formatMacro(raw)} → '
+                '${CalculationEngine.formatMacro(cooked)} г (в среднем $pct %)'
+            : '= Σ $what продукта × (100 − потери группы) / 100';
+    final pLine = lossTable
+        ? tableLine('белков', pPct, calc.rawTotalProtein, calc.cookedProtein)
+        : hasItems
+            ? '= Сумма белков *$pPct /100 = ${CalculationEngine.formatMacro(calc.rawTotalProtein)} * $pPct / 100 = ${CalculationEngine.formatMacro(calc.cookedProtein)} г'
+            : '= Сумма белков *$pPct /100';
+    final fLine = lossTable
+        ? tableLine('жиров', fPct, calc.rawTotalFat, calc.cookedFat)
+        : hasItems
+            ? '= Сумма жиров *$fPct/100 = ${CalculationEngine.formatMacro(calc.rawTotalFat)} * $fPct / 100 = ${CalculationEngine.formatMacro(calc.cookedFat)} г'
+            : '= Сумма жиров *$fPct/100';
+    final cLine = lossTable
+        ? tableLine('углеводов', cPct, calc.rawTotalCarbs, calc.cookedCarbs)
+        : hasItems
+            ? '= Сумма углеводов *$cPct/100 = ${CalculationEngine.formatMacro(calc.rawTotalCarbs)} * $cPct / 100 = ${CalculationEngine.formatMacro(calc.cookedCarbs)} г'
+            : '= Сумма углеводов *$cPct/100';
     final kcalLine = hasItems
         ? 'Белки (после т.о) х 4 + Жиры (после т.о) х 9 + Углеводы (после т.о) х 4 = ${CalculationEngine.formatMacro(calc.cookedProtein)} х 4 + ${CalculationEngine.formatMacro(calc.cookedFat)} х 9 + ${CalculationEngine.formatMacro(calc.cookedCarbs)} х 4 = ${CalculationEngine.formatKcal(calc.cookedKcal)} ккал'
         : 'Белки (после т.о) х 4 + Жиры (после т.о) х 9 + Углеводы (после т.о) х 4';
@@ -267,12 +288,12 @@ class DocxBlankGenerator {
         : null;
 
     docSb.write('''
-    ${_formulaParagraph('Сохранность после тепловой обработки:', bold: true, spaceBefore: 40)}
+    ${_formulaParagraph(lossTable ? 'Потери при тепловой обработке — по группам продуктов (${calc.process.label}):' : 'Сохранность после тепловой обработки:', bold: true, spaceBefore: 40)}
     ${_formulaParagraph(pLine)}
     ${_formulaParagraph(fLine)}
     ${_formulaParagraph(cLine)}
     ${_formulaParagraph('Энергетическая ценность:', bold: true, spaceBefore: 30)}
-    ${_formulaParagraph(kcalLine)}
+    ${_formulaParagraph(kcalLine)}${lossTable ? '\n    ${_formulaParagraph(kNotGostNotice, spaceBefore: 20)}' : ''}
     ${zeroWasteWarning != null ? _formulaParagraph(zeroWasteWarning, spaceBefore: 20) : ''}
     <w:sectPr>
       <w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/>

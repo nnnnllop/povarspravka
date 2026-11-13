@@ -21,8 +21,8 @@ class CalculationMath {
     final d = scale > 0 ? BigInt.from(10).pow(scale) : BigInt.one;
     if (scale < 0) n *= BigInt.from(10).pow(-scale);
     final rounded = (n.abs() * BigInt.two + d) ~/ (d * BigInt.two);
-    return (n.isNegative ? -rounded : rounded).toDouble() /
-        BigInt.from(10).pow(digits).toDouble();
+    return _finiteClamp((n.isNegative ? -rounded : rounded).toDouble() /
+        BigInt.from(10).pow(digits).toDouble());
   }
 
   /// Энергетическая ценность по формуле бланка: Б × 4 + Ж × 9 + У × 4
@@ -55,8 +55,8 @@ class CalculationMath {
       d *= BigInt.from(10).pow(-scale);
     }
     final rounded = (n.abs() * BigInt.two + d) ~/ (d * BigInt.two);
-    return (n.isNegative ? -rounded : rounded).toDouble() /
-        BigInt.from(10).pow(digits).toDouble();
+    return _finiteClamp((n.isNegative ? -rounded : rounded).toDouble() /
+        BigInt.from(10).pow(digits).toDouble());
   }
 
   // value = numerator / denominator * 10^-scale. Integer arithmetic until output.
@@ -70,8 +70,8 @@ class CalculationMath {
     }
     final units = (numerator.abs() * BigInt.two + denominator) ~/
         (denominator * BigInt.two);
-    return (numerator.isNegative ? -units : units).toDouble() /
-        BigInt.from(10).pow(digits).toDouble();
+    return _finiteClamp((numerator.isNegative ? -units : units).toDouble() /
+        BigInt.from(10).pow(digits).toDouble());
   }
 
   static (BigInt, int) _sum(Iterable<double> values) {
@@ -119,4 +119,16 @@ class CalculationMath {
 
   static double round1(double v) => productRounded(v, 1.0, 1);
   static double round2(double v) => productRounded(v, 1.0, 2);
+
+  /// Кламп значения к конечному диапазону double.
+  ///
+  /// `BigInt.toDouble()` на очень больших числителях выдаёт `Infinity`
+  /// (MATH-06, FUZZ-02), а `Infinity.roundToDouble()` и `toInt()` молча
+  /// превращают «1,5e21» в `9223372036854775807`. Любой результат, который
+  /// вышел за пределы double, честнее вернуть как границу диапазона.
+  static double _finiteClamp(double v) {
+    if (v.isFinite) return v;
+    if (v.isNaN) return 0.0;
+    return v.isNegative ? -double.maxFinite : double.maxFinite;
+  }
 }
