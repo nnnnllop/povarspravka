@@ -97,19 +97,20 @@ void main() {
     notes.add('D4 undo restores identically');
   });
 
-  test('D5 impossible yield is rejected with a message', () {
-    // 600 g of pure fat -> cooked fat ~528 g; a 100 g yield is impossible.
+  test('D5 a fat-dense dish with a small yield CALCULATES (LOGIC-01)', () {
+    // SPEC: 600 g of pure fat holds ~528 g of cooked fat. A 100 g yield is
+    // dense but legal — fat is a component of the dish mass, not an upper
+    // bound on it. The engine must compute, not throw.
     final d = one(Ingredient(
         id: '1', product: prod('Масло', p: 0, f: 99.9, c: 0), weightGrams: 600),
         y: 100);
-    Object? err;
-    try {
-      CalculationEngine.calculate(d);
-    } catch (e) {
-      err = e;
-    }
-    expect(err, isNotNull);
-    notes.add('D5 engine throws: ${err.toString().split('\n').first}');
+    expect(() => CalculationEngine.calculate(d), returnsNormally);
+    final r = CalculationEngine.calculate(d);
+    expect(r.yieldGrams, 100);
+    expect(r.cookedFat, greaterThan(0));
+    expect(r.per100gKcal.isFinite, isTrue);
+    notes.add('D5 engine computed: yield=${r.yieldGrams} '
+        'per100gKcal=${r.per100gKcal}');
   });
 
   test('D7 pathological mass inputs parse predictably', () {

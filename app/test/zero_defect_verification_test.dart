@@ -80,7 +80,9 @@ void main() {
     expect(s.drafts.last!.ingredients.single.weightGrams, 100);
   });
   test('Scenario grid: waste, mass, no heat and dilution preserve displayed totals', () {
-    for (final waste in [0.0,.1,.5,1.5,25.0,80.0,99.9,100.0]) {
+    // SPEC: waste 100 % is invalid (MATH-A1.5..A1.8) — the grid covers the
+    // whole VALID range, and the boundary itself is asserted separately.
+    for (final waste in [0.0,.1,.5,1.5,25.0,80.0,99.9]) {
       for (final mass in [.01,.05,.1,.6,.7,100000.0,1000000.0]) {
         final d = fixture(mass).copyWith(retentionProtein:1,retentionFat:1,retentionCarbs:1,ingredients:[Ingredient(id:'grid',product:beet.copyWith(wastePct:waste),weightGrams:mass,isGross:true)]);
         final r = CalculationEngine.calculate(d);
@@ -88,6 +90,17 @@ void main() {
         expect(r.rawTotalWeight,d.ingredients.single.netGramsRounded);
       }
     }
+    expect(
+        () => CalculationEngine.calculate(fixture(100).copyWith(
+            ingredients: [
+              Ingredient(
+                  id: 'grid',
+                  product: beet.copyWith(wastePct: 100.0),
+                  weightGrams: 100,
+                  isGross: true)
+            ])),
+        throwsA(isA<ArgumentError>()),
+        reason: 'waste 100 % leaves no product and must be rejected');
     for (final n in [0,1,60]) {
       final d = fixture(100).copyWith(ingredients:List.generate(n,(i)=>Ingredient(id:'$i',product:beet,weightGrams:100)));
       final r = CalculationEngine.calculate(d); expect(r.rawTotalWeight,100.0*n);

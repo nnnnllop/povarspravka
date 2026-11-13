@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:povarspravka/core/calculation/calculation_engine.dart';
 import 'package:povarspravka/core/calculation/models/dish.dart';
+import 'package:povarspravka/core/calculation/models/heat_process.dart';
 import 'package:povarspravka/core/calculation/models/ingredient.dart';
 import 'package:povarspravka/core/calculation/models/product.dart';
 import 'package:povarspravka/core/calculation/yield_explanation.dart';
@@ -63,6 +64,10 @@ void main() {
   test('Automatic yield follows edits, add, remove, undo', () async {
     final n = DishNotifier();
     addTearDown(n.dispose);
+    // Автоматический выход (сумма нетто) — поведение документа legacy
+    // (задача 2026-11-03): новое блюдо создаётся в режиме cold, где вес
+    // готового блюда не угадывается — см. тест «New dish (cold)…» ниже.
+    n.setHeatProcess(HeatProcess.legacy);
     n.addIngredient(beet, 100);
     final ing = n.state.ingredients.single;
     expect(n.state.effectiveYieldGrams, 100);
@@ -81,12 +86,48 @@ void main() {
   test('Custom yield persists until explicitly reset', () async {
     final n = DishNotifier();
     addTearDown(n.dispose);
+    // legacy: после сброса — снова сумма нетто (прежнее поведение).
+    n.setHeatProcess(HeatProcess.legacy);
     n.addIngredient(beet, 100);
     n.setCustomYield(200);
     n.updateIngredient(n.state.ingredients.single.id, 150);
     expect(n.state.effectiveYieldGrams, 200);
     n.setCustomYield(null);
     expect(n.state.effectiveYieldGrams, 150);
+    await n.flushPendingSaves();
+  });
+  test('New dish (cold): weight is never guessed through edits', () async {
+    final n = DishNotifier();
+    addTearDown(n.dispose);
+    expect(n.state.process, HeatProcess.cold);
+    n.addIngredient(beet, 100);
+    final ing = n.state.ingredients.single;
+    expect(n.state.effectiveYieldGrams, 0);
+    n.updateIngredient(ing.id, 200);
+    n.addIngredient(beet, 50);
+    n.removeIngredient(ing.id);
+    n.restoreIngredient(ing, 0);
+    expect(n.state.ingredients.length, 2);
+    expect(n.state.totalRawNetGrams, 150);
+    expect(n.state.effectiveYieldGrams, 0,
+        reason: 'вес готового блюда вводит повар; сумма нетто его не заменяет');
+    final r = CalculationEngine.calculate(n.state);
+    expect(r.hasYield, isFalse);
+    // cold: потерь нет — итог на всё блюдо равен сырью.
+    expect(r.cookedProtein, r.rawTotalProtein);
+    expect(r.cookedFat, r.rawTotalFat);
+    expect(r.cookedCarbs, r.rawTotalCarbs);
+    await n.flushPendingSaves();
+  });
+  test('New dish: entered weight persists until reset, then none', () async {
+    final n = DishNotifier();
+    addTearDown(n.dispose);
+    n.addIngredient(beet, 100);
+    n.setCustomYield(200);
+    n.updateIngredient(n.state.ingredients.single.id, 150);
+    expect(n.state.effectiveYieldGrams, 200);
+    n.setCustomYield(null);
+    expect(n.state.effectiveYieldGrams, 0);
     await n.flushPendingSaves();
   });
   test('Invalid custom input never silently resets a valid yield', () async {
@@ -130,14 +171,22 @@ void main() {
     expect(() => CalculationEngine.calculate(fixture(200, yieldGrams: 0.1)),
         throwsArgumentError);
   });
-  test('Zero retention and no heating remain independent of yield', () {
-    for (final retention in [0.0, 1.0]) {
+  test('Minimum retention and no heating remain independent of yield', () {
+    // SPEC (retention): 0 % is invalid — a dish that keeps nothing is an input
+    // error, not a coefficient. The valid lower bound is the 1 % floor.
+    expect(
+        () => CalculationEngine.calculate(fixture(100).copyWith(
+            retentionProtein: 0,
+            retentionFat: 0,
+            retentionCarbs: 0)),
+        throwsArgumentError);
+    for (final retention in [0.01, 1.0]) {
       final r = CalculationEngine.calculate(fixture(100).copyWith(
           retentionProtein: retention,
           retentionFat: retention,
           retentionCarbs: retention));
-      expect(r.cookedProtein, 1.5 * retention);
-      expect(r.per100gProtein, r.cookedProtein);
+      expect(r.cookedProtein, closeTo(1.5 * retention, 0.01));
+      expect(r.per100gProtein, closeTo(r.cookedProtein, 1e-9));
     }
   });
 }

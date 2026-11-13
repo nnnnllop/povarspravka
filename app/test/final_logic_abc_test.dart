@@ -12,6 +12,7 @@ import 'package:povarspravka/core/calculation/models/blank_mode.dart';
 import 'package:povarspravka/core/calculation/models/dish.dart';
 import 'package:povarspravka/core/calculation/models/ingredient.dart';
 import 'package:povarspravka/core/calculation/models/product.dart';
+import 'support/test_artifacts.dart';
 
 Product p({
   String name = 'x',
@@ -289,5 +290,9 @@ void main() {
     expect(portion.kcal, 406.8);
   });
 
-  dump(r'C:\projects\povarspravka\audit\signoff\a_results.json', out);
+  tearDownAll(() {
+    final dir = artifactDirOnce('signoff_a');
+    dump('${dir.path}/a_results.json', out);
+    if (dir.existsSync()) dir.deleteSync(recursive: true);
+  });
 }

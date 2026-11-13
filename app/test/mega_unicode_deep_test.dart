@@ -2,12 +2,12 @@ import 'dart:math';
 import 'package:xml/xml.dart';
 import 'package:povarspravka/core/export/openxml_text.dart';
 import 'dart:convert';
-import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:povarspravka/core/export/docx_blank_generator.dart';
 import 'package:povarspravka/core/export/xlsx_blank_generator.dart';
 import 'culinary_logic_test.dart' show fixture;
+import 'support/test_artifacts.dart';
 
 bool xmlScalar(int c) =>
     c == 9 ||
@@ -99,9 +99,9 @@ void main() {
       }
       expect(all.join(), contains('🍲🥩'));
       expect(all.join(), contains('&amp;&lt;&gt;'));
-      final out = Directory('../audit_artifacts/mega/deep_unicode')
-        ..createSync(recursive: true);
-      File('${out.path}/controls.$format').writeAsBytesSync(bytes);
+      // во временный каталог: `../audit_artifacts/` дерево не засоряем (D14)
+      artifactFile('deep_unicode', 'controls.$format')
+          .writeAsBytesSync(bytes);
     });
   }
   test('DEEP XLSX literal OOXML escape sequences stay literal', () {
@@ -118,9 +118,8 @@ void main() {
     final archive = ZipDecoder().decodeBytes(bytes);
     final xml = utf8.decode(
         archive.findFile('xl/worksheets/sheet1.xml')!.content as List<int>);
-    final out = Directory('../audit_artifacts/mega/deep_unicode')
-      ..createSync(recursive: true);
-    File('${out.path}/literal.xlsx').writeAsBytesSync(bytes);
+    // во временный каталог (аудит D14)
+    artifactFile('deep_unicode', 'literal.xlsx').writeAsBytesSync(bytes);
     expect(xml, contains('_x005F_x0041_'));
     expect(xml, contains('_x005F_x000A_'));
     expect(xml, contains('_x005F_x005F_'));

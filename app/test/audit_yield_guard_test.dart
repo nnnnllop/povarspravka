@@ -28,11 +28,12 @@ class FixtureRepo extends ProductRepository {
   Future<List<Product>> searchProducts(
           {String query = '',
           int? groupId,
+          bool? isDish,
           String? source,
           int limit = 60}) async =>
       const [beef];
   @override
-  Future<List<FoodGroup>> getFoodGroups() async => const [];
+  Future<List<FoodGroup>> getFoodGroups({bool? isDish}) async => const [];
   @override
   Future<List<ProductNutrient>> getNutrientsForProduct(int productId) async =>
       const [];
@@ -41,12 +42,19 @@ class FixtureRepo extends ProductRepository {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('engine rejects yield below cooked macro mass', () {
+  test('engine CALCULATES a yield below cooked macro mass (LOGIC-01)', () {
+    // SPEC (LOGIC-01): cooked macronutrients are a COMPONENT of the dish mass,
+    // not an upper bound on it. Butter-heavy dishes legitimately hold more fat
+    // than their ready yield (fat absorbs into the garnish or leaves with the
+    // foam), so this must calculate, not throw.
     final notifier = DishNotifier();
+    addTearDown(notifier.dispose);
     notifier.addIngredient(beef, 600);
     notifier.setCustomYield(10);
-    expect(() => CalculationEngine.calculate(notifier.state),
-        throwsA(isA<ArgumentError>()));
+    expect(() => CalculationEngine.calculate(notifier.state), returnsNormally);
+    final r = CalculationEngine.calculate(notifier.state);
+    expect(r.yieldGrams, 10);
+    expect(r.per100gKcal.isFinite, isTrue);
   });
 
   testWidgets('editor keeps a valid yield and explains the limit',

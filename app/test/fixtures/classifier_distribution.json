@@ -1,0 +1,167 @@
+{
+  "total": 8261,
+  "totals": {
+    "dairy": 558,
+    "egg": 87,
+    "meat": 1620,
+    "poultry": 380,
+    "fish": 801,
+    "fatOil": 128,
+    "grainPasta": 508,
+    "flourBread": 866,
+    "legumes": 205,
+    "vegetable": 888,
+    "rootTuber": 343,
+    "fruitBerry": 444,
+    "sugarHoney": 259,
+    "other": 1174
+  },
+  "by_group_id": {
+    "1": {
+      "dairy": 158
+    },
+    "2": {
+      "egg": 13
+    },
+    "3": {
+      "meat": 145,
+      "poultry": 37
+    },
+    "4": {
+      "fish": 151
+    },
+    "5": {
+      "fatOil": 44
+    },
+    "6": {
+      "grainPasta": 58,
+      "flourBread": 66
+    },
+    "7": {
+      "legumes": 24,
+      "vegetable": 2
+    },
+    "8": {
+      "vegetable": 99,
+      "rootTuber": 58
+    },
+    "9": {
+      "fruitBerry": 61,
+      "sugarHoney": 13
+    },
+    "10": {
+      "sugarHoney": 53,
+      "other": 6,
+      "flourBread": 16,
+      "legumes": 3
+    },
+    "11": {
+      "other": 80
+    },
+    "12": {
+      "other": 33,
+      "grainPasta": 1
+    },
+    "101": {
+      "flourBread": 186
+    },
+    "102": {
+      "grainPasta": 195,
+      "flourBread": 36
+    },
+    "103": {
+      "flourBread": 461,
+      "sugarHoney": 5
+    },
+    "104": {
+      "egg": 28,
+      "grainPasta": 76
+    },
+    "105": {
+      "fruitBerry": 275
+    },
+    "106": {
+      "vegetable": 475,
+      "rootTuber": 77,
+      "legumes": 8
+    },
+    "107": {
+      "legumes": 136,
+      "grainPasta": 2,
+      "vegetable": 4
+    },
+    "108": {
+      "rootTuber": 84,
+      "flourBread": 2,
+      "vegetable": 70,
+      "other": 1
+    },
+    "109": {
+      "dairy": 279
+    },
+    "110": {
+      "other": 114
+    },
+    "111": {
+      "other": 119
+    },
+    "112": {
+      "fatOil": 65
+    },
+    "113": {
+      "other": 97
+    },
+    "114": {
+      "sugarHoney": 186,
+      "dairy": 67
+    },
+    "115": {
+      "fish": 520
+    },
+    "116": {
+      "meat": 680,
+      "fatOil": 5
+    },
+    "117": {
+      "meat": 182,
+      "poultry": 280
+    },
+    "118": {
+      "poultry": 27,
+      "meat": 347,
+      "fatOil": 1
+    },
+    "119": {
+      "other": 493,
+      "flourBread": 67,
+      "grainPasta": 166,
+      "vegetable": 232,
+      "rootTuber": 118,
+      "legumes": 32,
+      "poultry": 2,
+      "dairy": 9,
+      "meat": 20,
+      "fish": 7,
+      "fruitBerry": 8,
+      "fatOil": 8,
+      "egg": 2,
+      "sugarHoney": 1
+    },
+    "120": {
+      "meat": 246,
+      "other": 231,
+      "flourBread": 32,
+      "poultry": 34,
+      "fish": 123,
+      "rootTuber": 6,
+      "egg": 44,
+      "dairy": 45,
+      "fatOil": 5,
+      "fruitBerry": 100,
+      "grainPasta": 10,
+      "vegetable": 6,
+      "legumes": 2,
+      "sugarHoney": 1
+    }
+  }
+}

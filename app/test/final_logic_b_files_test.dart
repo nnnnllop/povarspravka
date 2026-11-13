@@ -1,3 +1,4 @@
+// [DIAGNOSTIC PROBE — NOT ACCEPTANCE COVERAGE]
 // Final logic audit - Block B (files): render 8 forms to PDF, DOCX and XLSX,
 // save artefacts to disk and compare 11 control figures against CalculationEngine.
 import 'dart:convert';
@@ -12,8 +13,7 @@ import 'package:povarspravka/core/calculation/models/product.dart';
 import 'package:povarspravka/core/export/docx_blank_generator.dart';
 import 'package:povarspravka/core/export/pdf_blank_generator.dart';
 import 'package:povarspravka/core/export/xlsx_blank_generator.dart';
-
-const _out = r'C:\projects\povarspravka\audit\signoff\exports';
+import 'support/test_artifacts.dart';
 
 Product prod(String name, double p, double f, double c, {double waste = 0}) => Product(
       id: name.hashCode,
@@ -49,7 +49,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('export 8 dish forms to PDF, DOCX and XLSX', () async {
-    Directory(_out).createSync(recursive: true);
+    final _out = artifactDir('signoff_exports').path;
 
     // 1. Single ingredient
     final single = Dish(

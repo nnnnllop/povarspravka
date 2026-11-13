@@ -9,6 +9,7 @@ import 'package:povarspravka/core/calculation/calculation_engine.dart';
 import 'package:povarspravka/core/calculation/calculation_math.dart';
 import 'package:povarspravka/core/calculation/models/blank_mode.dart';
 import 'package:povarspravka/core/calculation/models/dish.dart';
+import 'package:povarspravka/core/calculation/models/heat_process.dart';
 import 'package:povarspravka/core/calculation/models/ingredient.dart';
 import 'package:povarspravka/core/calculation/models/product.dart';
 import 'package:povarspravka/core/export/docx_blank_generator.dart';
@@ -21,6 +22,7 @@ import 'package:povarspravka/presentation/screens/recipe_editor_screen.dart';
 import 'package:povarspravka/presentation/widgets/custom_numpad.dart';
 import 'package:povarspravka/presentation/widgets/macro_summary_bar.dart';
 import 'culinary_logic_test.dart' show beet, fixture;
+import 'support/test_artifacts.dart';
 
 String part(List<int> bytes, String name) => utf8.decode(
     ZipDecoder().decodeBytes(bytes).findFile(name)!.content as List<int>);
@@ -32,6 +34,7 @@ class FakeProducts extends ProductRepository {
           {required String query,
           int? groupId,
           String? source,
+          bool? isDish,
           int limit = 50}) =>
       requests.putIfAbsent(query, () => Completer<List<Product>>()).future;
 }
@@ -48,8 +51,8 @@ class FailingStorage extends DishStorageRepository {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  test('Gross/net boundaries and inverse: no division by zero at 100%', () {
-    for (final waste in [0.0, 50.0, 100.0]) {
+  test('Gross/net boundaries and inverse: waste 100% is rejected', () {
+    for (final waste in [0.0, 50.0]) {
       final ing = Ingredient(
           id: 'x',
           product: beet.copyWith(wastePct: waste),
@@ -60,10 +63,19 @@ void main() {
       expect(
           ing.proteinInDish, CalculationMath.round2(1.5 * (1 - waste / 100)));
     }
+    // SPEC: waste >= 100 % is not a number we accept — 100 % waste means no
+    // product left, so validation rejects it instead of dividing by zero.
+    expect(
+        () => Ingredient(
+            id: 'x',
+            product: beet.copyWith(wastePct: 100.0),
+            weightGrams: 100,
+            isGross: true),
+        returnsNormally); // the model itself stays a plain data holder
+    expect(() => Ingredient.netFromGross(100, 100), throwsArgumentError);
+    expect(() => Ingredient.grossFromNet(50, 100), throwsArgumentError);
     expect(Ingredient.grossFromNet(50, 50), 100);
     expect(Ingredient.grossFromNet(50, 0), 50);
-    expect(Ingredient.grossFromNet(50, 100), isNull);
-    expect(Ingredient.grossFromNet(0, 100), 0);
   });
   for (final value in [double.nan, double.infinity, -1.0, 101.0]) {
     test('Invalid product nutrients fail explicitly: $value', () {
@@ -124,8 +136,13 @@ void main() {
       expect(n.state.retentionProtein, .94);
       expect(n.state.retentionFat, .88);
     }
+    // SPEC (B1.2): retention 0 is physically meaningless and is rejected,
+    // leaving the previous valid settings untouched.
     n.setRetention(protein: 0, fat: 1, carbs: 1);
-    expect(CalculationEngine.calculate(n.state).cookedProtein, 0);
+    expect(n.state.retentionProtein, .94,
+        reason: 'retention 0 must not be accepted');
+    n.setRetention(protein: 0.01, fat: 1, carbs: 1);
+    expect(n.state.retentionProtein, .01);
     await n.flushPendingSaves();
   });
   test('Custom yield boundaries 0, micro, 999999 and junk', () async {
@@ -275,8 +292,11 @@ void main() {
       raw['retentionProtein'] = -1;
       await File('${dir.path}/povarspravka_user_dishes.json')
           .writeAsString(jsonEncode({'activeDraft': raw, 'savedDishes': []}));
+      // FUZZ-13: черновик хранится отдельно (`draft.json`), поэтому порча
+      // библиотечного документа не откатывает черновик к предыдущему
+      // поколению — восстанавливается самое свежее состояние (200 г).
       expect(
-          (await s.loadAll()).activeDraft!.ingredients.single.weightGrams, 100);
+          (await s.loadAll()).activeDraft!.ingredients.single.weightGrams, 200);
     } finally {
       await dir.delete(recursive: true);
     }
@@ -341,8 +361,8 @@ void main() {
       expect(sheet, contains('94,56'));
       expect(styles, contains(r'[$-419]0.00'));
       expect(styles, contains(r'[$-419]0.0'));
-      final out = Directory('../audit_artifacts/system_logic');
-      await out.create(recursive: true);
+      // артефакты — во временный каталог (аудит D14)
+      final out = artifactDir('system_logic_${mode.name}');
       await File('${out.path}/${mode.name}.xlsx').writeAsBytes(bytes);
       await File('${out.path}/${mode.name}.docx')
           .writeAsBytes(DocxBlankGenerator.generate(d));
@@ -444,9 +464,30 @@ void main() {
     expect(tester.takeException(), isNull);
   });
   testWidgets(
-      'Retention settings preserve decimals and accept zero, reject junk',
+      'New dish: parameters dialog shows the loss-table hint, no retention triple',
       (tester) async {
     final n = DishNotifier();
+    n.addIngredient(beet, 100);
+    await tester.pumpWidget(ProviderScope(
+        overrides: [dishProvider.overrideWith((ref) => n)],
+        child: const MaterialApp(home: RecipeEditorScreen())));
+    await tester.tap(find.byTooltip('Параметры'));
+    await tester.pumpAndSettle();
+    expect(n.state.process, HeatProcess.cold);
+    expect(find.widgetWithText(TextField, 'Белки %'), findsNothing,
+        reason: 'тройка сохранности есть только у старого расчёта');
+    final hint =
+        tester.widget<Text>(find.byKey(const ValueKey('process-hint')));
+    expect(hint.data, contains('по таблице потерь'));
+    expect(tester.takeException(), isNull);
+    await n.flushPendingSaves();
+  });
+  testWidgets(
+      'Retention settings preserve decimals and reject zero and junk',
+      (tester) async {
+    final n = DishNotifier();
+    // Тройка сохранности есть только у старого расчёта (legacy).
+    n.setHeatProcess(HeatProcess.legacy);
     n.addIngredient(beet, 100);
     n.setRetention(protein: .9456);
     await tester.pumpWidget(ProviderScope(
@@ -459,12 +500,17 @@ void main() {
     await tester.enterText(p, 'junk');
     await tester.tap(find.text('Применить'));
     await tester.pumpAndSettle();
-    expect(find.text('Введите каждый процент от 0 до 100.'), findsOneWidget);
+    expect(find.text('Введите каждый процент от 1 до 100.'), findsOneWidget);
     expect(n.state.retentionProtein, .9456);
     await tester.enterText(p, '0');
     await tester.tap(find.text('Применить'));
     await tester.pumpAndSettle();
-    expect(n.state.retentionProtein, 0);
+    expect(n.state.retentionProtein, .9456,
+        reason: 'retention 0 is rejected, the previous value survives');
+    await tester.enterText(p, '1');
+    await tester.tap(find.text('Применить'));
+    await tester.pumpAndSettle();
+    expect(n.state.retentionProtein, .01);
     expect(tester.takeException(), isNull);
     await n.flushPendingSaves();
   });

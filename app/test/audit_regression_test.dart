@@ -9,6 +9,7 @@ import 'package:povarspravka/core/export/pdf_blank_generator.dart';
 import 'package:povarspravka/core/export/xlsx_blank_generator.dart';
 import 'package:povarspravka/data/repositories/dish_storage_repository.dart';
 import 'package:povarspravka/presentation/providers/dish_provider.dart';
+import 'support/test_artifacts.dart';
 
 Dish fixture(int n, {BlankMode mode = BlankMode.photoCross}) => Dish(
       id: 'audit',
@@ -43,9 +44,11 @@ Dish fixture(int n, {BlankMode mode = BlankMode.photoCross}) => Dish(
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  final artifacts = Directory('../audit_artifacts/exports');
-  setUpAll(() async {
-    await artifacts.create(recursive: true);
+  // Артефакты экспорта — во временный каталог, а не в `../audit_artifacts/`
+  // рабочего дерева (аудит D14).
+  final artifacts = artifactDirOnce('exports');
+  tearDownAll(() {
+    if (artifacts.existsSync()) artifacts.deleteSync(recursive: true);
   });
 
   for (final mode in BlankMode.values) {
@@ -80,17 +83,25 @@ void main() {
   });
 
   test('Storage serializes 100 concurrent saves', () async {
+    final drafts = List.generate(100, (i) => fixture(1).copyWith(title: 'snapshot $i'));
     await Future.wait(List.generate(
         100,
         (i) => storage.saveAll(
-              activeDraft: fixture(1).copyWith(title: 'snapshot $i'),
+              activeDraft: drafts[i],
               savedDishes: [fixture(1)],
             )));
+    // Порядок соблюдён: последним записан именно 99-й черновик.
     expect((await storage.loadAll()).activeDraft!.title, 'snapshot 99');
-    final backup =
-        jsonDecode(await File('${getMain().path}.bak').readAsString());
-    expect(backup['activeDraft']['title'], 'snapshot 98');
+    // FUZZ-13: черновик живёт в `draft.json` со СВОЕЙ резервной копией, а не
+    // в документе библиотеки. Библиотека не менялась ни разу, поэтому её
+    // документ и `.bak` не переписывались вовсе — и предпоследним
+    // сохранённым черновиком остаётся 98-й.
+    final draftBackup = jsonDecode(await File(
+            '${getMain().path}.draft.json.bak')
+        .readAsString()) as Map<String, dynamic>;
+    expect((draftBackup['activeDraft'] as Map)['title'], 'snapshot 98');
     expect(await File('${getMain().path}.tmp').exists(), isFalse);
+    expect(await File('${getMain().path}.draft.json.tmp').exists(), isFalse);
   });
 
   for (final damaged in [
@@ -118,7 +129,10 @@ void main() {
     await storage.saveAll(activeDraft: fixture(1), savedDishes: []);
     await storage.saveAll(activeDraft: fixture(5), savedDishes: []);
     await getMain().delete();
-    expect((await storage.loadAll()).activeDraft!.ingredients.length, 1);
+    // FUZZ-13: черновик — отдельный документ, поэтому удаление файла
+    // библиотеки его больше не задевает: восстанавливается ПОСЛЕДНИЙ
+    // черновик (fixture(5) — 5 ингредиентов), а не предыдущее поколение.
+    expect((await storage.loadAll()).activeDraft!.ingredients.length, 5);
   });
 
   test('Storage rejects unrecoverable corruption', () async {

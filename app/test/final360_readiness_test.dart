@@ -20,6 +20,7 @@ import 'package:povarspravka/presentation/screens/recipe_editor_screen.dart';
 import 'package:povarspravka/presentation/screens/search_product_modal.dart';
 import 'package:povarspravka/presentation/screens/blank_preview_screen.dart';
 import 'package:povarspravka/presentation/widgets/custom_numpad.dart';
+import 'support/test_artifacts.dart';
 
 const sample = Product(
     id: 1,
@@ -39,11 +40,12 @@ class FixtureRepo extends ProductRepository {
   Future<List<Product>> searchProducts(
           {String query = '',
           int? groupId,
+          bool? isDish,
           String? source,
           int limit = 60}) async =>
       products;
   @override
-  Future<List<FoodGroup>> getFoodGroups() async =>
+  Future<List<FoodGroup>> getFoodGroups({bool? isDish}) async =>
       [const FoodGroup(id: 1, code: 'qa', name: 'Овощи и картофель')];
   @override
   Future<List<ProductNutrient>> getNutrientsForProduct(int productId) async =>
@@ -161,7 +163,8 @@ void main() {
         clipped.add(obj.text.toPlainText());
       }
     }
-    File('../audit/final360_text_clipping.json').writeAsStringSync(jsonEncode({
+    File('${artifactDir('final360').path}/text_clipping.json')
+        .writeAsStringSync(jsonEncode({
       'screen': 'BlankPreviewScreen',
       'scale': 2,
       'size': '320x640',
@@ -193,7 +196,7 @@ void main() {
         clipped.add(obj.text.toPlainText());
       }
     }
-    File('../audit/final360_long_name_clipping.json')
+    File('${artifactDir('final360').path}/long_name_clipping.json')
         .writeAsStringSync(jsonEncode({
       'screen': 'BlankPreviewScreen',
       'scale': 2,
@@ -295,14 +298,17 @@ void main() {
     }
     expect(rejected.toSet(), {'167611', '167702'});
     final n = DishNotifier();
+    // SPEC (FUZZ-01): `addIngredient` is a UI-facing path — it rejects the
+    // quarantine rows SILENTLY (no exception reaches the widget tree) while
+    // the recipe stays untouched.
     for (final row in rows
         .where((r) => ['167611', '167702'].contains(r['id'].toString()))) {
-      expect(
-          () => n.addIngredient(
-              Product.fromMap(Map<String, dynamic>.from(row)), 100),
-          throwsArgumentError);
+      final p = Product.fromMap(Map<String, dynamic>.from(row));
+      expect(() => n.addIngredient(p, 100), returnsNormally);
+      expect(CalculationValidation.isValidProduct(p), isFalse);
     }
-    expect(n.state.ingredients, isEmpty);
+    expect(n.state.ingredients, isEmpty,
+        reason: 'quarantined products must never enter the recipe');
     n.dispose();
   });
   test('360 generate fresh PDF DOCX XLSX ten ingredients', () async {
@@ -311,8 +317,9 @@ void main() {
       n.addIngredient(sample, 100.25 + i);
     }
     n.setCustomYield(777.77);
-    final out = Directory('../audit/final360_exports')
-      ..createSync(recursive: true);
+    // Экспортные файлы — во временный каталог (аудит D14). `../audit/`
+    // остаётся только на чтение: `final360_catalog.json` — входной фикстур.
+    final out = artifactDir('final360_exports');
     File('${out.path}/photoCross.pdf')
         .writeAsBytesSync(await PdfBlankGenerator.generate(n.state));
     File('${out.path}/photoCross.docx')

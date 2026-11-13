@@ -12,9 +12,9 @@ import 'package:povarspravka/core/calculation/models/product.dart';
 import 'package:povarspravka/core/export/docx_blank_generator.dart';
 import 'package:povarspravka/core/export/pdf_blank_generator.dart';
 import 'package:povarspravka/core/export/xlsx_blank_generator.dart';
+import 'support/test_artifacts.dart';
 
 const _root = r'C:\temp_audit';
-const _out = r'C:\temp_audit\exports';
 
 Dish buildDish(String key, Map<String, dynamic> data, {BlankMode? mode}) {
   final products = data['products'] as Map<String, dynamic>;
@@ -101,7 +101,8 @@ void main() {
     if (!File('$_root\\recipes.json').existsSync()) return;
     final data = jsonDecode(File('$_root\\recipes.json').readAsStringSync())
         as Map<String, dynamic>;
-    Directory(_out).createSync(recursive: true);
+    final outDir = artifactDir('logic_probe');
+    final _out = outDir.path;
     final report = <String, dynamic>{};
 
     for (final key in ['A1', 'A2', 'A3', 'A4', 'A5']) {
@@ -200,7 +201,7 @@ void main() {
         .writeAsBytesSync(await PdfBlankGenerator.generate(custom));
     report['retention_custom'] = dishNumbers(custom);
 
-    File('$_root\\probe.json').writeAsStringSync(
+    File('$_out\\probe.json').writeAsStringSync(
         const JsonEncoder.withIndent(' ').convert(report));
   });
 }

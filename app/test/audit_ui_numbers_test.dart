@@ -1,3 +1,4 @@
+// [DIAGNOSTIC PROBE — NOT ACCEPTANCE COVERAGE]
 // Dumps every visible number in the editor, inspector and preview for A4.
 import 'dart:convert';
 import 'dart:io';
@@ -23,11 +24,12 @@ class FixtureRepo extends ProductRepository {
   Future<List<Product>> searchProducts(
           {String query = '',
           int? groupId,
+          bool? isDish,
           String? source,
           int limit = 60}) async =>
       const [];
   @override
-  Future<List<FoodGroup>> getFoodGroups() async => const [];
+  Future<List<FoodGroup>> getFoodGroups({bool? isDish}) async => const [];
   @override
   Future<List<ProductNutrient>> getNutrientsForProduct(int productId) async =>
       const [];

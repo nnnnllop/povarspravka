@@ -24,11 +24,12 @@ class CatalogRepo extends ProductRepository {
   Future<List<Product>> searchProducts(
           {required String query,
           int? groupId,
+          bool? isDish,
           String? source,
           int limit = 50}) async =>
       products;
   @override
-  Future<List<FoodGroup>> getFoodGroups() async => [];
+  Future<List<FoodGroup>> getFoodGroups({bool? isDish}) async => [];
   @override
   Future<List<ProductNutrient>> getNutrientsForProduct(int productId) async =>
       [];
@@ -36,11 +37,13 @@ class CatalogRepo extends ProductRepository {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  final auditRoot = Directory('../audit_artifacts/mega')
-    ..createSync(recursive: true);
-  final out = auditRoot.createTempSync('exports_');
-  File('${auditRoot.path}/latest_exports.txt')
-      .writeAsStringSync(out.absolute.path);
+  // Экспортные артефакты — во временный каталог ОС, а не в
+  // `../audit_artifacts/` рабочего дерева: раннер удаляет его после прогона
+  // файла (аудит D14). Раньше путь зависел от текущего каталога запуска.
+  final out = Directory.systemTemp.createTempSync('povar_mega_exports_');
+  tearDownAll(() {
+    if (out.existsSync()) out.deleteSync(recursive: true);
+  });
   for (final mode in BlankMode.values) {
     for (final n in [0, 1, 18, 19, 50, 100]) {
       test('MEGA export ${mode.name} $n unicode 500 codepoints', () async {

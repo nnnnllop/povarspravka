@@ -1,0 +1,2824 @@
+{
+ "description": "Эталон нутриентов после тепловой обработки (задача 2026-11-03). Ожидания посчитаны независимым скриптом без Dart-кода.",
+ "generator": "app/test/fixtures/nutrients_benchmark_reference.py",
+ "lossTable": "docs/COEFFICIENT_SOURCES.md (LOSS_TABLE_JSON)",
+ "dishes": [
+  {
+   "name": "Картофель отварной",
+   "process": "boil",
+   "yieldGrams": 700,
+   "ingredients": [
+    {
+     "productId": 742,
+     "code": "8.1.4.1",
+     "name": "Картофель",
+     "grams": 1000,
+     "isGross": true,
+     "group": "rootTuber",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 2.0,
+      "fat": 0.4,
+      "carbs": 16.3,
+      "wastePct": 28.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "boil",
+      "net": 720,
+      "rawProtein": 14.4,
+      "rawFat": 2.88,
+      "rawCarbs": 117.36,
+      "lossProtein": 2,
+      "lossFat": 2,
+      "lossCarbs": 5,
+      "cookedProtein": 14.11,
+      "cookedFat": 2.82,
+      "cookedCarbs": 111.49
+     }
+    },
+    {
+     "productId": 1089,
+     "code": "12.1.2",
+     "name": "Соль поваренная пищевая",
+     "grams": 10,
+     "isGross": false,
+     "group": "other",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 0.0,
+      "fat": 0.0,
+      "carbs": 0.0,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "boil",
+      "net": 10,
+      "rawProtein": 0,
+      "rawFat": 0,
+      "rawCarbs": 0,
+      "lossProtein": 6,
+      "lossFat": 12,
+      "lossCarbs": 9,
+      "cookedProtein": 0,
+      "cookedFat": 0,
+      "cookedCarbs": 0
+     }
+    }
+   ],
+   "expected": {
+    "rawProtein": 14.4,
+    "rawFat": 2.88,
+    "rawCarbs": 117.36,
+    "cookedProtein": 14.11,
+    "cookedFat": 2.82,
+    "cookedCarbs": 111.49,
+    "cookedKcal": 527.8,
+    "yieldGrams": 700,
+    "per100gProtein": 2.02,
+    "per100gFat": 0.4,
+    "per100gCarbs": 15.93,
+    "per100gKcal": 75.4
+   }
+  },
+  {
+   "name": "Пюре картофельное",
+   "process": "boil",
+   "yieldGrams": 1000,
+   "ingredients": [
+    {
+     "productId": 742,
+     "code": "8.1.4.1",
+     "name": "Картофель",
+     "grams": 1100,
+     "isGross": true,
+     "group": "rootTuber",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 2.0,
+      "fat": 0.4,
+      "carbs": 16.3,
+      "wastePct": 28.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "boil",
+      "net": 792,
+      "rawProtein": 15.84,
+      "rawFat": 3.17,
+      "rawCarbs": 129.1,
+      "lossProtein": 2,
+      "lossFat": 2,
+      "lossCarbs": 5,
+      "cookedProtein": 15.52,
+      "cookedFat": 3.11,
+      "cookedCarbs": 122.65
+     }
+    },
+    {
+     "productId": 53,
+     "code": "1.3.1.1",
+     "name": "Молоко пастеризованное 3,2% жирности",
+     "grams": 150,
+     "isGross": false,
+     "group": "dairy",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 2.9,
+      "fat": 3.2,
+      "carbs": 4.7,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "boil",
+      "net": 150,
+      "rawProtein": 4.35,
+      "rawFat": 4.8,
+      "rawCarbs": 7.05,
+      "lossProtein": 5,
+      "lossFat": 5,
+      "lossCarbs": 5,
+      "cookedProtein": 4.13,
+      "cookedFat": 4.56,
+      "cookedCarbs": 6.7
+     }
+    },
+    {
+     "productId": 510,
+     "code": "5.1.6",
+     "name": "Масло сливочное",
+     "grams": 40,
+     "isGross": false,
+     "group": "fatOil",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 0.8,
+      "fat": 71.5,
+      "carbs": 1.3,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "boil",
+      "net": 40,
+      "rawProtein": 0.32,
+      "rawFat": 28.6,
+      "rawCarbs": 0.52,
+      "lossProtein": 6,
+      "lossFat": 12,
+      "lossCarbs": 9,
+      "cookedProtein": 0.3,
+      "cookedFat": 25.17,
+      "cookedCarbs": 0.47
+     }
+    }
+   ],
+   "expected": {
+    "rawProtein": 20.51,
+    "rawFat": 36.57,
+    "rawCarbs": 136.67,
+    "cookedProtein": 19.95,
+    "cookedFat": 32.84,
+    "cookedCarbs": 129.82,
+    "cookedKcal": 894.6,
+    "yieldGrams": 1000,
+    "per100gProtein": 2,
+    "per100gFat": 3.28,
+    "per100gCarbs": 12.98,
+    "per100gKcal": 89.5
+   }
+  },
+  {
+   "name": "Каша гречневая рассыпчатая",
+   "process": "boil",
+   "yieldGrams": 1000,
+   "ingredients": [
+    {
+     "productId": 654,
+     "code": "6.6.4",
+     "name": "Крупа гречневая ядрица",
+     "grams": 400,
+     "isGross": false,
+     "group": "grainPasta",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 12.6,
+      "fat": 3.3,
+      "carbs": 57.1,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "boil",
+      "net": 400,
+      "rawProtein": 50.4,
+      "rawFat": 13.2,
+      "rawCarbs": 228.4,
+      "lossProtein": 2,
+      "lossFat": 2,
+      "lossCarbs": 5,
+      "cookedProtein": 49.39,
+      "cookedFat": 12.94,
+      "cookedCarbs": 216.98
+     }
+    },
+    {
+     "productId": 510,
+     "code": "5.1.6",
+     "name": "Масло сливочное",
+     "grams": 20,
+     "isGross": false,
+     "group": "fatOil",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 0.8,
+      "fat": 71.5,
+      "carbs": 1.3,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "boil",
+      "net": 20,
+      "rawProtein": 0.16,
+      "rawFat": 14.3,
+      "rawCarbs": 0.26,
+      "lossProtein": 6,
+      "lossFat": 12,
+      "lossCarbs": 9,
+      "cookedProtein": 0.15,
+      "cookedFat": 12.58,
+      "cookedCarbs": 0.24
+     }
+    },
+    {
+     "productId": 1089,
+     "code": "12.1.2",
+     "name": "Соль поваренная пищевая",
+     "grams": 5,
+     "isGross": false,
+     "group": "other",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 0.0,
+      "fat": 0.0,
+      "carbs": 0.0,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "boil",
+      "net": 5,
+      "rawProtein": 0,
+      "rawFat": 0,
+      "rawCarbs": 0,
+      "lossProtein": 6,
+      "lossFat": 12,
+      "lossCarbs": 9,
+      "cookedProtein": 0,
+      "cookedFat": 0,
+      "cookedCarbs": 0
+     }
+    }
+   ],
+   "expected": {
+    "rawProtein": 50.56,
+    "rawFat": 27.5,
+    "rawCarbs": 228.66,
+    "cookedProtein": 49.54,
+    "cookedFat": 25.52,
+    "cookedCarbs": 217.22,
+    "cookedKcal": 1296.7,
+    "yieldGrams": 1000,
+    "per100gProtein": 4.95,
+    "per100gFat": 2.55,
+    "per100gCarbs": 21.72,
+    "per100gKcal": 129.7
+   }
+  },
+  {
+   "name": "Рис отварной",
+   "process": "boil",
+   "yieldGrams": 2684.7,
+   "ingredients": [
+    {
+     "productId": 10322,
+     "code": "C359000",
+     "name": "Рис пропаренный, шлифованный, сырой",
+     "grams": 1000,
+     "isGross": false,
+     "group": "grainPasta",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 8.125,
+      "fat": 1.03,
+      "carbs": 72.1,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "boil",
+      "net": 1000,
+      "rawProtein": 81.3,
+      "rawFat": 10.3,
+      "rawCarbs": 721,
+      "lossProtein": 2,
+      "lossFat": 2,
+      "lossCarbs": 5,
+      "cookedProtein": 79.67,
+      "cookedFat": 10.09,
+      "cookedCarbs": 684.95
+     }
+    }
+   ],
+   "expected": {
+    "rawProtein": 81.3,
+    "rawFat": 10.3,
+    "rawCarbs": 721,
+    "cookedProtein": 79.67,
+    "cookedFat": 10.09,
+    "cookedCarbs": 684.95,
+    "cookedKcal": 3149.3,
+    "yieldGrams": 2684.7,
+    "per100gProtein": 2.97,
+    "per100gFat": 0.38,
+    "per100gCarbs": 25.51,
+    "per100gKcal": 117.3
+   }
+  },
+  {
+   "name": "Говядина тушёная",
+   "process": "stew",
+   "yieldGrams": 778.5,
+   "ingredients": [
+    {
+     "productId": 13684,
+     "code": "U171100",
+     "name": "Говядина для жаркого (лопатка), сырая",
+     "grams": 1000,
+     "isGross": false,
+     "group": "meat",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 20.2,
+      "fat": 5.3,
+      "carbs": 0.0,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "stew",
+      "net": 1000,
+      "rawProtein": 202,
+      "rawFat": 53,
+      "rawCarbs": 0,
+      "lossProtein": 5,
+      "lossFat": 5,
+      "lossCarbs": 0,
+      "cookedProtein": 191.9,
+      "cookedFat": 50.35,
+      "cookedCarbs": 0
+     }
+    }
+   ],
+   "expected": {
+    "rawProtein": 202,
+    "rawFat": 53,
+    "rawCarbs": 0,
+    "cookedProtein": 191.9,
+    "cookedFat": 50.35,
+    "cookedCarbs": 0,
+    "cookedKcal": 1220.8,
+    "yieldGrams": 778.5,
+    "per100gProtein": 24.65,
+    "per100gFat": 6.47,
+    "per100gCarbs": 0,
+    "per100gKcal": 156.8
+   }
+  },
+  {
+   "name": "Макароны отварные",
+   "process": "boil",
+   "yieldGrams": 1500,
+   "ingredients": [
+    {
+     "productId": 552,
+     "code": "6.1.2.1.1",
+     "name": "Макароны из муки в/с",
+     "grams": 500,
+     "isGross": false,
+     "group": "grainPasta",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 11.0,
+      "fat": 1.3,
+      "carbs": 70.5,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "boil",
+      "net": 500,
+      "rawProtein": 55,
+      "rawFat": 6.5,
+      "rawCarbs": 352.5,
+      "lossProtein": 2,
+      "lossFat": 2,
+      "lossCarbs": 5,
+      "cookedProtein": 53.9,
+      "cookedFat": 6.37,
+      "cookedCarbs": 334.88
+     }
+    }
+   ],
+   "expected": {
+    "rawProtein": 55,
+    "rawFat": 6.5,
+    "rawCarbs": 352.5,
+    "cookedProtein": 53.9,
+    "cookedFat": 6.37,
+    "cookedCarbs": 334.88,
+    "cookedKcal": 1612.5,
+    "yieldGrams": 1500,
+    "per100gProtein": 3.59,
+    "per100gFat": 0.42,
+    "per100gCarbs": 22.33,
+    "per100gKcal": 107.5
+   }
+  },
+  {
+   "name": "Борщ",
+   "process": "boil",
+   "yieldGrams": 2000,
+   "ingredients": [
+    {
+     "productId": 779,
+     "code": "8.1.5.12",
+     "name": "Свекла",
+     "grams": 200,
+     "isGross": true,
+     "group": "rootTuber",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 1.5,
+      "fat": 0.1,
+      "carbs": 8.8,
+      "wastePct": 20.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "boil",
+      "net": 160,
+      "rawProtein": 2.4,
+      "rawFat": 0.16,
+      "rawCarbs": 14.08,
+      "lossProtein": 2,
+      "lossFat": 2,
+      "lossCarbs": 5,
+      "cookedProtein": 2.35,
+      "cookedFat": 0.16,
+      "cookedCarbs": 13.38
+     }
+    },
+    {
+     "productId": 712,
+     "code": "8.1.2.1",
+     "name": "Капуста белокочанная",
+     "grams": 250,
+     "isGross": true,
+     "group": "vegetable",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 1.8,
+      "fat": 0.1,
+      "carbs": 4.7,
+      "wastePct": 20.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "boil",
+      "net": 200,
+      "rawProtein": 3.6,
+      "rawFat": 0.2,
+      "rawCarbs": 9.4,
+      "lossProtein": 2,
+      "lossFat": 2,
+      "lossCarbs": 2,
+      "cookedProtein": 3.53,
+      "cookedFat": 0.2,
+      "cookedCarbs": 9.21
+     }
+    },
+    {
+     "productId": 742,
+     "code": "8.1.4.1",
+     "name": "Картофель",
+     "grams": 200,
+     "isGross": true,
+     "group": "rootTuber",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 2.0,
+      "fat": 0.4,
+      "carbs": 16.3,
+      "wastePct": 28.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "boil",
+      "net": 144,
+      "rawProtein": 2.88,
+      "rawFat": 0.58,
+      "rawCarbs": 23.47,
+      "lossProtein": 2,
+      "lossFat": 2,
+      "lossCarbs": 5,
+      "cookedProtein": 2.82,
+      "cookedFat": 0.57,
+      "cookedCarbs": 22.3
+     }
+    },
+    {
+     "productId": 768,
+     "code": "8.1.5.1",
+     "name": "Морковь",
+     "grams": 100,
+     "isGross": true,
+     "group": "rootTuber",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 1.3,
+      "fat": 0.1,
+      "carbs": 6.9,
+      "wastePct": 20.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "boil",
+      "net": 80,
+      "rawProtein": 1.04,
+      "rawFat": 0.08,
+      "rawCarbs": 5.52,
+      "lossProtein": 2,
+      "lossFat": 2,
+      "lossCarbs": 5,
+      "cookedProtein": 1.02,
+      "cookedFat": 0.08,
+      "cookedCarbs": 5.24
+     }
+    },
+    {
+     "productId": 738,
+     "code": "8.1.3.4",
+     "name": "Лук репчатый",
+     "grams": 100,
+     "isGross": true,
+     "group": "vegetable",
+     "groupOverride": false,
+     "processOverride": "fry",
+     "snapshot": {
+      "protein": 1.4,
+      "fat": 0.2,
+      "carbs": 8.2,
+      "wastePct": 16.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "fry",
+      "net": 84,
+      "rawProtein": 1.18,
+      "rawFat": 0.17,
+      "rawCarbs": 6.89,
+      "lossProtein": 5,
+      "lossFat": 10,
+      "lossCarbs": 20,
+      "cookedProtein": 1.12,
+      "cookedFat": 0.15,
+      "cookedCarbs": 5.51
+     }
+    },
+    {
+     "productId": 533,
+     "code": "5.4.13",
+     "name": "Масло подсолнечное",
+     "grams": 20,
+     "isGross": false,
+     "group": "fatOil",
+     "groupOverride": false,
+     "processOverride": "fry",
+     "snapshot": {
+      "protein": 0.0,
+      "fat": 99.9,
+      "carbs": 0.0,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "fry",
+      "net": 20,
+      "rawProtein": 0,
+      "rawFat": 19.98,
+      "rawCarbs": 0,
+      "lossProtein": 50,
+      "lossFat": 50,
+      "lossCarbs": 50,
+      "cookedProtein": 0,
+      "cookedFat": 9.99,
+      "cookedCarbs": 0
+     }
+    },
+    {
+     "productId": 818,
+     "code": "8.1.6.17",
+     "name": "Томатная паста. Консервы",
+     "grams": 30,
+     "isGross": false,
+     "group": "vegetable",
+     "groupOverride": false,
+     "processOverride": "stew",
+     "snapshot": {
+      "protein": 4.8,
+      "fat": 0.0,
+      "carbs": 19.0,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "stew",
+      "net": 30,
+      "rawProtein": 1.44,
+      "rawFat": 0,
+      "rawCarbs": 5.7,
+      "lossProtein": 2,
+      "lossFat": 10,
+      "lossCarbs": 5,
+      "cookedProtein": 1.41,
+      "cookedFat": 0,
+      "cookedCarbs": 5.42
+     }
+    },
+    {
+     "productId": 98,
+     "code": "1.4.2.2",
+     "name": "Сметана 20,0% жирности",
+     "grams": 100,
+     "isGross": false,
+     "group": "dairy",
+     "groupOverride": false,
+     "processOverride": "cold",
+     "snapshot": {
+      "protein": 2.5,
+      "fat": 20.0,
+      "carbs": 3.4,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "cold",
+      "net": 100,
+      "rawProtein": 2.5,
+      "rawFat": 20,
+      "rawCarbs": 3.4,
+      "lossProtein": 0,
+      "lossFat": 0,
+      "lossCarbs": 0,
+      "cookedProtein": 2.5,
+      "cookedFat": 20,
+      "cookedCarbs": 3.4
+     }
+    }
+   ],
+   "expected": {
+    "rawProtein": 15.04,
+    "rawFat": 41.17,
+    "rawCarbs": 68.46,
+    "cookedProtein": 14.75,
+    "cookedFat": 31.15,
+    "cookedCarbs": 64.46,
+    "cookedKcal": 597.2,
+    "yieldGrams": 2000,
+    "per100gProtein": 0.74,
+    "per100gFat": 1.56,
+    "per100gCarbs": 3.22,
+    "per100gKcal": 29.9
+   }
+  },
+  {
+   "name": "Бульон мясной",
+   "process": "stock",
+   "yieldGrams": 3000,
+   "ingredients": [
+    {
+     "productId": 174,
+     "code": "3.1.3",
+     "name": "Говядина 1 кат.",
+     "grams": 1000,
+     "isGross": false,
+     "group": "meat",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 18.6,
+      "fat": 16.0,
+      "carbs": 0.0,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "stock",
+      "net": 1000,
+      "rawProtein": 186,
+      "rawFat": 160,
+      "rawCarbs": 0,
+      "lossProtein": 90,
+      "lossFat": 75,
+      "lossCarbs": 100,
+      "cookedProtein": 18.6,
+      "cookedFat": 40,
+      "cookedCarbs": 0
+     }
+    },
+    {
+     "productId": 768,
+     "code": "8.1.5.1",
+     "name": "Морковь",
+     "grams": 50,
+     "isGross": true,
+     "group": "rootTuber",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 1.3,
+      "fat": 0.1,
+      "carbs": 6.9,
+      "wastePct": 20.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "stock",
+      "net": 40,
+      "rawProtein": 0.52,
+      "rawFat": 0.04,
+      "rawCarbs": 2.76,
+      "lossProtein": 97,
+      "lossFat": 97,
+      "lossCarbs": 95,
+      "cookedProtein": 0.02,
+      "cookedFat": 0,
+      "cookedCarbs": 0.14
+     }
+    },
+    {
+     "productId": 738,
+     "code": "8.1.3.4",
+     "name": "Лук репчатый",
+     "grams": 50,
+     "isGross": true,
+     "group": "vegetable",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 1.4,
+      "fat": 0.2,
+      "carbs": 8.2,
+      "wastePct": 16.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "stock",
+      "net": 42,
+      "rawProtein": 0.59,
+      "rawFat": 0.08,
+      "rawCarbs": 3.44,
+      "lossProtein": 97,
+      "lossFat": 97,
+      "lossCarbs": 82,
+      "cookedProtein": 0.02,
+      "cookedFat": 0,
+      "cookedCarbs": 0.62
+     }
+    },
+    {
+     "productId": 1089,
+     "code": "12.1.2",
+     "name": "Соль поваренная пищевая",
+     "grams": 10,
+     "isGross": false,
+     "group": "other",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 0.0,
+      "fat": 0.0,
+      "carbs": 0.0,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "stock",
+      "net": 10,
+      "rawProtein": 0,
+      "rawFat": 0,
+      "rawCarbs": 0,
+      "lossProtein": 6,
+      "lossFat": 12,
+      "lossCarbs": 9,
+      "cookedProtein": 0,
+      "cookedFat": 0,
+      "cookedCarbs": 0
+     }
+    }
+   ],
+   "expected": {
+    "rawProtein": 187.11,
+    "rawFat": 160.12,
+    "rawCarbs": 6.2,
+    "cookedProtein": 18.64,
+    "cookedFat": 40,
+    "cookedCarbs": 0.76,
+    "cookedKcal": 437.6,
+    "yieldGrams": 3000,
+    "per100gProtein": 0.62,
+    "per100gFat": 1.33,
+    "per100gCarbs": 0.03,
+    "per100gKcal": 14.6
+   }
+  },
+  {
+   "name": "Куры жареные",
+   "process": "fry",
+   "yieldGrams": 700,
+   "ingredients": [
+    {
+     "productId": 192,
+     "code": "3.1.15.7",
+     "name": "Куры 1 кат.",
+     "grams": 1000,
+     "isGross": false,
+     "group": "poultry",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 18.2,
+      "fat": 18.4,
+      "carbs": 0.0,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "fry",
+      "net": 1000,
+      "rawProtein": 182,
+      "rawFat": 184,
+      "rawCarbs": 0,
+      "lossProtein": 10,
+      "lossFat": 30,
+      "lossCarbs": 0,
+      "cookedProtein": 163.8,
+      "cookedFat": 128.8,
+      "cookedCarbs": 0
+     }
+    },
+    {
+     "productId": 533,
+     "code": "5.4.13",
+     "name": "Масло подсолнечное",
+     "grams": 50,
+     "isGross": false,
+     "group": "fatOil",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 0.0,
+      "fat": 99.9,
+      "carbs": 0.0,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "fry",
+      "net": 50,
+      "rawProtein": 0,
+      "rawFat": 49.95,
+      "rawCarbs": 0,
+      "lossProtein": 50,
+      "lossFat": 50,
+      "lossCarbs": 50,
+      "cookedProtein": 0,
+      "cookedFat": 24.98,
+      "cookedCarbs": 0
+     }
+    }
+   ],
+   "expected": {
+    "rawProtein": 182,
+    "rawFat": 233.95,
+    "rawCarbs": 0,
+    "cookedProtein": 163.8,
+    "cookedFat": 153.78,
+    "cookedCarbs": 0,
+    "cookedKcal": 2039.2,
+    "yieldGrams": 700,
+    "per100gProtein": 23.4,
+    "per100gFat": 21.97,
+    "per100gCarbs": 0,
+    "per100gKcal": 291.3
+   }
+  },
+  {
+   "name": "Треска жареная",
+   "process": "fry",
+   "yieldGrams": 450,
+   "ingredients": [
+    {
+     "productId": 390,
+     "code": "4.1.4.8",
+     "name": "Рыба треска",
+     "grams": 1000,
+     "isGross": true,
+     "group": "fish",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 16.0,
+      "fat": 0.6,
+      "carbs": 0.0,
+      "wastePct": 51.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "fry",
+      "net": 490,
+      "rawProtein": 78.4,
+      "rawFat": 2.94,
+      "rawCarbs": 0,
+      "lossProtein": 10,
+      "lossFat": 20,
+      "lossCarbs": 0,
+      "cookedProtein": 70.56,
+      "cookedFat": 2.35,
+      "cookedCarbs": 0
+     }
+    },
+    {
+     "productId": 609,
+     "code": "6.1.3.9",
+     "name": "Мука обойная пшеничная",
+     "grams": 50,
+     "isGross": false,
+     "group": "flourBread",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 11.5,
+      "fat": 2.2,
+      "carbs": 61.5,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "fry",
+      "net": 50,
+      "rawProtein": 5.75,
+      "rawFat": 1.1,
+      "rawCarbs": 30.75,
+      "lossProtein": 5,
+      "lossFat": 10,
+      "lossCarbs": 10,
+      "cookedProtein": 5.46,
+      "cookedFat": 0.99,
+      "cookedCarbs": 27.68
+     }
+    },
+    {
+     "productId": 533,
+     "code": "5.4.13",
+     "name": "Масло подсолнечное",
+     "grams": 50,
+     "isGross": false,
+     "group": "fatOil",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 0.0,
+      "fat": 99.9,
+      "carbs": 0.0,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "fry",
+      "net": 50,
+      "rawProtein": 0,
+      "rawFat": 49.95,
+      "rawCarbs": 0,
+      "lossProtein": 50,
+      "lossFat": 50,
+      "lossCarbs": 50,
+      "cookedProtein": 0,
+      "cookedFat": 24.98,
+      "cookedCarbs": 0
+     }
+    }
+   ],
+   "expected": {
+    "rawProtein": 84.15,
+    "rawFat": 53.99,
+    "rawCarbs": 30.75,
+    "cookedProtein": 76.02,
+    "cookedFat": 28.32,
+    "cookedCarbs": 27.68,
+    "cookedKcal": 669.7,
+    "yieldGrams": 450,
+    "per100gProtein": 16.89,
+    "per100gFat": 6.29,
+    "per100gCarbs": 6.15,
+    "per100gKcal": 148.8
+   }
+  },
+  {
+   "name": "Минтай на пару",
+   "process": "steam",
+   "yieldGrams": 800,
+   "ingredients": [
+    {
+     "productId": 383,
+     "code": "4.1.4.1",
+     "name": "Рыба минтай",
+     "grams": 1000,
+     "isGross": false,
+     "group": "fish",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 15.9,
+      "fat": 0.9,
+      "carbs": 0.0,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "steam",
+      "net": 1000,
+      "rawProtein": 159,
+      "rawFat": 9,
+      "rawCarbs": 0,
+      "lossProtein": 10,
+      "lossFat": 10,
+      "lossCarbs": 0,
+      "cookedProtein": 143.1,
+      "cookedFat": 8.1,
+      "cookedCarbs": 0
+     }
+    }
+   ],
+   "expected": {
+    "rawProtein": 159,
+    "rawFat": 9,
+    "rawCarbs": 0,
+    "cookedProtein": 143.1,
+    "cookedFat": 8.1,
+    "cookedCarbs": 0,
+    "cookedKcal": 645.3,
+    "yieldGrams": 800,
+    "per100gProtein": 17.89,
+    "per100gFat": 1.01,
+    "per100gCarbs": 0,
+    "per100gKcal": 80.7
+   }
+  },
+  {
+   "name": "Омлет натуральный",
+   "process": "bake",
+   "yieldGrams": 600,
+   "ingredients": [
+    {
+     "productId": 159,
+     "code": "2.1.1",
+     "name": "Яйцо куриное",
+     "grams": 500,
+     "isGross": true,
+     "group": "egg",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 12.7,
+      "fat": 11.5,
+      "carbs": 0.7,
+      "wastePct": 13.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "bake",
+      "net": 435,
+      "rawProtein": 55.25,
+      "rawFat": 50.03,
+      "rawCarbs": 3.05,
+      "lossProtein": 8,
+      "lossFat": 25,
+      "lossCarbs": 0,
+      "cookedProtein": 50.83,
+      "cookedFat": 37.52,
+      "cookedCarbs": 3.05
+     }
+    },
+    {
+     "productId": 53,
+     "code": "1.3.1.1",
+     "name": "Молоко пастеризованное 3,2% жирности",
+     "grams": 200,
+     "isGross": false,
+     "group": "dairy",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 2.9,
+      "fat": 3.2,
+      "carbs": 4.7,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "bake",
+      "net": 200,
+      "rawProtein": 5.8,
+      "rawFat": 6.4,
+      "rawCarbs": 9.4,
+      "lossProtein": 5,
+      "lossFat": 5,
+      "lossCarbs": 5,
+      "cookedProtein": 5.51,
+      "cookedFat": 6.08,
+      "cookedCarbs": 8.93
+     }
+    },
+    {
+     "productId": 510,
+     "code": "5.1.6",
+     "name": "Масло сливочное",
+     "grams": 20,
+     "isGross": false,
+     "group": "fatOil",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 0.8,
+      "fat": 71.5,
+      "carbs": 1.3,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "bake",
+      "net": 20,
+      "rawProtein": 0.16,
+      "rawFat": 14.3,
+      "rawCarbs": 0.26,
+      "lossProtein": 6,
+      "lossFat": 12,
+      "lossCarbs": 9,
+      "cookedProtein": 0.15,
+      "cookedFat": 12.58,
+      "cookedCarbs": 0.24
+     }
+    }
+   ],
+   "expected": {
+    "rawProtein": 61.21,
+    "rawFat": 70.73,
+    "rawCarbs": 12.71,
+    "cookedProtein": 56.49,
+    "cookedFat": 56.18,
+    "cookedCarbs": 12.22,
+    "cookedKcal": 780.5,
+    "yieldGrams": 600,
+    "per100gProtein": 9.42,
+    "per100gFat": 9.36,
+    "per100gCarbs": 2.04,
+    "per100gKcal": 130.1
+   }
+  },
+  {
+   "name": "Запеканка творожная",
+   "process": "bake",
+   "yieldGrams": 1100,
+   "ingredients": [
+    {
+     "productId": 47,
+     "code": "1.2.3.1",
+     "name": "Творог «Столовый» 2,0% жирности",
+     "grams": 1000,
+     "isGross": false,
+     "group": "dairy",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 20.0,
+      "fat": 2.0,
+      "carbs": 3.0,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "bake",
+      "net": 1000,
+      "rawProtein": 200,
+      "rawFat": 20,
+      "rawCarbs": 30,
+      "lossProtein": 5,
+      "lossFat": 5,
+      "lossCarbs": 5,
+      "cookedProtein": 190,
+      "cookedFat": 19,
+      "cookedCarbs": 28.5
+     }
+    },
+    {
+     "productId": 930,
+     "code": "10.1.1",
+     "name": "Сахар-песок",
+     "grams": 100,
+     "isGross": false,
+     "group": "sugarHoney",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 0.0,
+      "fat": 0.0,
+      "carbs": 99.8,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "bake",
+      "net": 100,
+      "rawProtein": 0,
+      "rawFat": 0,
+      "rawCarbs": 99.8,
+      "lossProtein": 5,
+      "lossFat": 6,
+      "lossCarbs": 9,
+      "cookedProtein": 0,
+      "cookedFat": 0,
+      "cookedCarbs": 90.82
+     }
+    },
+    {
+     "productId": 159,
+     "code": "2.1.1",
+     "name": "Яйцо куриное",
+     "grams": 115,
+     "isGross": true,
+     "group": "egg",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 12.7,
+      "fat": 11.5,
+      "carbs": 0.7,
+      "wastePct": 13.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "bake",
+      "net": 100.1,
+      "rawProtein": 12.71,
+      "rawFat": 11.51,
+      "rawCarbs": 0.7,
+      "lossProtein": 8,
+      "lossFat": 25,
+      "lossCarbs": 0,
+      "cookedProtein": 11.69,
+      "cookedFat": 8.63,
+      "cookedCarbs": 0.7
+     }
+    },
+    {
+     "productId": 613,
+     "code": "6.1.3.11.2",
+     "name": "Крупа манная",
+     "grams": 60,
+     "isGross": false,
+     "group": "grainPasta",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 10.3,
+      "fat": 1.0,
+      "carbs": 70.6,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "bake",
+      "net": 60,
+      "rawProtein": 6.18,
+      "rawFat": 0.6,
+      "rawCarbs": 42.36,
+      "lossProtein": 5,
+      "lossFat": 6,
+      "lossCarbs": 9,
+      "cookedProtein": 5.87,
+      "cookedFat": 0.56,
+      "cookedCarbs": 38.55
+     }
+    },
+    {
+     "productId": 98,
+     "code": "1.4.2.2",
+     "name": "Сметана 20,0% жирности",
+     "grams": 50,
+     "isGross": false,
+     "group": "dairy",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 2.5,
+      "fat": 20.0,
+      "carbs": 3.4,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "bake",
+      "net": 50,
+      "rawProtein": 1.25,
+      "rawFat": 10,
+      "rawCarbs": 1.7,
+      "lossProtein": 5,
+      "lossFat": 5,
+      "lossCarbs": 5,
+      "cookedProtein": 1.19,
+      "cookedFat": 9.5,
+      "cookedCarbs": 1.62
+     }
+    }
+   ],
+   "expected": {
+    "rawProtein": 220.14,
+    "rawFat": 42.11,
+    "rawCarbs": 174.56,
+    "cookedProtein": 208.75,
+    "cookedFat": 37.69,
+    "cookedCarbs": 160.19,
+    "cookedKcal": 1815,
+    "yieldGrams": 1100,
+    "per100gProtein": 18.98,
+    "per100gFat": 3.43,
+    "per100gCarbs": 14.56,
+    "per100gKcal": 165
+   }
+  },
+  {
+   "name": "Сырники",
+   "process": "fry",
+   "yieldGrams": 600,
+   "ingredients": [
+    {
+     "productId": 47,
+     "code": "1.2.3.1",
+     "name": "Творог «Столовый» 2,0% жирности",
+     "grams": 500,
+     "isGross": false,
+     "group": "dairy",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 20.0,
+      "fat": 2.0,
+      "carbs": 3.0,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "fry",
+      "net": 500,
+      "rawProtein": 100,
+      "rawFat": 10,
+      "rawCarbs": 15,
+      "lossProtein": 5,
+      "lossFat": 5,
+      "lossCarbs": 5,
+      "cookedProtein": 95,
+      "cookedFat": 9.5,
+      "cookedCarbs": 14.25
+     }
+    },
+    {
+     "productId": 609,
+     "code": "6.1.3.9",
+     "name": "Мука обойная пшеничная",
+     "grams": 80,
+     "isGross": false,
+     "group": "flourBread",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 11.5,
+      "fat": 2.2,
+      "carbs": 61.5,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "fry",
+      "net": 80,
+      "rawProtein": 9.2,
+      "rawFat": 1.76,
+      "rawCarbs": 49.2,
+      "lossProtein": 5,
+      "lossFat": 10,
+      "lossCarbs": 10,
+      "cookedProtein": 8.74,
+      "cookedFat": 1.58,
+      "cookedCarbs": 44.28
+     }
+    },
+    {
+     "productId": 159,
+     "code": "2.1.1",
+     "name": "Яйцо куриное",
+     "grams": 60,
+     "isGross": true,
+     "group": "egg",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 12.7,
+      "fat": 11.5,
+      "carbs": 0.7,
+      "wastePct": 13.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "fry",
+      "net": 52.2,
+      "rawProtein": 6.63,
+      "rawFat": 6,
+      "rawCarbs": 0.37,
+      "lossProtein": 8,
+      "lossFat": 25,
+      "lossCarbs": 0,
+      "cookedProtein": 6.1,
+      "cookedFat": 4.5,
+      "cookedCarbs": 0.37
+     }
+    },
+    {
+     "productId": 930,
+     "code": "10.1.1",
+     "name": "Сахар-песок",
+     "grams": 50,
+     "isGross": false,
+     "group": "sugarHoney",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 0.0,
+      "fat": 0.0,
+      "carbs": 99.8,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "fry",
+      "net": 50,
+      "rawProtein": 0,
+      "rawFat": 0,
+      "rawCarbs": 49.9,
+      "lossProtein": 5,
+      "lossFat": 10,
+      "lossCarbs": 20,
+      "cookedProtein": 0,
+      "cookedFat": 0,
+      "cookedCarbs": 39.92
+     }
+    },
+    {
+     "productId": 533,
+     "code": "5.4.13",
+     "name": "Масло подсолнечное",
+     "grams": 40,
+     "isGross": false,
+     "group": "fatOil",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 0.0,
+      "fat": 99.9,
+      "carbs": 0.0,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "fry",
+      "net": 40,
+      "rawProtein": 0,
+      "rawFat": 39.96,
+      "rawCarbs": 0,
+      "lossProtein": 50,
+      "lossFat": 50,
+      "lossCarbs": 50,
+      "cookedProtein": 0,
+      "cookedFat": 19.98,
+      "cookedCarbs": 0
+     }
+    }
+   ],
+   "expected": {
+    "rawProtein": 115.83,
+    "rawFat": 57.72,
+    "rawCarbs": 114.47,
+    "cookedProtein": 109.84,
+    "cookedFat": 35.56,
+    "cookedCarbs": 98.82,
+    "cookedKcal": 1154.7,
+    "yieldGrams": 600,
+    "per100gProtein": 18.31,
+    "per100gFat": 5.93,
+    "per100gCarbs": 16.47,
+    "per100gKcal": 192.5
+   }
+  },
+  {
+   "name": "Капуста тушёная",
+   "process": "stew",
+   "yieldGrams": 1000,
+   "ingredients": [
+    {
+     "productId": 712,
+     "code": "8.1.2.1",
+     "name": "Капуста белокочанная",
+     "grams": 1250,
+     "isGross": true,
+     "group": "vegetable",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 1.8,
+      "fat": 0.1,
+      "carbs": 4.7,
+      "wastePct": 20.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "stew",
+      "net": 1000,
+      "rawProtein": 18,
+      "rawFat": 1,
+      "rawCarbs": 47,
+      "lossProtein": 2,
+      "lossFat": 10,
+      "lossCarbs": 5,
+      "cookedProtein": 17.64,
+      "cookedFat": 0.9,
+      "cookedCarbs": 44.65
+     }
+    },
+    {
+     "productId": 768,
+     "code": "8.1.5.1",
+     "name": "Морковь",
+     "grams": 125,
+     "isGross": true,
+     "group": "rootTuber",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 1.3,
+      "fat": 0.1,
+      "carbs": 6.9,
+      "wastePct": 20.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "stew",
+      "net": 100,
+      "rawProtein": 1.3,
+      "rawFat": 0.1,
+      "rawCarbs": 6.9,
+      "lossProtein": 2,
+      "lossFat": 10,
+      "lossCarbs": 5,
+      "cookedProtein": 1.27,
+      "cookedFat": 0.09,
+      "cookedCarbs": 6.56
+     }
+    },
+    {
+     "productId": 738,
+     "code": "8.1.3.4",
+     "name": "Лук репчатый",
+     "grams": 120,
+     "isGross": true,
+     "group": "vegetable",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 1.4,
+      "fat": 0.2,
+      "carbs": 8.2,
+      "wastePct": 16.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "stew",
+      "net": 100.8,
+      "rawProtein": 1.41,
+      "rawFat": 0.2,
+      "rawCarbs": 8.27,
+      "lossProtein": 2,
+      "lossFat": 10,
+      "lossCarbs": 5,
+      "cookedProtein": 1.38,
+      "cookedFat": 0.18,
+      "cookedCarbs": 7.86
+     }
+    },
+    {
+     "productId": 818,
+     "code": "8.1.6.17",
+     "name": "Томатная паста. Консервы",
+     "grams": 50,
+     "isGross": false,
+     "group": "vegetable",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 4.8,
+      "fat": 0.0,
+      "carbs": 19.0,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "stew",
+      "net": 50,
+      "rawProtein": 2.4,
+      "rawFat": 0,
+      "rawCarbs": 9.5,
+      "lossProtein": 2,
+      "lossFat": 10,
+      "lossCarbs": 5,
+      "cookedProtein": 2.35,
+      "cookedFat": 0,
+      "cookedCarbs": 9.03
+     }
+    },
+    {
+     "productId": 533,
+     "code": "5.4.13",
+     "name": "Масло подсолнечное",
+     "grams": 40,
+     "isGross": false,
+     "group": "fatOil",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 0.0,
+      "fat": 99.9,
+      "carbs": 0.0,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "stew",
+      "net": 40,
+      "rawProtein": 0,
+      "rawFat": 39.96,
+      "rawCarbs": 0,
+      "lossProtein": 6,
+      "lossFat": 12,
+      "lossCarbs": 9,
+      "cookedProtein": 0,
+      "cookedFat": 35.16,
+      "cookedCarbs": 0
+     }
+    }
+   ],
+   "expected": {
+    "rawProtein": 23.11,
+    "rawFat": 41.26,
+    "rawCarbs": 71.67,
+    "cookedProtein": 22.64,
+    "cookedFat": 36.33,
+    "cookedCarbs": 68.1,
+    "cookedKcal": 689.9,
+    "yieldGrams": 1000,
+    "per100gProtein": 2.26,
+    "per100gFat": 3.63,
+    "per100gCarbs": 6.81,
+    "per100gKcal": 69
+   }
+  },
+  {
+   "name": "Свинина запечённая",
+   "process": "bake",
+   "yieldGrams": 650,
+   "ingredients": [
+    {
+     "productId": 183,
+     "code": "3.1.12",
+     "name": "Свинина мясная",
+     "grams": 1176,
+     "isGross": true,
+     "group": "meat",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 14.3,
+      "fat": 33.3,
+      "carbs": 0.0,
+      "wastePct": 15.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "bake",
+      "net": 999.6,
+      "rawProtein": 142.94,
+      "rawFat": 332.87,
+      "rawCarbs": 0,
+      "lossProtein": 8,
+      "lossFat": 25,
+      "lossCarbs": 0,
+      "cookedProtein": 131.5,
+      "cookedFat": 249.65,
+      "cookedCarbs": 0
+     }
+    },
+    {
+     "productId": 1089,
+     "code": "12.1.2",
+     "name": "Соль поваренная пищевая",
+     "grams": 12,
+     "isGross": false,
+     "group": "other",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 0.0,
+      "fat": 0.0,
+      "carbs": 0.0,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "bake",
+      "net": 12,
+      "rawProtein": 0,
+      "rawFat": 0,
+      "rawCarbs": 0,
+      "lossProtein": 6,
+      "lossFat": 12,
+      "lossCarbs": 9,
+      "cookedProtein": 0,
+      "cookedFat": 0,
+      "cookedCarbs": 0
+     }
+    }
+   ],
+   "expected": {
+    "rawProtein": 142.94,
+    "rawFat": 332.87,
+    "rawCarbs": 0,
+    "cookedProtein": 131.5,
+    "cookedFat": 249.65,
+    "cookedCarbs": 0,
+    "cookedKcal": 2772.9,
+    "yieldGrams": 650,
+    "per100gProtein": 20.23,
+    "per100gFat": 38.41,
+    "per100gCarbs": 0,
+    "per100gKcal": 426.6
+   }
+  },
+  {
+   "name": "Пюре из гороха",
+   "process": "boil",
+   "yieldGrams": 1250,
+   "ingredients": [
+    {
+     "productId": 674,
+     "code": "7.1.2",
+     "name": "Горох лущеный",
+     "grams": 500,
+     "isGross": false,
+     "group": "legumes",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 23.0,
+      "fat": 1.6,
+      "carbs": 48.1,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "boil",
+      "net": 500,
+      "rawProtein": 115,
+      "rawFat": 8,
+      "rawCarbs": 240.5,
+      "lossProtein": 2,
+      "lossFat": 2,
+      "lossCarbs": 5,
+      "cookedProtein": 112.7,
+      "cookedFat": 7.84,
+      "cookedCarbs": 228.48
+     }
+    },
+    {
+     "productId": 533,
+     "code": "5.4.13",
+     "name": "Масло подсолнечное",
+     "grams": 30,
+     "isGross": false,
+     "group": "fatOil",
+     "groupOverride": false,
+     "processOverride": "cold",
+     "snapshot": {
+      "protein": 0.0,
+      "fat": 99.9,
+      "carbs": 0.0,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "cold",
+      "net": 30,
+      "rawProtein": 0,
+      "rawFat": 29.97,
+      "rawCarbs": 0,
+      "lossProtein": 0,
+      "lossFat": 0,
+      "lossCarbs": 0,
+      "cookedProtein": 0,
+      "cookedFat": 29.97,
+      "cookedCarbs": 0
+     }
+    }
+   ],
+   "expected": {
+    "rawProtein": 115,
+    "rawFat": 37.97,
+    "rawCarbs": 240.5,
+    "cookedProtein": 112.7,
+    "cookedFat": 37.81,
+    "cookedCarbs": 228.48,
+    "cookedKcal": 1705,
+    "yieldGrams": 1250,
+    "per100gProtein": 9.02,
+    "per100gFat": 3.02,
+    "per100gCarbs": 18.28,
+    "per100gKcal": 136.4
+   }
+  },
+  {
+   "name": "Яблоки печёные",
+   "process": "bake",
+   "yieldGrams": 750,
+   "ingredients": [
+    {
+     "productId": 875,
+     "code": "9.1.2.6",
+     "name": "Яблоки",
+     "grams": 1000,
+     "isGross": true,
+     "group": "fruitBerry",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 0.4,
+      "fat": 0.4,
+      "carbs": 9.8,
+      "wastePct": 12.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "bake",
+      "net": 880,
+      "rawProtein": 3.52,
+      "rawFat": 3.52,
+      "rawCarbs": 86.24,
+      "lossProtein": 5,
+      "lossFat": 6,
+      "lossCarbs": 9,
+      "cookedProtein": 3.34,
+      "cookedFat": 3.31,
+      "cookedCarbs": 78.48
+     }
+    },
+    {
+     "productId": 930,
+     "code": "10.1.1",
+     "name": "Сахар-песок",
+     "grams": 100,
+     "isGross": false,
+     "group": "sugarHoney",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 0.0,
+      "fat": 0.0,
+      "carbs": 99.8,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "bake",
+      "net": 100,
+      "rawProtein": 0,
+      "rawFat": 0,
+      "rawCarbs": 99.8,
+      "lossProtein": 5,
+      "lossFat": 6,
+      "lossCarbs": 9,
+      "cookedProtein": 0,
+      "cookedFat": 0,
+      "cookedCarbs": 90.82
+     }
+    },
+    {
+     "productId": 991,
+     "code": "10.11.8",
+     "name": "Мед пчелиный",
+     "grams": 50,
+     "isGross": false,
+     "group": "sugarHoney",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 0.8,
+      "fat": 0.0,
+      "carbs": 80.3,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "bake",
+      "net": 50,
+      "rawProtein": 0.4,
+      "rawFat": 0,
+      "rawCarbs": 40.15,
+      "lossProtein": 5,
+      "lossFat": 6,
+      "lossCarbs": 9,
+      "cookedProtein": 0.38,
+      "cookedFat": 0,
+      "cookedCarbs": 36.54
+     }
+    }
+   ],
+   "expected": {
+    "rawProtein": 3.92,
+    "rawFat": 3.52,
+    "rawCarbs": 226.19,
+    "cookedProtein": 3.72,
+    "cookedFat": 3.31,
+    "cookedCarbs": 205.84,
+    "cookedKcal": 868,
+    "yieldGrams": 750,
+    "per100gProtein": 0.5,
+    "per100gFat": 0.44,
+    "per100gCarbs": 27.45,
+    "per100gKcal": 115.7
+   }
+  },
+  {
+   "name": "Винегрет (вес не указан)",
+   "process": "cold",
+   "yieldGrams": null,
+   "ingredients": [
+    {
+     "productId": 779,
+     "code": "8.1.5.12",
+     "name": "Свекла",
+     "grams": 300,
+     "isGross": true,
+     "group": "rootTuber",
+     "groupOverride": false,
+     "processOverride": "boil",
+     "snapshot": {
+      "protein": 1.5,
+      "fat": 0.1,
+      "carbs": 8.8,
+      "wastePct": 20.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "boil",
+      "net": 240,
+      "rawProtein": 3.6,
+      "rawFat": 0.24,
+      "rawCarbs": 21.12,
+      "lossProtein": 2,
+      "lossFat": 2,
+      "lossCarbs": 5,
+      "cookedProtein": 3.53,
+      "cookedFat": 0.24,
+      "cookedCarbs": 20.06
+     }
+    },
+    {
+     "productId": 742,
+     "code": "8.1.4.1",
+     "name": "Картофель",
+     "grams": 300,
+     "isGross": true,
+     "group": "rootTuber",
+     "groupOverride": false,
+     "processOverride": "boil",
+     "snapshot": {
+      "protein": 2.0,
+      "fat": 0.4,
+      "carbs": 16.3,
+      "wastePct": 28.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "boil",
+      "net": 216,
+      "rawProtein": 4.32,
+      "rawFat": 0.86,
+      "rawCarbs": 35.21,
+      "lossProtein": 2,
+      "lossFat": 2,
+      "lossCarbs": 5,
+      "cookedProtein": 4.23,
+      "cookedFat": 0.84,
+      "cookedCarbs": 33.45
+     }
+    },
+    {
+     "productId": 768,
+     "code": "8.1.5.1",
+     "name": "Морковь",
+     "grams": 150,
+     "isGross": true,
+     "group": "rootTuber",
+     "groupOverride": false,
+     "processOverride": "boil",
+     "snapshot": {
+      "protein": 1.3,
+      "fat": 0.1,
+      "carbs": 6.9,
+      "wastePct": 20.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "boil",
+      "net": 120,
+      "rawProtein": 1.56,
+      "rawFat": 0.12,
+      "rawCarbs": 8.28,
+      "lossProtein": 2,
+      "lossFat": 2,
+      "lossCarbs": 5,
+      "cookedProtein": 1.53,
+      "cookedFat": 0.12,
+      "cookedCarbs": 7.87
+     }
+    },
+    {
+     "productId": 738,
+     "code": "8.1.3.4",
+     "name": "Лук репчатый",
+     "grams": 100,
+     "isGross": true,
+     "group": "vegetable",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 1.4,
+      "fat": 0.2,
+      "carbs": 8.2,
+      "wastePct": 16.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "cold",
+      "net": 84,
+      "rawProtein": 1.18,
+      "rawFat": 0.17,
+      "rawCarbs": 6.89,
+      "lossProtein": 0,
+      "lossFat": 0,
+      "lossCarbs": 0,
+      "cookedProtein": 1.18,
+      "cookedFat": 0.17,
+      "cookedCarbs": 6.89
+     }
+    },
+    {
+     "productId": 533,
+     "code": "5.4.13",
+     "name": "Масло подсолнечное",
+     "grams": 50,
+     "isGross": false,
+     "group": "fatOil",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 0.0,
+      "fat": 99.9,
+      "carbs": 0.0,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "cold",
+      "net": 50,
+      "rawProtein": 0,
+      "rawFat": 49.95,
+      "rawCarbs": 0,
+      "lossProtein": 0,
+      "lossFat": 0,
+      "lossCarbs": 0,
+      "cookedProtein": 0,
+      "cookedFat": 49.95,
+      "cookedCarbs": 0
+     }
+    }
+   ],
+   "expected": {
+    "rawProtein": 10.66,
+    "rawFat": 51.34,
+    "rawCarbs": 71.5,
+    "cookedProtein": 10.47,
+    "cookedFat": 51.32,
+    "cookedCarbs": 68.27,
+    "cookedKcal": 776.8,
+    "yieldGrams": 0,
+    "per100gProtein": null,
+    "per100gFat": null,
+    "per100gCarbs": null,
+    "per100gKcal": null
+   }
+  },
+  {
+   "name": "Каша пшённая молочная",
+   "process": "boil",
+   "yieldGrams": 1000,
+   "ingredients": [
+    {
+     "productId": 665,
+     "code": "6.8.2",
+     "name": "Крупа пшено шлифованное",
+     "grams": 200,
+     "isGross": false,
+     "group": "grainPasta",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 11.5,
+      "fat": 3.3,
+      "carbs": 66.5,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "boil",
+      "net": 200,
+      "rawProtein": 23,
+      "rawFat": 6.6,
+      "rawCarbs": 133,
+      "lossProtein": 2,
+      "lossFat": 2,
+      "lossCarbs": 5,
+      "cookedProtein": 22.54,
+      "cookedFat": 6.47,
+      "cookedCarbs": 126.35
+     }
+    },
+    {
+     "productId": 53,
+     "code": "1.3.1.1",
+     "name": "Молоко пастеризованное 3,2% жирности",
+     "grams": 800,
+     "isGross": false,
+     "group": "dairy",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 2.9,
+      "fat": 3.2,
+      "carbs": 4.7,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "boil",
+      "net": 800,
+      "rawProtein": 23.2,
+      "rawFat": 25.6,
+      "rawCarbs": 37.6,
+      "lossProtein": 5,
+      "lossFat": 5,
+      "lossCarbs": 5,
+      "cookedProtein": 22.04,
+      "cookedFat": 24.32,
+      "cookedCarbs": 35.72
+     }
+    },
+    {
+     "productId": 930,
+     "code": "10.1.1",
+     "name": "Сахар-песок",
+     "grams": 20,
+     "isGross": false,
+     "group": "sugarHoney",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 0.0,
+      "fat": 0.0,
+      "carbs": 99.8,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "boil",
+      "net": 20,
+      "rawProtein": 0,
+      "rawFat": 0,
+      "rawCarbs": 19.96,
+      "lossProtein": 2,
+      "lossFat": 2,
+      "lossCarbs": 2,
+      "cookedProtein": 0,
+      "cookedFat": 0,
+      "cookedCarbs": 19.56
+     }
+    },
+    {
+     "productId": 510,
+     "code": "5.1.6",
+     "name": "Масло сливочное",
+     "grams": 20,
+     "isGross": false,
+     "group": "fatOil",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 0.8,
+      "fat": 71.5,
+      "carbs": 1.3,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "boil",
+      "net": 20,
+      "rawProtein": 0.16,
+      "rawFat": 14.3,
+      "rawCarbs": 0.26,
+      "lossProtein": 6,
+      "lossFat": 12,
+      "lossCarbs": 9,
+      "cookedProtein": 0.15,
+      "cookedFat": 12.58,
+      "cookedCarbs": 0.24
+     }
+    }
+   ],
+   "expected": {
+    "rawProtein": 46.36,
+    "rawFat": 46.5,
+    "rawCarbs": 190.82,
+    "cookedProtein": 44.73,
+    "cookedFat": 43.37,
+    "cookedCarbs": 181.87,
+    "cookedKcal": 1296.7,
+    "yieldGrams": 1000,
+    "per100gProtein": 4.47,
+    "per100gFat": 4.34,
+    "per100gCarbs": 18.19,
+    "per100gKcal": 129.7
+   }
+  },
+  {
+   "name": "Блины",
+   "process": "fry",
+   "yieldGrams": 1100,
+   "ingredients": [
+    {
+     "productId": 609,
+     "code": "6.1.3.9",
+     "name": "Мука обойная пшеничная",
+     "grams": 400,
+     "isGross": false,
+     "group": "flourBread",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 11.5,
+      "fat": 2.2,
+      "carbs": 61.5,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "fry",
+      "net": 400,
+      "rawProtein": 46,
+      "rawFat": 8.8,
+      "rawCarbs": 246,
+      "lossProtein": 5,
+      "lossFat": 10,
+      "lossCarbs": 10,
+      "cookedProtein": 43.7,
+      "cookedFat": 7.92,
+      "cookedCarbs": 221.4
+     }
+    },
+    {
+     "productId": 53,
+     "code": "1.3.1.1",
+     "name": "Молоко пастеризованное 3,2% жирности",
+     "grams": 800,
+     "isGross": false,
+     "group": "dairy",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 2.9,
+      "fat": 3.2,
+      "carbs": 4.7,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "fry",
+      "net": 800,
+      "rawProtein": 23.2,
+      "rawFat": 25.6,
+      "rawCarbs": 37.6,
+      "lossProtein": 5,
+      "lossFat": 5,
+      "lossCarbs": 5,
+      "cookedProtein": 22.04,
+      "cookedFat": 24.32,
+      "cookedCarbs": 35.72
+     }
+    },
+    {
+     "productId": 159,
+     "code": "2.1.1",
+     "name": "Яйцо куриное",
+     "grams": 115,
+     "isGross": true,
+     "group": "egg",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 12.7,
+      "fat": 11.5,
+      "carbs": 0.7,
+      "wastePct": 13.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "fry",
+      "net": 100.1,
+      "rawProtein": 12.71,
+      "rawFat": 11.51,
+      "rawCarbs": 0.7,
+      "lossProtein": 8,
+      "lossFat": 25,
+      "lossCarbs": 0,
+      "cookedProtein": 11.69,
+      "cookedFat": 8.63,
+      "cookedCarbs": 0.7
+     }
+    },
+    {
+     "productId": 930,
+     "code": "10.1.1",
+     "name": "Сахар-песок",
+     "grams": 30,
+     "isGross": false,
+     "group": "sugarHoney",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 0.0,
+      "fat": 0.0,
+      "carbs": 99.8,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "fry",
+      "net": 30,
+      "rawProtein": 0,
+      "rawFat": 0,
+      "rawCarbs": 29.94,
+      "lossProtein": 5,
+      "lossFat": 10,
+      "lossCarbs": 20,
+      "cookedProtein": 0,
+      "cookedFat": 0,
+      "cookedCarbs": 23.95
+     }
+    },
+    {
+     "productId": 533,
+     "code": "5.4.13",
+     "name": "Масло подсолнечное",
+     "grams": 40,
+     "isGross": false,
+     "group": "fatOil",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 0.0,
+      "fat": 99.9,
+      "carbs": 0.0,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "fry",
+      "net": 40,
+      "rawProtein": 0,
+      "rawFat": 39.96,
+      "rawCarbs": 0,
+      "lossProtein": 50,
+      "lossFat": 50,
+      "lossCarbs": 50,
+      "cookedProtein": 0,
+      "cookedFat": 19.98,
+      "cookedCarbs": 0
+     }
+    }
+   ],
+   "expected": {
+    "rawProtein": 81.91,
+    "rawFat": 85.87,
+    "rawCarbs": 314.24,
+    "cookedProtein": 77.43,
+    "cookedFat": 60.85,
+    "cookedCarbs": 281.77,
+    "cookedKcal": 1984.5,
+    "yieldGrams": 1100,
+    "per100gProtein": 7.04,
+    "per100gFat": 5.53,
+    "per100gCarbs": 25.62,
+    "per100gKcal": 180.4
+   }
+  },
+  {
+   "name": "Куриная грудка на пару",
+   "process": "steam",
+   "yieldGrams": 750,
+   "ingredients": [
+    {
+     "productId": 14369,
+     "code": "V416100",
+     "name": "Куриное филе грудки сырое",
+     "grams": 1000,
+     "isGross": false,
+     "group": "poultry",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 23.25,
+      "fat": 1.81,
+      "carbs": 0.0,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "steam",
+      "net": 1000,
+      "rawProtein": 232.5,
+      "rawFat": 18.1,
+      "rawCarbs": 0,
+      "lossProtein": 10,
+      "lossFat": 25,
+      "lossCarbs": 0,
+      "cookedProtein": 209.25,
+      "cookedFat": 13.58,
+      "cookedCarbs": 0
+     }
+    }
+   ],
+   "expected": {
+    "rawProtein": 232.5,
+    "rawFat": 18.1,
+    "rawCarbs": 0,
+    "cookedProtein": 209.25,
+    "cookedFat": 13.58,
+    "cookedCarbs": 0,
+    "cookedKcal": 959.2,
+    "yieldGrams": 750,
+    "per100gProtein": 27.9,
+    "per100gFat": 1.81,
+    "per100gCarbs": 0,
+    "per100gKcal": 127.9
+   }
+  },
+  {
+   "name": "Макароны запечённые с сыром",
+   "process": "bake",
+   "yieldGrams": 900,
+   "ingredients": [
+    {
+     "productId": 552,
+     "code": "6.1.2.1.1",
+     "name": "Макароны из муки в/с",
+     "grams": 300,
+     "isGross": false,
+     "group": "grainPasta",
+     "groupOverride": false,
+     "processOverride": "boil",
+     "snapshot": {
+      "protein": 11.0,
+      "fat": 1.3,
+      "carbs": 70.5,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "boil",
+      "net": 300,
+      "rawProtein": 33,
+      "rawFat": 3.9,
+      "rawCarbs": 211.5,
+      "lossProtein": 2,
+      "lossFat": 2,
+      "lossCarbs": 5,
+      "cookedProtein": 32.34,
+      "cookedFat": 3.82,
+      "cookedCarbs": 200.93
+     }
+    },
+    {
+     "productId": 137,
+     "code": "1.6.1.8",
+     "name": "Сыр «Российский»",
+     "grams": 100,
+     "isGross": false,
+     "group": "dairy",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 23.2,
+      "fat": 29.5,
+      "carbs": 0.0,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "bake",
+      "net": 100,
+      "rawProtein": 23.2,
+      "rawFat": 29.5,
+      "rawCarbs": 0,
+      "lossProtein": 5,
+      "lossFat": 5,
+      "lossCarbs": 5,
+      "cookedProtein": 22.04,
+      "cookedFat": 28.03,
+      "cookedCarbs": 0
+     }
+    },
+    {
+     "productId": 510,
+     "code": "5.1.6",
+     "name": "Масло сливочное",
+     "grams": 30,
+     "isGross": false,
+     "group": "fatOil",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 0.8,
+      "fat": 71.5,
+      "carbs": 1.3,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "bake",
+      "net": 30,
+      "rawProtein": 0.24,
+      "rawFat": 21.45,
+      "rawCarbs": 0.39,
+      "lossProtein": 6,
+      "lossFat": 12,
+      "lossCarbs": 9,
+      "cookedProtein": 0.23,
+      "cookedFat": 18.88,
+      "cookedCarbs": 0.35
+     }
+    }
+   ],
+   "expected": {
+    "rawProtein": 56.44,
+    "rawFat": 54.85,
+    "rawCarbs": 211.89,
+    "cookedProtein": 54.61,
+    "cookedFat": 50.73,
+    "cookedCarbs": 201.28,
+    "cookedKcal": 1480.1,
+    "yieldGrams": 900,
+    "per100gProtein": 6.07,
+    "per100gFat": 5.64,
+    "per100gCarbs": 22.36,
+    "per100gKcal": 164.5
+   }
+  },
+  {
+   "name": "Картофель жареный со шпиком",
+   "process": "fry",
+   "yieldGrams": 600,
+   "ingredients": [
+    {
+     "productId": 742,
+     "code": "8.1.4.1",
+     "name": "Картофель",
+     "grams": 1000,
+     "isGross": true,
+     "group": "rootTuber",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 2.0,
+      "fat": 0.4,
+      "carbs": 16.3,
+      "wastePct": 28.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "fry",
+      "net": 720,
+      "rawProtein": 14.4,
+      "rawFat": 2.88,
+      "rawCarbs": 117.36,
+      "lossProtein": 5,
+      "lossFat": 10,
+      "lossCarbs": 10,
+      "cookedProtein": 13.68,
+      "cookedFat": 2.59,
+      "cookedCarbs": 105.62
+     }
+    },
+    {
+     "productId": 182,
+     "code": "3.1.11",
+     "name": "Свинина жирная",
+     "grams": 100,
+     "isGross": true,
+     "group": "fatOil",
+     "groupOverride": true,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 11.7,
+      "fat": 49.3,
+      "carbs": 0.0,
+      "wastePct": 12.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "fry",
+      "net": 88,
+      "rawProtein": 10.3,
+      "rawFat": 43.38,
+      "rawCarbs": 0,
+      "lossProtein": 50,
+      "lossFat": 50,
+      "lossCarbs": 50,
+      "cookedProtein": 5.15,
+      "cookedFat": 21.69,
+      "cookedCarbs": 0
+     }
+    }
+   ],
+   "expected": {
+    "rawProtein": 24.7,
+    "rawFat": 46.26,
+    "rawCarbs": 117.36,
+    "cookedProtein": 18.83,
+    "cookedFat": 24.28,
+    "cookedCarbs": 105.62,
+    "cookedKcal": 716.3,
+    "yieldGrams": 600,
+    "per100gProtein": 3.14,
+    "per100gFat": 4.05,
+    "per100gCarbs": 17.6,
+    "per100gKcal": 119.4
+   }
+  },
+  {
+   "name": "Говядина тушёная (старый расчёт)",
+   "process": "legacy",
+   "yieldGrams": null,
+   "ingredients": [
+    {
+     "productId": 174,
+     "code": "3.1.3",
+     "name": "Говядина 1 кат.",
+     "grams": 1000,
+     "isGross": false,
+     "group": "meat",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 18.6,
+      "fat": 16.0,
+      "carbs": 0.0,
+      "wastePct": 0.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "legacy",
+      "net": 1000,
+      "rawProtein": 186,
+      "rawFat": 160,
+      "rawCarbs": 0
+     }
+    },
+    {
+     "productId": 738,
+     "code": "8.1.3.4",
+     "name": "Лук репчатый",
+     "grams": 100,
+     "isGross": true,
+     "group": "vegetable",
+     "groupOverride": false,
+     "processOverride": null,
+     "snapshot": {
+      "protein": 1.4,
+      "fat": 0.2,
+      "carbs": 8.2,
+      "wastePct": 16.0,
+      "isDish": false
+     },
+     "expected": {
+      "process": "legacy",
+      "net": 84,
+      "rawProtein": 1.18,
+      "rawFat": 0.17,
+      "rawCarbs": 6.89
+     }
+    }
+   ],
+   "expected": {
+    "rawProtein": 187.18,
+    "rawFat": 160.17,
+    "rawCarbs": 6.89,
+    "cookedProtein": 175.95,
+    "cookedFat": 140.95,
+    "cookedCarbs": 6.27,
+    "cookedKcal": 1997.4,
+    "yieldGrams": 1084,
+    "per100gProtein": 16.23,
+    "per100gFat": 13,
+    "per100gCarbs": 0.58,
+    "per100gKcal": 184.3
+   }
+  }
+ ],
+ "referenceChecks": [
+  {
+   "dish": "Рис отварной",
+   "rawProductId": 10322,
+   "cookedProductId": 10323,
+   "cookedProductName": "Рис пропаренный варёный",
+   "referenceKcalPer100g": 110,
+   "modelKcalPer100g": 117.3,
+   "deviationPct": 6.6,
+   "tolerancePct": 10,
+   "yieldMethod": "масса × (100 − вода сырого) / (100 − вода готового)"
+  },
+  {
+   "dish": "Говядина тушёная",
+   "rawProductId": 13684,
+   "cookedProductId": 13685,
+   "cookedProductName": "Говядина для жарки (лопатка) тушёная без жира",
+   "referenceKcalPer100g": 163,
+   "modelKcalPer100g": 156.8,
+   "deviationPct": -3.8,
+   "tolerancePct": 10,
+   "yieldMethod": "масса × (100 − вода сырого) / (100 − вода готового)"
+  }
+ ]
+}

@@ -6,18 +6,35 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:povarspravka/core/calculation/calculation_engine.dart';
+import 'package:povarspravka/core/calculation/models/heat_process.dart';
+import 'package:povarspravka/core/calculation/models/loss_group.dart';
 import 'package:povarspravka/core/theme/app_theme.dart';
 import 'package:povarspravka/presentation/providers/dish_provider.dart';
 import 'package:povarspravka/presentation/screens/recipe_editor_screen.dart';
 import 'package:povarspravka/presentation/widgets/macro_summary_bar.dart';
 import 'culinary_logic_test.dart' show beet;
+import 'support/test_artifacts.dart';
+
+/// Одна временная папка снимков на прогон файла: `../audit_artifacts/`
+/// рабочего дерева больше не трогаем (аудит D14).
+Directory get _shotsDir => _shots ??= artifactDirOnce('culinary_ui');
+Directory? _shots;
+
+/// Удаление папки снимков в конце файла (регистрируется в `main`).
+void _dropShots() {
+  final dir = _shots;
+  if (dir != null && dir.existsSync()) dir.deleteSync(recursive: true);
+}
 
 final boundary = GlobalKey();
 Future<void> prepare(WidgetTester tester,
     {double width = 390,
     double scale = 1,
     bool dark = false,
-    bool empty = false}) async {
+    bool empty = false,
+    // Снимки и числа ниже (94/88/91 %, «Задать фактический выход») — экран
+    // старого расчёта (legacy). Новый расчёт — тесты «New dish …» в конце.
+    HeatProcess process = HeatProcess.legacy}) async {
   tester.view.physicalSize = Size(width, 844);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
@@ -29,6 +46,7 @@ Future<void> prepare(WidgetTester tester,
     ..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));
   await icons.load();
   final notifier = DishNotifier();
+  notifier.setHeatProcess(process);
   if (!empty) notifier.addIngredient(beet, 100);
   await tester.pumpWidget(ProviderScope(
       overrides: [dishProvider.overrideWith((ref) => notifier)],
@@ -57,8 +75,7 @@ Future<void> screenshot(WidgetTester tester, String name) async {
         boundary.currentContext!.findRenderObject()! as RenderRepaintBoundary;
     final image = await box.toImage(pixelRatio: 1);
     final data = await image.toByteData(format: ui.ImageByteFormat.png);
-    final dir = Directory('../audit_artifacts/culinary_ui');
-    await dir.create(recursive: true);
+    final dir = _shotsDir;
     await File('${dir.path}/$name.png')
         .writeAsBytes(data!.buffer.asUint8List());
     image.dispose();
@@ -76,6 +93,7 @@ Future<void> reveal(WidgetTester tester, Finder finder) async {
 }
 
 void main() {
+  tearDownAll(_dropShots);
   testWidgets('Automatic mode, both tabs and inspector use same numbers',
       (tester) async {
     await prepare(tester);
@@ -254,6 +272,78 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(BackButton), findsOneWidget);
     await screenshot(tester, 'navigation_320');
+    expect(tester.takeException(), isNull);
+  });
+
+  // Новый расчёт (задача 2026-11-03): потери Б/Ж/У — по таблице для группы
+  // каждого продукта, вес готового блюда вводит повар.
+  testWidgets('New dish (cold): weight field always shown, nothing guessed',
+      (tester) async {
+    await prepare(tester, process: HeatProcess.cold);
+    final c = ProviderScope.containerOf(
+        tester.element(find.byType(RecipeEditorScreen)));
+    expect(c.read(dishProvider).process, HeatProcess.cold);
+    expect(find.text('Вес готового блюда не указан'), findsOneWidget);
+    expect(find.text('Задать фактический выход'), findsNothing);
+    final input = find.byKey(const ValueKey('actual-yield'));
+    expect(input, findsOneWidget);
+    expect(tester.widget<TextField>(input).controller!.text, isEmpty);
+    expect(find.text('Укажите вес готового блюда'), findsOneWidget);
+    final r = CalculationEngine.calculate(c.read(dishProvider));
+    expect(r.hasYield, isFalse);
+    expect([r.cookedProtein, r.cookedFat, r.cookedCarbs], [1.5, .1, 8.8],
+        reason: 'без обработки потерь нет');
+    await reveal(tester, find.byType(MacroSummaryBar));
+    expect(find.text('После т.о. · на всё блюдо'), findsOneWidget);
+    expect(tester.widget<Text>(find.byKey(const ValueKey('macro-Белки'))).data,
+        '1,50 г');
+    await screenshot(tester, 'new_cold_no_weight');
+    await reveal(tester, input);
+    await tester.enterText(input, '80');
+    await tester.pumpAndSettle();
+    expect(c.read(dishProvider).effectiveYieldGrams, 80);
+    expect(find.text('Выход готового блюда: 80 г'), findsOneWidget);
+    await tester.enterText(input, '');
+    await tester.pumpAndSettle();
+    expect(c.read(dishProvider).customYieldGrams, isNull);
+    expect(c.read(dishProvider).effectiveYieldGrams, 0,
+        reason: 'пустое поле — вес не указан, сумма нетто не подставляется');
+    expect(find.text('Вес готового блюда не указан'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('New dish (boil): table losses per group, label and weight',
+      (tester) async {
+    await prepare(tester, process: HeatProcess.boil);
+    final c = ProviderScope.containerOf(
+        tester.element(find.byType(RecipeEditorScreen)));
+    final n = c.read(dishProvider.notifier);
+    final id = c.read(dishProvider).ingredients.single.id;
+    // «Свекла» фикстуры записана с group_id 1 (молочные у Скурихина) —
+    // повар переводит её в корнеплоды вручную.
+    n.setIngredientGroup(id, LossGroup.rootTuber);
+    await tester.pumpAndSettle();
+    final label = find.textContaining(
+        'корнеплоды и картофель (вручную) · варка — Б 2 %, Ж 2 %, У 5 %');
+    await reveal(tester, label);
+    expect(label, findsOneWidget);
+    // МР 2.3.0419-26, прил. 4: корнеплоды, варка — потери 2 / 2 / 5 %.
+    final r = CalculationEngine.calculate(c.read(dishProvider));
+    expect([r.cookedProtein, r.cookedFat, r.cookedCarbs], [1.47, .1, 8.36]);
+    expect(r.cookedKcal, 40.2);
+    expect(r.hasYield, isFalse);
+    await reveal(tester, find.byType(MacroSummaryBar));
+    expect(tester.widget<Text>(find.byKey(const ValueKey('macro-Белки'))).data,
+        '1,47 г');
+    final input = find.byKey(const ValueKey('actual-yield'));
+    await reveal(tester, input);
+    await tester.enterText(input, '90');
+    await tester.pumpAndSettle();
+    final r2 = CalculationEngine.calculate(c.read(dishProvider));
+    expect(r2.yieldGrams, 90);
+    expect(r2.cookedProtein, 1.47,
+        reason: 'вес готового блюда не меняет БЖУ на всё блюдо');
+    expect(r2.per100gProtein, 1.63);
+    await screenshot(tester, 'new_boil_weight');
     expect(tester.takeException(), isNull);
   });
 }

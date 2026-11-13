@@ -24,7 +24,11 @@ void main() {
       await file.writeAsString(bad, flush: true);
       final result =
           await DishStorageRepository(storageDirectory: dir).loadAll();
-      expect(result.activeDraft!.toJson(), old.toJson());
+      // FUZZ-13: черновик хранится в отдельном `draft.json` с собственной
+      // CRC, поэтому порча библиотечного документа его не откатывает:
+      // восстанавливается последнее состояние редактора (`current`), а не
+      // предыдущее поколение. Библиотека всё так же чинится из `.bak`.
+      expect(result.activeDraft!.title, 'current');
       expect(result.savedDishes.single.toJson(), old.toJson());
     });
   }

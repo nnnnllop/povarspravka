@@ -5,6 +5,7 @@ import 'package:xml/xml.dart';
 import 'package:povarspravka/core/calculation/calculation_engine.dart';
 import 'package:povarspravka/core/calculation/models/blank_mode.dart';
 import 'package:povarspravka/core/calculation/models/dish.dart';
+import 'package:povarspravka/core/calculation/models/heat_process.dart';
 import 'package:povarspravka/core/calculation/models/ingredient.dart';
 import 'package:povarspravka/core/calculation/models/product.dart';
 import 'package:povarspravka/core/export/docx_blank_generator.dart';
@@ -163,6 +164,9 @@ void main() {
         'Dish copyWith clearCustomYield and DishNotifier retention customization',
         () {
       final notifier = DishNotifier();
+      // Старый расчёт (legacy): без веса выход = сумма нетто, тройка
+      // сохранности задаётся вручную. Новый расчёт — следующий тест.
+      notifier.setHeatProcess(HeatProcess.legacy);
       notifier.addIngredient(pBeef, 200.0);
       notifier.setCustomYield(150.0);
       expect(notifier.state.customYieldGrams, equals(150.0));
@@ -179,6 +183,23 @@ void main() {
       expect(res.cookedProtein, closeTo(res.rawTotalProtein, 0.001));
       expect(res.cookedFat, closeTo(res.rawTotalFat, 0.001));
       expect(res.cookedCarbs, closeTo(res.rawTotalCarbs, 0.001));
+    });
+
+    test('New dish (cold): clearing the weight leaves no yield, no losses', () {
+      final notifier = DishNotifier();
+      expect(notifier.state.process, HeatProcess.cold);
+      notifier.addIngredient(pBeef, 200.0);
+      notifier.setCustomYield(150.0);
+      expect(notifier.state.effectiveYieldGrams, equals(150.0));
+      notifier.setCustomYield(null);
+      expect(notifier.state.customYieldGrams, isNull);
+      expect(notifier.state.effectiveYieldGrams, equals(0.0),
+          reason: 'вес готового блюда не угадывается по сумме нетто');
+      final res = CalculationEngine.calculate(notifier.state);
+      expect(res.hasYield, isFalse);
+      expect(res.cookedProtein, res.rawTotalProtein);
+      expect(res.cookedFat, res.rawTotalFat);
+      expect(res.cookedCarbs, res.rawTotalCarbs);
     });
 
     test('Unlimited ingredients (25 items) handles smoothly without overflow',

@@ -333,11 +333,12 @@ class _SampleRepo extends ProductRepository {
   Future<List<Product>> searchProducts(
           {String query = '',
           int? groupId,
+          bool? isDish,
           String? source,
           int limit = 60}) async =>
       [_sampleProduct(), _sampleProduct(name: 'Морковь')];
   @override
-  Future<List<FoodGroup>> getFoodGroups() async =>
+  Future<List<FoodGroup>> getFoodGroups({bool? isDish}) async =>
       [const FoodGroup(id: 1, code: 'qa', name: 'Овощи и корнеплоды')];
   @override
   Future<List<ProductNutrient>> getNutrientsForProduct(int productId) async =>

@@ -63,6 +63,12 @@ class _ChaosFile implements File {
     return _ChaosFile(renamed, hook);
   }
 
+  // Чтение хвоста файла для отпечатка библиотеки (RA-14) — без точки отказа:
+  // набор точек инъекции этого файла не меняется.
+  @override
+  Future<RandomAccessFile> open({FileMode mode = FileMode.read}) =>
+      native.open(mode: mode);
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

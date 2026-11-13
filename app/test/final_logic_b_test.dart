@@ -11,6 +11,7 @@ import 'package:povarspravka/core/calculation/models/blank_mode.dart';
 import 'package:povarspravka/core/calculation/models/dish.dart';
 import 'package:povarspravka/core/calculation/models/ingredient.dart';
 import 'package:povarspravka/core/calculation/models/product.dart';
+import 'support/test_artifacts.dart';
 
 Product prod(String name, double p, double f, double c, {double waste = 0}) =>
     Product(
@@ -157,11 +158,13 @@ void main() {
     expect(CalculationEngine.formatGrams(egg.netGramsRounded), '94');
   });
 
-  dumpLog(log);
+  tearDownAll(() => dumpLog(log));
 }
 
 void dumpLog(Map<String, dynamic> log) {
-  final f = File(r'C:\projects\povarspravka\audit\signoff\b_results.json');
+  final dir = artifactDirOnce('signoff_b');
+  final f = File('${dir.path}/b_results.json');
   f.parent.createSync(recursive: true);
   f.writeAsStringSync(const JsonEncoder.withIndent(' ').convert(log));
+  if (dir.existsSync()) dir.deleteSync(recursive: true);
 }
