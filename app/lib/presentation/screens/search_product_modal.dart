@@ -9,6 +9,7 @@ import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
 import '../providers/dish_provider.dart';
 import '../providers/search_provider.dart';
+import '../widgets/app_buttons.dart';
 import '../widgets/custom_numpad.dart';
 import '../widgets/nutrient_chip.dart';
 
@@ -115,40 +116,104 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
     final searchState = ref.watch(searchProvider);
     final isCatalog = widget.mode == SearchMode.browseCatalog;
     final media = MediaQuery.of(context);
+    final shortLandscape = media.size.height < 460;
+
+    Widget buildBody() {
+      if (shortLandscape) {
+        return Column(
+          children: [
+            _buildHeader(context, isCatalog),
+            Expanded(
+              child: CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildDishSegment(context, isCatalog),
+                        const SizedBox(height: Space.x2),
+                        _buildSourceSegment(context),
+                        _buildSearchField(context),
+                        Divider(height: 1, color: Palette.of(context).divider),
+                      ],
+                    ),
+                  ),
+                  if (searchState.isLoading && searchState.results.isEmpty)
+                    const SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(
+                        child: CircularProgressIndicator.adaptive(),
+                      ),
+                    )
+                  else if (searchState.results.isEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Padding(
+                        padding: const EdgeInsets.all(Space.x4),
+                        child: _buildEmptyContent(context),
+                      ),
+                    )
+                  else
+                    SliverPadding(
+                      padding: const EdgeInsets.only(bottom: Space.x6),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, idx) {
+                            final product = searchState.results[idx];
+                            if (isCatalog) {
+                              return _buildCatalogRow(context, product);
+                            }
+                            return _buildPickRow(context, product);
+                          },
+                          childCount: searchState.results.length,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        );
+      }
+
+      return Column(
+        children: [
+          _buildHeader(context, isCatalog),
+          _buildDishSegment(context, isCatalog),
+          const SizedBox(height: Space.x2),
+          _buildSourceSegment(context),
+          _buildSearchField(context),
+          Divider(height: 1, color: Palette.of(context).divider),
+          Expanded(
+            child: searchState.isLoading && searchState.results.isEmpty
+                ? const Center(child: CircularProgressIndicator.adaptive())
+                : searchState.results.isEmpty
+                    ? _buildEmpty(context)
+                    : _buildResults(context, isCatalog),
+          ),
+        ],
+      );
+    }
 
     return Padding(
       // Системная клавиатура больше не выжимает список до двух строк:
       // шит поднимается над `viewInsets`.
       padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
-      child: Container(
-        constraints: BoxConstraints(
-          maxHeight: media.size.height * 0.92,
-          minHeight: media.size.height * 0.5,
-        ),
-        decoration: BoxDecoration(
-          color: Palette.of(context).surface,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(Radii.sheet),
+      child: AppContentFrame(
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: media.size.height * 0.92,
           ),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: SafeArea(
-          top: false,
-          child: Column(
-            children: [
-              _buildHeader(context, isCatalog),
-              _buildDishSegment(context, isCatalog),
-              _buildSourceSegment(context),
-              _buildSearchField(context),
-              Divider(height: 1, color: Palette.of(context).divider),
-              Expanded(
-                child: searchState.isLoading && searchState.results.isEmpty
-                    ? const Center(child: CircularProgressIndicator.adaptive())
-                    : searchState.results.isEmpty
-                        ? _buildEmpty(context)
-                        : _buildResults(context, isCatalog),
-              ),
-            ],
+          decoration: BoxDecoration(
+            color: Palette.of(context).surface,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(Radii.sheet),
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: SafeArea(
+            top: false,
+            child: buildBody(),
           ),
         ),
       ),
@@ -193,6 +258,9 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
     final autoFocus = ref.watch(searchProvider.select((s) => s.query.isEmpty)) &&
         mounted;
 
+    final media = MediaQuery.of(context);
+    final compact = media.size.width < 380 || media.textScaler.scale(1.0) > 1.2;
+
     Widget item(String text) => Text(
           text,
           maxLines: 1,
@@ -205,16 +273,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
         width: double.infinity,
         child: SegmentedButton<bool?>(
           showSelectedIcon: false,
-          style: SegmentedButton.styleFrom(
-            minimumSize: const Size(0, kMinTapTarget),
-            backgroundColor: p.surface,
-            foregroundColor: p.inkSecondary,
-            selectedBackgroundColor: p.accentSoft,
-            selectedForegroundColor: p.accent,
-            side: BorderSide(color: p.border),
-            shape: RoundedRectangleBorder(borderRadius: Radii.fieldAll),
-            textStyle: AppTypography.label,
-          ),
+          style: AppSegmentedStyle.of(p, compact: compact),
           segments: [
             ButtonSegment(value: false, label: item('Продукты')),
             ButtonSegment(value: true, label: item('Готовые блюда')),
@@ -241,8 +300,11 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
     final autoFocus = ref.watch(searchProvider.select((s) => s.query.isEmpty)) &&
         mounted;
 
+    final media = MediaQuery.of(context);
+    final compact = media.size.width < 380 || media.textScaler.scale(1.0) > 1.2;
+
     String label(String name, int count) =>
-        count == 0 ? name : '$name · ${_spaced(count)}';
+        compact || count == 0 ? name : '$name · ${_spaced(count)}';
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: Space.x4),
@@ -250,16 +312,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
         width: double.infinity,
         child: SegmentedButton<String?>(
           showSelectedIcon: false,
-          style: SegmentedButton.styleFrom(
-            minimumSize: const Size(0, kMinTapTarget),
-            backgroundColor: p.surface,
-            foregroundColor: p.inkSecondary,
-            selectedBackgroundColor: p.accentSoft,
-            selectedForegroundColor: p.accent,
-            side: BorderSide(color: p.border),
-            shape: RoundedRectangleBorder(borderRadius: Radii.fieldAll),
-            textStyle: AppTypography.label,
-          ),
+          style: AppSegmentedStyle.of(p, compact: compact),
           segments: [
             const ButtonSegment(
               value: null,
@@ -320,20 +373,38 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
     );
   }
 
-  Widget _buildEmpty(BuildContext context) {
+  Widget _buildEmptyContent(BuildContext context) {
     final p = Palette.of(context);
     return Center(
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.search_off_rounded, size: 48, color: p.inkMuted),
           const SizedBox(height: Space.x3),
           Text('Ничего не найдено',
+              textAlign: TextAlign.center,
               style: AppTypography.headline.copyWith(color: p.inkSecondary)),
           const SizedBox(height: Space.x1),
           Text('Попробуйте изменить запрос или снять фильтры',
+              textAlign: TextAlign.center,
               style: AppTypography.bodySm.copyWith(color: p.inkMuted)),
         ],
+      ),
+    );
+  }
+
+  Widget _buildEmpty(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        padding: const EdgeInsets.all(Space.x4),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight:
+                (constraints.maxHeight - Space.x8).clamp(0.0, double.infinity),
+          ),
+          child: _buildEmptyContent(context),
+        ),
       ),
     );
   }
@@ -751,6 +822,34 @@ class ProductInfoCardSheet extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (!isValid) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: Space.x3, vertical: Space.x2),
+                        decoration: BoxDecoration(
+                          color: p.dangerSoft,
+                          borderRadius: Radii.fieldAll,
+                          border: Border.all(color: p.danger.withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.warning_amber_rounded,
+                                color: p.danger, size: 18),
+                            const SizedBox(width: Space.x2),
+                            Expanded(
+                              child: Text(
+                                'Сумма нутриентов в исходных данных превышает 100 г '
+                                '(${(product.protein + product.fat + product.carbs).toStringAsFixed(2)} г). '
+                                'Продукт доступен только для справки.',
+                                style: AppTypography.caption
+                                    .copyWith(color: p.danger),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: Space.x3),
+                    ],
                     _buildMacroBlock(p),
                     const SizedBox(height: Space.x4),
                     _sectionTitle(p,
@@ -883,38 +982,9 @@ class ProductInfoCardSheet extends ConsumerWidget {
                 ),
               ),
             ),
-            if (!isValid)
-              Padding(
-                padding:
-                    const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: Space.x3, vertical: Space.x2),
-                  decoration: BoxDecoration(
-                    color: p.dangerSoft,
-                    borderRadius: Radii.fieldAll,
-                    border: Border.all(color: p.danger.withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.warning_amber_rounded,
-                          color: p.danger, size: 18),
-                      const SizedBox(width: Space.x2),
-                      Expanded(
-                        child: Text(
-                          'Сумма нутриентов в исходных данных превышает 100 г '
-                          '(${(product.protein + product.fat + product.carbs).toStringAsFixed(2)} г). '
-                          'Продукт доступен только для справки.',
-                          style: AppTypography.caption.copyWith(color: p.danger),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(
-                  Space.x4, Space.x2, Space.x4, Space.x3),
+                  Space.x4, Space.x2, Space.x4, Space.x2),
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(

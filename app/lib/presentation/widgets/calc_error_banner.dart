@@ -25,7 +25,7 @@ class CalcErrorBanner extends StatelessWidget {
           const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x3),
       decoration: BoxDecoration(
         color: p.surface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: Radii.cardAll,
         border: Border.all(color: p.kcal.withOpacity(0.55)),
       ),
       child: Row(
@@ -40,10 +40,9 @@ class CalcErrorBanner extends StatelessWidget {
               children: [
                 Text(
                   'Проверьте выход и параметры блюда',
-                  style: AppTypography.body.copyWith(
+                  style: AppTypography.bodySm.copyWith(
                     color: p.ink,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 if (detail != null && detail!.isNotEmpty) ...[
@@ -87,11 +86,7 @@ class FriendlyErrorPane extends StatelessWidget {
               Text(
                 'Не удалось показать этот экран',
                 textAlign: TextAlign.center,
-                style: AppTypography.body.copyWith(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: p.ink,
-                ),
+                style: AppTypography.headline.copyWith(color: p.ink),
               ),
               const SizedBox(height: Space.x1),
               Text(

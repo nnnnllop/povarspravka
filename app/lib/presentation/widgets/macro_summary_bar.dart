@@ -6,6 +6,7 @@ import '../../core/calculation/models/calculation_result.dart';
 import '../../core/calculation/yield_explanation.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
+import 'app_buttons.dart';
 import 'loss_clarity_hints.dart';
 import 'yield_density_warning.dart';
 
@@ -205,16 +206,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
           // Выбор ответа: «на всё блюдо» или «на 100 г».
           SegmentedButton<bool>(
             showSelectedIcon: false,
-            style: SegmentedButton.styleFrom(
-              minimumSize: const Size(0, kMinTapTarget),
-              backgroundColor: p.surface,
-              foregroundColor: p.inkSecondary,
-              selectedBackgroundColor: p.accentSoft,
-              selectedForegroundColor: p.accent,
-              side: BorderSide(color: p.border),
-              shape: RoundedRectangleBorder(borderRadius: Radii.fieldAll),
-              textStyle: AppTypography.caption.copyWith(fontWeight: FontWeight.w700),
-            ),
+            style: AppSegmentedStyle.of(p, compact: true),
             segments: [
               ButtonSegment(
                 value: false,
@@ -326,8 +318,18 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
   /// строкой в карточке параметров выше, а повтор в доке — это второй ответ
   /// на тот же вопрос.
   Widget _buildCompact(BuildContext context, Palette p, CalculationResult r) {
+    final shortHeight = MediaQuery.sizeOf(context).height < 460;
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final ultraCompact = shortHeight && textScale > 1.35;
+    final cells = <(Color, String, String, String, String)>[
+      (p.protein, 'Белки', 'Б', m(r.cookedProtein), 'г'),
+      (p.fat, 'Жиры', 'Ж', m(r.cookedFat), 'г'),
+      (p.carbs, 'Углеводы', 'У', m(r.cookedCarbs), 'г'),
+      (p.kcal, 'Энергия', '', k(r.cookedKcal), 'ккал'),
+    ];
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(Space.x3, Space.x2, Space.x2, Space.x2),
+      padding: EdgeInsets.only(bottom: shortHeight ? 0 : Space.x1),
       child: Row(
         children: [
           Expanded(
@@ -335,37 +337,78 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  'После т.о. · на всё блюдо',
-                  style: AppTypography.caption.copyWith(color: p.inkSecondary),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                // Wrap не даёт строгих ограничений по ширине ни ОДНОМУ
-                // ребёнку и переносит их сам — поэтому внутренние Column
-                // здесь безопасны, а при крупном шрифте строка уйдёт вниз.
-                Wrap(
-                  spacing: Space.x3,
-                  runSpacing: 2,
-                  crossAxisAlignment: WrapCrossAlignment.start,
-                  children: [
-                    for (final cell in <(Color, String, String, String)>[
-                      (p.protein, 'Белки', m(r.cookedProtein), 'г'),
-                      (p.fat, 'Жиры', m(r.cookedFat), 'г'),
-                      (p.carbs, 'Углеводы', m(r.cookedCarbs), 'г'),
-                      (p.kcal, 'Энергия', k(r.cookedKcal), 'ккал'),
-                    ])
-                      _ValueCell(
-                        tint: cell.$1,
-                        title: cell.$2,
-                        value: cell.$3,
-                        unit: cell.$4,
-                        palette: p,
-                        compact: true,
+                if (!ultraCompact) ...[
+                  Text(
+                    'После т.о. · на всё блюдо',
+                    style:
+                        AppTypography.caption.copyWith(color: p.inkSecondary),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                ],
+                if (shortHeight)
+                  Semantics(
+                    label:
+                        'После т.о. · на всё блюдо: Белки ${m(r.cookedProtein)} г, Жиры ${m(r.cookedFat)} г, Углеводы ${m(r.cookedCarbs)} г, Энергия ${k(r.cookedKcal)} ккал',
+                    child: Text.rich(
+                      TextSpan(
+                        style: AppTypography.caption.copyWith(
+                          color: p.ink,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        children: [
+                          for (var i = 0; i < cells.length; i++) ...[
+                            if (i > 0)
+                              TextSpan(
+                                text: ' · ',
+                                style: AppTypography.caption
+                                    .copyWith(color: p.inkMuted),
+                              ),
+                            WidgetSpan(
+                              alignment: PlaceholderAlignment.middle,
+                              child: Container(
+                                width: 6,
+                                height: 6,
+                                margin: const EdgeInsets.only(right: 3),
+                                decoration: BoxDecoration(
+                                  color: cells[i].$1,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                            TextSpan(
+                              text: ultraCompact
+                                  ? (cells[i].$3.isEmpty
+                                      ? '${cells[i].$4} ${cells[i].$5}'
+                                      : '${cells[i].$3} ${cells[i].$4}')
+                                  : '${cells[i].$2} ${cells[i].$4} ${cells[i].$5}',
+                            ),
+                          ],
+                        ],
                       ),
-                  ],
-                ),
+                    ),
+                  )
+                else
+                  // Wrap не даёт строгих ограничений по ширине ни ОДНОМУ
+                  // ребёнку и переносит их сам — поэтому внутренние Column
+                  // здесь безопасны, а при крупном шрифте строка уйдёт вниз.
+                  Wrap(
+                    spacing: Space.x3,
+                    runSpacing: 2,
+                    crossAxisAlignment: WrapCrossAlignment.start,
+                    children: [
+                      for (final cell in cells)
+                        _ValueCell(
+                          tint: cell.$1,
+                          title: cell.$2,
+                          value: cell.$4,
+                          unit: cell.$5,
+                          palette: p,
+                          compact: true,
+                        ),
+                    ],
+                  ),
               ],
             ),
           ),
@@ -782,20 +825,22 @@ class _ValueCell extends StatelessWidget {
           color: tint,
           margin: const EdgeInsets.only(right: Space.x2),
         ),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(title,
-                style: AppTypography.caption
-                    .copyWith(color: palette.inkMuted)),
-            Text(
-              '$value $unit',
-              key: ValueKey('macro-$title'),
-              style: (compact ? AppTypography.numSm : AppTypography.num)
-                  .copyWith(color: palette.ink),
-            ),
-          ],
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(title,
+                  style: AppTypography.caption
+                      .copyWith(color: palette.inkMuted)),
+              Text(
+                '$value $unit',
+                key: ValueKey('macro-$title'),
+                style: (compact ? AppTypography.numSm : AppTypography.num)
+                    .copyWith(color: palette.ink),
+              ),
+            ],
+          ),
         ),
       ],
     );

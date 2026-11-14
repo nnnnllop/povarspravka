@@ -10,6 +10,7 @@ import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
 import '../providers/dish_provider.dart';
+import '../widgets/app_buttons.dart';
 import '../widgets/calc_error_banner.dart';
 
 /// Просмотр бланка (аудит P1-8).
@@ -124,13 +125,20 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // Плашка режима: имя режима и счётчик в одной строке.
-          Container(
+      body: Builder(
+        builder: (context) {
+          final media = MediaQuery.sizeOf(context);
+          final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+          final inlineModeBanner =
+              (media.height < 680 && textScale > 1.3) || media.height < 420;
+
+          final modeBanner = Container(
             padding: const EdgeInsets.symmetric(
                 horizontal: Space.x4, vertical: Space.x2),
-            color: p.sunken,
+            decoration: BoxDecoration(
+              color: p.sunken,
+              border: Border(bottom: BorderSide(color: p.divider)),
+            ),
             child: Row(
               children: [
                 Icon(
@@ -154,82 +162,135 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
                 ),
               ],
             ),
-          ),
+          );
 
-          // Лист бланка: пинч-зум и перетаскивание.
-          Expanded(
-            child: InteractiveViewer(
-              transformationController: _transform,
-              minScale: _minScale,
-              maxScale: _maxScale,
-              // Лист больше экрана — панорамируем свободно по обеим осям.
-              constrained: false,
-              boundaryMargin: const EdgeInsets.all(80),
-              child: Container(
-                padding: const EdgeInsets.all(Space.x4),
-                child: calc == null
-                    // STATE-01: невычислимое блюдо не роняет бланк.
-                    ? Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          CalcErrorBanner(
-                              detail: ref.watch(calculationErrorProvider)),
-                        ],
-                      )
-                    : _BlankPreviewDocument(
-                        dish: dish,
-                        calc: calc,
-                        scale:
-                            MediaQuery.textScalerOf(context).scale(9.5) / 9.5,
+          final previewDoc = calc == null
+              // STATE-01: невычислимое блюдо не роняет бланк.
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CalcErrorBanner(detail: ref.watch(calculationErrorProvider)),
+                  ],
+                )
+              : _BlankPreviewDocument(
+                  dish: dish,
+                  calc: calc,
+                  scale: MediaQuery.textScalerOf(context).scale(9.5) / 9.5,
+                );
+
+          return Column(
+            children: [
+              // Плашка режима: на просторных экранах закреплена над листом,
+              // а на тесных с крупным текстом прокручивается вместе с листом.
+              if (!inlineModeBanner) modeBanner,
+
+              // Лист бланка: пинч-зум и перетаскивание.
+              Expanded(
+                child: InteractiveViewer(
+                  transformationController: _transform,
+                  minScale: _minScale,
+                  maxScale: _maxScale,
+                  // Лист больше экрана — панорамируем свободно по обеим осям.
+                  constrained: false,
+                  boundaryMargin: const EdgeInsets.all(80),
+                  child: Container(
+                    padding: const EdgeInsets.all(Space.x4),
+                    child: inlineModeBanner
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: (media.width - Space.x8)
+                                    .clamp(240.0, double.infinity),
+                                child: modeBanner,
+                              ),
+                              const SizedBox(height: Space.x3),
+                              previewDoc,
+                            ],
+                          )
+                        : previewDoc,
+                  ),
+                ),
+              ),
+
+          // Панель масштаба: плоский нижний док с 1 px верхним разделителем.
+          AppBottomBar(
+            padding: const EdgeInsets.symmetric(
+                horizontal: Space.x2, vertical: Space.x1),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+                final twoRows = constraints.maxWidth < 380 ||
+                    (textScale > 1.2 && constraints.maxWidth < 520);
+
+                final zoomOutBtn = IconButton(
+                  tooltip: 'Уменьшить',
+                  icon: const Icon(Icons.zoom_out_rounded),
+                  onPressed: () => _zoomBy(1 / 1.25),
+                );
+                final zoomInBtn = IconButton(
+                  tooltip: 'Увеличить',
+                  icon: const Icon(Icons.zoom_in_rounded),
+                  onPressed: () => _zoomBy(1.25),
+                );
+                final scaleLabel = Text(
+                  'Масштаб ${(_scale * 100).round()} %',
+                  key: const ValueKey('blank-zoom'),
+                  textAlign: TextAlign.center,
+                  style: AppTypography.numSm.copyWith(color: p.inkSecondary),
+                );
+                final resetBtn = TextButton.icon(
+                  onPressed: _resetZoom,
+                  icon: const Icon(Icons.fit_screen_rounded, size: 18),
+                  label: const Text('По размеру'),
+                );
+
+                if (twoRows) {
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      IntrinsicHeight(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            zoomOutBtn,
+                            const SizedBox(width: Space.x1),
+                            Flexible(child: Center(child: scaleLabel)),
+                            const SizedBox(width: Space.x1),
+                            zoomInBtn,
+                          ],
+                        ),
                       ),
-              ),
-            ),
-          ),
+                      resetBtn,
+                    ],
+                  );
+                }
 
-          // Панель масштаба: единственные элементы управления листом.
-          SafeArea(
-            top: false,
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: Space.x2, vertical: Space.x2),
-              decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: p.divider)),
-              ),
-              // Wrap, а не Row: при масштабе текста 2.0× подпись «По размеру»
-              // не помещается рядом с кнопками зума и должна перейти на новую
-              // строку, а не обрезаться (проверено design_audit_test).
-              child: Wrap(
-                alignment: WrapAlignment.center,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  IconButton(
-                    tooltip: 'Уменьшить',
-                    icon: const Icon(Icons.zoom_out_rounded),
-                    onPressed: () => _zoomBy(1 / 1.25),
+                return IntrinsicHeight(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      zoomOutBtn,
+                      const SizedBox(width: Space.x1),
+                      Flexible(child: Center(child: scaleLabel)),
+                      const SizedBox(width: Space.x1),
+                      zoomInBtn,
+                      const SizedBox(width: Space.x2),
+                      resetBtn,
+                    ],
                   ),
-                  Text(
-                    'Масштаб ${(_scale * 100).round()} %',
-                    key: const ValueKey('blank-zoom'),
-                    textAlign: TextAlign.center,
-                    style:
-                        AppTypography.numSm.copyWith(color: p.inkSecondary),
-                  ),
-                  IconButton(
-                    tooltip: 'Увеличить',
-                    icon: const Icon(Icons.zoom_in_rounded),
-                    onPressed: () => _zoomBy(1.25),
-                  ),
-                  TextButton.icon(
-                    onPressed: _resetZoom,
-                    icon: const Icon(Icons.fit_screen_rounded, size: 18),
-                    label: const Text('По размеру'),
-                  ),
-                ],
-              ),
+                );
+              },
             ),
           ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }

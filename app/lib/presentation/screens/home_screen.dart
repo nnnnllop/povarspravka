@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,27 +9,15 @@ import '../../core/calculation/models/dish.dart';
 import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
-import '../../data/masters_recipes.dart';
 import '../providers/dish_provider.dart';
+import '../widgets/app_buttons.dart';
 import '../widgets/loss_clarity_hints.dart';
 import '../widgets/persistence_error_banner.dart';
 import 'recipe_editor_screen.dart';
 import 'search_product_modal.dart';
 
-/// Главный экран (аудит P1-7).
-///
-/// Было: экран открывался рекламным блоком «100% ОФЛАЙН» высотой ~430 dp,
-/// под ним горизонтальная карусель рецептур мастеров, потом две плитки-
-/// лозунга и в самом низу — сохранённые блюда. То есть главное действие
-/// (продолжить начатый расчёт) и главная ценность (моя библиотека) стояли
-/// ниже всего, что не помогает повару.
-///
-/// Стало — правило «сверху вниз по частоте»:
-///  1. Активный черновик: одна строка + «Продолжить» (или «Новый расчёт»).
-///  2. Мои блюда — библиотека, 1-в-ряд, с выходом и ккал.
-///  3. Рецептуры мастеров — сетка по 2 в ряд.
-///  4. Нижний док: «Новый расчёт» и «Справочник продуктов».
-/// Допущения и форматы — под катом «Как считается», а не на первом экране.
+/// Главный экран: активный черновик, библиотека «Мои блюда» и нижний док
+/// («Новый расчёт» и «Справочник»). Допущения вынесены в шторку «Как считается».
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
@@ -40,6 +30,11 @@ class HomeScreen extends ConsumerWidget {
     final compatibilityNotice = ref.watch(storageCompatibilityNoticeProvider);
     final persistenceError = ref.watch(persistenceErrorProvider);
     final savedDishesError = ref.watch(savedDishesErrorProvider);
+    final width = MediaQuery.sizeOf(context).width;
+    final gutter = Space.gutter(width);
+    final listHPad = math.max(gutter, (width - Space.maxWidth) / 2);
+    final hasActiveDraft =
+        activeDish.ingredients.isNotEmpty || activeDish.title.trim().isNotEmpty;
 
     return Scaffold(
       backgroundColor: p.canvas,
@@ -69,30 +64,32 @@ class HomeScreen extends ConsumerWidget {
       body: Column(
         children: [
           if (persistenceError != null || savedDishesError != null)
-            PersistenceErrorBanner(
-              margin: const EdgeInsets.fromLTRB(
-                  Space.x4, Space.x2, Space.x4, Space.x2),
-              onRetry: () async {
-                var ok = true;
-                if (ref.read(persistenceErrorProvider) != null) {
-                  ok = await ref
-                          .read(dishProvider.notifier)
-                          .retryPersistence() &&
-                      ok;
-                }
-                if (ref.read(savedDishesErrorProvider) != null) {
-                  ok = await ref
-                          .read(savedDishesProvider.notifier)
-                          .retryLastOperation() &&
-                      ok;
-                }
-                return ok;
-              },
+            AppContentFrame(
+              child: PersistenceErrorBanner(
+                margin: EdgeInsets.fromLTRB(
+                    gutter, Space.x2, gutter, Space.x2),
+                onRetry: () async {
+                  var ok = true;
+                  if (ref.read(persistenceErrorProvider) != null) {
+                    ok = await ref
+                            .read(dishProvider.notifier)
+                            .retryPersistence() &&
+                        ok;
+                  }
+                  if (ref.read(savedDishesErrorProvider) != null) {
+                    ok = await ref
+                            .read(savedDishesProvider.notifier)
+                            .retryLastOperation() &&
+                        ok;
+                  }
+                  return ok;
+                },
+              ),
             ),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(
-                  Space.x4, Space.x2, Space.x4, Space.x6),
+              padding: EdgeInsets.fromLTRB(
+                  listHPad, Space.x2, listHPad, Space.x6),
               children: [
                 if (recoveryNotice != null) ...[
                   _NoticeBanner(
@@ -116,36 +113,25 @@ class HomeScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: Space.x3),
                 ],
-          _ActiveDraftCard(
-            dish: activeDish,
-            onOpen: () => _openEditor(context),
-            onNew: () => _newCalculation(context, ref),
-          ),
-          const SizedBox(height: Space.x5),
+                if (hasActiveDraft) ...[
+                  _ActiveDraftCard(
+                    dish: activeDish,
+                    onOpen: () => _openEditor(context),
+                    onNew: () => _newCalculation(context, ref),
+                  ),
+                  const SizedBox(height: Space.x5),
+                ],
 
-          // ── Мои блюда ────────────────────────────────────────────────
-          _SectionHeader(
-            title: 'Мои блюда',
-            trailing: savedDishes.isEmpty ? null : '${savedDishes.length}',
-          ),
-          const SizedBox(height: Space.x2),
-          if (savedDishes.isEmpty)
-            _EmptyLibrary(palette: p)
-          else
-            for (final dish in savedDishes) _SavedDishCard(dish: dish),
-
-          const SizedBox(height: Space.x5),
-
-          // ── Рецептуры мастеров ──────────────────────────────────────
-          const _SectionHeader(title: 'Рецептуры мастеров'),
-          const SizedBox(height: Space.x2),
-          _MastersGrid(
-            onPick: (recipe) {
-              AppHaptics.toggle();
-              ref.read(dishProvider.notifier).loadDish(recipe.toDish());
-              _openEditor(context);
-            },
-          ),
+                // ── Мои блюда ────────────────────────────────────────────────
+                _SectionHeader(
+                  title: 'Мои блюда',
+                  trailing: savedDishes.isEmpty ? null : '${savedDishes.length}',
+                ),
+                const SizedBox(height: Space.x2),
+                if (savedDishes.isEmpty)
+                  _EmptyLibrary(palette: p)
+                else
+                  for (final dish in savedDishes) _SavedDishCard(dish: dish),
               ],
             ),
           ),
@@ -716,79 +702,6 @@ class _SavedDishCard extends ConsumerWidget {
   }
 }
 
-/// Мастера — сетка по 2 в ряд (было: горизонтальная карусель карточек
-/// шириной 230 dp, где вторая карточка всегда обрезана).
-class _MastersGrid extends StatelessWidget {
-  final void Function(MasterRecipe) onPick;
-
-  const _MastersGrid({required this.onPick});
-
-  @override
-  Widget build(BuildContext context) {
-    final p = Palette.of(context);
-    return LayoutBuilder(builder: (context, constraints) {
-      final wide = constraints.maxWidth >= 600;
-      final columns = wide ? 3 : 2;
-      const gap = Space.x2;
-      final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
-      return Wrap(
-        spacing: gap,
-        runSpacing: gap,
-        children: [
-          for (final recipe in MastersRecipesCatalog.recipes)
-            SizedBox(
-              width: width,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: p.surface,
-                  borderRadius: Radii.cardAll,
-                  border: Border.all(color: p.borderStatic),
-                ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () => onPick(recipe),
-                    borderRadius: Radii.cardAll,
-                    child: Padding(
-                      padding: const EdgeInsets.all(Space.x3),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            recipe.standardCode,
-                            style: AppTypography.caption.copyWith(
-                              color: p.inkMuted,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.4,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            recipe.name,
-                            style: AppTypography.bodySm.copyWith(
-                                color: p.ink, fontWeight: FontWeight.w700),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: Space.x1),
-                          Text(
-                            '${CalculationEngine.formatGrams(recipe.expectedYieldGrams)} г · '
-                            '${recipe.ingredients.length} инг.',
-                            style: AppTypography.numSm.copyWith(color: p.inkSecondary),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      );
-    });
-  }
-}
-
 /// Нижний док главного экрана: два главных действия всегда под рукой.
 class _HomeDock extends StatelessWidget {
   final VoidCallback onNewCalculation;
@@ -801,39 +714,42 @@ class _HomeDock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
-    return Material(
-      elevation: 8,
-      color: p.surface,
-      child: SafeArea(
-        top: false,
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-              horizontal: Space.x4, vertical: Space.x3),
-          decoration: BoxDecoration(
-            border: Border(top: BorderSide(color: p.divider)),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: onNewCalculation,
-                  icon: const Icon(Icons.add_rounded, size: 20),
-                  label: const Text('Новый расчёт'),
-                ),
+    final width = MediaQuery.sizeOf(context).width;
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final stackVertically = (width < 380 && textScale > 1.3) || width < 300;
+
+    final newBtn = FilledButton.icon(
+      onPressed: onNewCalculation,
+      icon: const Icon(Icons.add_rounded, size: 20),
+      label: const Text('Новый расчёт', textAlign: TextAlign.center),
+    );
+    final catalogBtn = OutlinedButton.icon(
+      onPressed: onCatalog,
+      icon: const Icon(Icons.search_rounded, size: 20),
+      label: const Text('Справочник', textAlign: TextAlign.center),
+    );
+
+    return AppBottomBar(
+      child: stackVertically
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                newBtn,
+                const SizedBox(height: Space.x2),
+                catalogBtn,
+              ],
+            )
+          : IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: newBtn),
+                  const SizedBox(width: Space.x2),
+                  Expanded(child: catalogBtn),
+                ],
               ),
-              const SizedBox(width: Space.x2),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: onCatalog,
-                  icon: const Icon(Icons.search_rounded, size: 20),
-                  label: const Text('Справочник'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+            ),
     );
   }
 }

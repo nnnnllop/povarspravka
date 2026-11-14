@@ -1,4 +1,6 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/calculation/calculation_engine.dart';
 import '../../core/calculation/calculation_math.dart';
@@ -12,12 +14,11 @@ import '../../core/calculation/models/heat_process.dart';
 import '../../core/calculation/models/ingredient.dart';
 import '../../core/calculation/models/loss_group.dart';
 import '../../core/calculation/yield_explanation.dart';
-import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
-import '../../data/masters_recipes.dart';
 import '../providers/dish_provider.dart';
+import '../widgets/app_buttons.dart';
 import '../widgets/calc_error_banner.dart';
 import '../widgets/custom_numpad.dart';
 import '../widgets/ingredient_card.dart';
@@ -34,8 +35,6 @@ class RecipeEditorScreen extends ConsumerStatefulWidget {
   @override
   ConsumerState<RecipeEditorScreen> createState() => _RecipeEditorScreenState();
 }
-
-enum _MasterLoadChoice { copy, replace, cancel }
 
 enum _ExitChoice { stay, discard, saveAndExit }
 
@@ -70,14 +69,18 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
   }
 
   String? _yieldError;
+  bool _yieldDetailsExpanded = false;
 
   @override
   Widget build(BuildContext context) {
+    final p = Palette.of(context);
     final dish = ref.watch(dishProvider);
     final calc = ref.watch(calculationResultProvider);
     final calcError = ref.watch(calculationErrorProvider);
     final persistenceError = ref.watch(persistenceErrorProvider);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final media = MediaQuery.sizeOf(context);
+    final gutter = Space.gutter(media.width);
+    final listHPad = math.max(gutter, (media.width - Space.maxWidth) / 2);
 
     ref.listen<Dish>(dishProvider, (previous, next) {
       if (previous?.id != next.id) {
@@ -97,8 +100,6 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
       }
     });
 
-    final separateActions = MediaQuery.sizeOf(context).width < 380 ||
-        MediaQuery.textScalerOf(context).scale(1) > 1.2;
     final actions = _buildActions(dish);
     final isDirty = ref.read(dishProvider.notifier).isDirty;
 
@@ -137,67 +138,47 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
         appBar: AppBar(
           title: Text(
             dish.title.trim().isEmpty ? 'Новое блюдо' : dish.title.trim(),
-            softWrap: true,
-            maxLines: 2,
+            maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
           titleSpacing: 0,
-          // Единственная точка входа к мастерам — эта кнопка в AppBar.
-          actions: separateActions ? null : actions,
-          bottom: separateActions
-              ? PreferredSize(
-                  preferredSize: const Size.fromHeight(kToolbarHeight),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    reverse: true,
-                    padding: const EdgeInsets.symmetric(horizontal: Space.x2),
-                    child: Row(children: actions),
-                  ),
-                )
-              : null,
+          actions: actions,
         ),
         body: Column(
           children: [
             if (persistenceError != null)
-              PersistenceErrorBanner(
-                margin: const EdgeInsets.symmetric(
-                    horizontal: Space.x4, vertical: Space.x2),
-                onRetry: () =>
-                    ref.read(dishProvider.notifier).retryPersistence(),
+              AppContentFrame(
+                child: PersistenceErrorBanner(
+                  margin: EdgeInsets.fromLTRB(gutter, Space.x2, gutter, Space.x1),
+                  onRetry: () =>
+                      ref.read(dishProvider.notifier).retryPersistence(),
+                ),
               ),
+            // STATE-01: баннер ошибки расчёта закреплён над лентой, поэтому
+            // виден на любом скролле и при компактном экране.
+            if (calcError != null)
+              AppContentFrame(child: CalcErrorBanner(detail: calcError)),
             Expanded(
-              child: Stack(
-                children: [
-                  ReorderableListView.builder(
-                padding: const EdgeInsets.fromLTRB(
-                    Space.x4, Space.x3, Space.x4, Space.x6 + 72),
+              child: ReorderableListView.builder(
+                padding: EdgeInsets.fromLTRB(
+                    listHPad, Space.x3, listHPad, Space.x6),
                 header: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // STATE-01: невычислимое блюдо не роняет экран — над
-                    // параметрами появляется понятный баннер.
-                    if (calcError != null) CalcErrorBanner(detail: calcError),
-                    _buildParameters(dish, calc, isDark),
+                    _buildParameters(dish, calc),
                     const SizedBox(height: Space.x5),
                     Text(
                       'Ингредиенты · ${dish.ingredients.length}',
-                      style: AppTypography.headline.copyWith(
-                        color: isDark ? AppColors.inkDark : AppColors.ink,
-                      ),
+                      style: AppTypography.headline.copyWith(color: p.ink),
                     ),
                     const SizedBox(height: Space.x1),
                     if (dish.ingredients.isNotEmpty)
                       Text(
                         '⟷ перетащить · ← смахнуть, чтобы удалить',
-                        style: AppTypography.caption.copyWith(
-                          color: isDark
-                              ? AppColors.inkMutedDark
-                              : AppColors.inkMuted,
-                        ),
+                        style: AppTypography.caption.copyWith(color: p.inkMuted),
                       ),
                     const SizedBox(height: Space.x3),
-                    if (dish.ingredients.isEmpty)
-                      _buildEmptyState(context, isDark),
+                    if (dish.ingredients.isEmpty) _buildEmptyState(context),
                   ],
                 ),
                 itemCount: dish.ingredients.length,
@@ -213,23 +194,16 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                       alignment: Alignment.centerRight,
                       padding: const EdgeInsets.all(Space.x6),
                       decoration: BoxDecoration(
-                        color: AppColors.dangerSoft,
+                        color: p.dangerSoft,
                         borderRadius: Radii.cardAll,
                       ),
-                      child: const Icon(Icons.delete_outline,
-                          color: AppColors.danger),
+                      child: Icon(Icons.delete_outline, color: p.danger),
                     ),
                     onDismissed: (_) => _removeIngredient(ing, index),
                     child: IngredientCard(
                       index: index + 1,
                       ingredient: ing,
-                      // Явная ручка перестановки, а не «удерживайте карточку»:
-                      // жест перетаскивания больше не конкурирует с тапом
-                      // «изменить» и свайпом «удалить» (аудит P1-6).
                       dragHandleIndex: index,
-                      // Новый расчёт: группа и способ обработки ингредиента
-                      // видны в карточке и меняются вручную. Старый расчёт
-                      // (legacy) — одна тройка на блюдо, строки нет.
                       lossLabel: dish.process.isLegacy
                           ? null
                           : lossLabelFor(ing, dish.process),
@@ -242,101 +216,157 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                   );
                 },
               ),
-                  Positioned(
-                    right: Space.x4,
-                    bottom: Space.x4,
-                    child: FloatingActionButton.extended(
-                      onPressed: () async {
-                        AppHaptics.commit();
-                        await SearchProductModal.show(
-                          context,
-                          mode: SearchMode.pickForRecipe,
-                        );
-                      },
-                      icon: const Icon(Icons.add_rounded, size: 22),
-                      label: const Text('Добавить продукт'),
-                    ),
-                  ),
-                ],
-              ),
             ),
-            // Закреплённая итоговая полоса: цифры не уезжают за край ленты
-            // и не прячутся под клавиатурой (аудит P1-6).
-            _buildSummaryRail(calc, dish),
+            // Плоский нижний док: итоги + «Бланк» + «Добавить продукт».
+            _buildBottomDock(calc, dish),
           ],
         ),
       ),
     );
   }
 
-  /// Нижний док итогов (аудит P1-6).
-  ///
-  /// Всегда компактный: одна строка «После т.о. · Б Ж У · ккал» + кнопка
-  /// «Инспектор расчёта», которая открывает те же три ступени
-  /// (Сырьё → После т.о. → Порция) полностью. Развёрнутая карточка в доке
-  /// на экране 640 dp отнимала треть высоты и выталкивала ингредиенты из
-  /// ленты — цена, которую не стоит платить за повтор уже посчитанных цифр.
-  Widget _buildSummaryRail(CalculationResult? calc, Dish dish) {
+  /// Плоский нижний док редактора: краткий итог «После т.о.» + действия.
+  Widget _buildBottomDock(CalculationResult? calc, Dish dish) {
     final p = Palette.of(context);
-    // STATE-01: без результата показываем прочерки, а не падаем.
-    return Material(
-      elevation: 8,
-      color: p.surface,
-      child: SafeArea(
-        top: false,
-        child: Container(
-          decoration: BoxDecoration(
-            border: Border(top: BorderSide(color: p.divider)),
+    final media = MediaQuery.sizeOf(context);
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final stackActions =
+        (media.width < 380 && textScale > 1.3) || media.width < 300;
+    final shortLandscape = media.height < 460 && media.width >= 560;
+    final landscapeInline = shortLandscape;
+
+    final summaryWidget = calc == null
+        ? Text(
+            'После т.о. · — Б — Ж — У — ккал',
+            style: AppTypography.numSm.copyWith(color: p.inkMuted),
+          )
+        : MacroSummaryBar(
+            key: ValueKey(dish.id),
+            result: calc,
+            compact: true,
+          );
+
+    final compactPad = landscapeInline
+        ? const EdgeInsets.symmetric(
+            horizontal: Space.x3,
+            vertical: Space.x2,
+          )
+        : null;
+
+    final blankBtn = OutlinedButton(
+      onPressed: _openBlank,
+      style: compactPad != null
+          ? OutlinedButton.styleFrom(padding: compactPad)
+          : null,
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.description_outlined, size: 18),
+          SizedBox(width: Space.x2),
+          Flexible(
+            child: Text(
+              'Бланк',
+              maxLines: 2,
+              textAlign: TextAlign.center,
+            ),
           ),
-          child: calc == null
-              ? Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: Space.x4, vertical: Space.x3),
-                  child: Text(
-                    'После т.о. · — Б — Ж — У — ккал',
-                    style: AppTypography.num.copyWith(color: p.inkMuted),
-                  ),
-                )
-              : MacroSummaryBar(
-                  key: ValueKey(dish.id),
-                  result: calc,
-                  compact: true,
-                ),
-        ),
+        ],
       ),
+    );
+
+    final addBtn = FilledButton(
+      onPressed: () async {
+        AppHaptics.commit();
+        await SearchProductModal.show(
+          context,
+          mode: SearchMode.pickForRecipe,
+        );
+      },
+      style:
+          compactPad != null ? FilledButton.styleFrom(padding: compactPad) : null,
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.add_rounded, size: 20),
+          SizedBox(width: Space.x2),
+          Flexible(
+            child: Text(
+              'Добавить продукт',
+              maxLines: 2,
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return AppBottomBar(
+      padding: shortLandscape
+          ? EdgeInsets.symmetric(
+              horizontal: Space.gutter(media.width),
+              vertical: Space.x1,
+            )
+          : null,
+      child: landscapeInline
+          ? Row(
+              children: [
+                Expanded(
+                  flex: 4,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: summaryWidget,
+                  ),
+                ),
+                const SizedBox(width: Space.x2),
+                Expanded(
+                  flex: 5,
+                  child: IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        blankBtn,
+                        const SizedBox(width: Space.x2),
+                        Expanded(child: addBtn),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                summaryWidget,
+                const SizedBox(height: Space.x1),
+                if (stackActions) ...[
+                  addBtn,
+                  const SizedBox(height: Space.x2),
+                  blankBtn,
+                ] else
+                  IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        blankBtn,
+                        const SizedBox(width: Space.x2),
+                        Expanded(child: addBtn),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
     );
   }
 
   List<Widget> _buildActions(Dish dish) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return [
-      // Единственная кнопка каталога мастеров в AppBar (остальные удалены).
-      IconButton(
-        icon: const Icon(Icons.auto_stories_outlined),
-        tooltip: 'Рецептуры мастеров',
-        onPressed: () => _showMastersCatalogSheet(context),
-      ),
       IconButton(
         icon: const Icon(Icons.tune_rounded),
         tooltip: 'Параметры',
         onPressed: () => _showRetentionSettingsDialog(context, dish),
-      ),
-      Padding(
-        padding: const EdgeInsets.symmetric(vertical: Space.x1),
-        child: FilledButton(
-          onPressed: _openBlank,
-          // `styleFrom` перекрывает тему целиком, поэтому минимум 48 dp
-          // задаём явно (WCAG 2.5.5).
-          style: FilledButton.styleFrom(
-            backgroundColor: isDark ? AppColors.primaryLight : AppColors.primary,
-            foregroundColor:
-                isDark ? AppColors.backgroundDark : Colors.white,
-            minimumSize: const Size(0, kMinTapTarget),
-            tapTargetSize: MaterialTapTargetSize.padded,
-            padding: const EdgeInsets.symmetric(horizontal: Space.x3),
-          ),
-          child: const Text('Бланк'),
-        ),
       ),
       PopupMenuButton<String>(
         tooltip: 'Другие действия',
@@ -471,9 +501,8 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                 Text(
                   'Источник: ${loss.source.title}'
                   '${loss.isVerified ? '' : '. Не подтверждено таблицей источника — ближайший аналог (${loss.note})'}.',
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textSecondaryLight,
-                    fontSize: 11,
+                  style: AppTypography.caption.copyWith(
+                    color: Palette.of(ctx).inkSecondary,
                   ),
                 ),
                 if (LossClarityHints.forIngredient(
@@ -481,22 +510,19 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                       process: process,
                     )
                     case final String clarityHint) ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: Space.x2),
                   Container(
                     key: const ValueKey('ingredient-loss-clarity-hint'),
                     padding: const EdgeInsets.all(Space.x2),
                     decoration: BoxDecoration(
                       color: Palette.of(ctx).accentSoft,
                       borderRadius: Radii.fieldAll,
-                      border: Border.all(
-                        color: Palette.of(ctx).accent.withOpacity(0.3),
-                      ),
+                      border: Border.all(color: Palette.of(ctx).borderStatic),
                     ),
                     child: Text(
                       clarityHint,
-                      style: AppTypography.bodySmall.copyWith(
+                      style: AppTypography.caption.copyWith(
                         color: Palette.of(ctx).ink,
-                        fontSize: 11.5,
                       ),
                     ),
                   ),
@@ -572,29 +598,23 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
     }
   }
 
-  Widget _buildParameters(Dish dish, CalculationResult? calc, bool isDark) {
+  Widget _buildParameters(Dish dish, CalculationResult? calc) {
+    final p = Palette.of(context);
     final legacy = dish.process.isLegacy;
     final custom = dish.customYieldGrams != null;
     // Новый расчёт: поле веса готового блюда видно всегда (вес вводит повар).
     // Старый расчёт (legacy): прежний переключатель «Задать фактический выход».
     final showYieldField = custom || !legacy;
-    // Сохранённый документ может содержать значения, которые валидатор
-    // отвергает (например, отход 100 %): тогда сумма нетто и выход не
-    // вычисляются, а экран не должен падать — показываем 0 и баннер ошибки.
     final rawNet = _safeGrams(() => dish.totalRawNetGrams);
     final effYield = _safeGrams(() => dish.effectiveYieldGrams);
-    final explanation =
-        YieldExplanation(rawNet, effYield);
+    final explanation = YieldExplanation(rawNet, effYield);
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(Space.x4),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.cardDark : AppColors.cardLight,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? AppColors.borderDark : AppColors.borderLight,
-          width: 1,
-        ),
+        color: p.surface,
+        borderRadius: Radii.cardAll,
+        border: Border.all(color: p.borderStatic, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -608,37 +628,41 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
               hintText: 'Например, борщ с капустой и картофелем',
             ),
           ),
-          const SizedBox(height: 8),
-          SwitchListTile.adaptive(
-            contentPadding: EdgeInsets.zero,
-            // 48 dp цель (WCAG 2.5.5): `dense: true` давала только 40 dp.
-            materialTapTargetSize: MaterialTapTargetSize.padded,
-            title: const Text('Печатать название в заголовке бланка'),
-            value: dish.showTitleInExport,
-            onChanged: (value) =>
-                ref.read(dishProvider.notifier).toggleShowTitle(value),
+          const SizedBox(height: Space.x2),
+          InkWell(
+            key: const ValueKey('heat-process-row'),
+            onTap: () => _showRetentionSettingsDialog(context, dish),
+            borderRadius: Radii.fieldAll,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: kMinTapTarget),
+              child: Row(
+                children: [
+                  Icon(Icons.local_fire_department_outlined,
+                      size: 18, color: p.inkSecondary),
+                  const SizedBox(width: Space.x2),
+                  Expanded(
+                    child: Text(
+                      'Обработка: ${dish.process.label}',
+                      style: AppTypography.bodySm.copyWith(color: p.ink),
+                    ),
+                  ),
+                  Text(
+                    'Изменить',
+                    style: AppTypography.label.copyWith(color: p.inkSecondary),
+                  ),
+                  const SizedBox(width: Space.x1),
+                  Icon(Icons.chevron_right_rounded,
+                      size: 18, color: p.inkMuted),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<BlankMode>(
-            isDense: MediaQuery.textScalerOf(context).scale(1) <= 1.2,
-            itemHeight: null,
-            value: dish.blankMode,
-            isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Режим бланка'),
-            items: BlankMode.values
-                .map((mode) => DropdownMenuItem(
-                    value: mode, child: Text(mode.shortName, softWrap: true)))
-                .toList(),
-            onChanged: (mode) {
-              if (mode != null) ref.read(dishProvider.notifier).setBlankMode(mode);
-            },
-          ),
-          const SizedBox(height: 4),
+          const SizedBox(height: Space.x1),
           Text(
             legacy || dish.hasCustomYield
                 ? 'Выход готового блюда: ${CalculationEngine.formatGrams(effYield)} г'
                 : 'Вес готового блюда не указан',
-            style: Theme.of(context).textTheme.titleMedium,
+            style: AppTypography.headline.copyWith(color: p.ink),
           ),
           if (legacy)
             SwitchListTile.adaptive(
@@ -649,7 +673,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                 custom
                     ? 'Ручной выход • нетто сырья ${CalculationEngine.formatGrams(rawNet)} г'
                     : 'Автоматически: сумма нетто ингредиентов',
-                style: AppTypography.bodySmall,
+                style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
               ),
               value: custom,
               onChanged: (enabled) {
@@ -668,12 +692,12 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
               },
             ),
           if (showYieldField) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: Space.x2),
             TextField(
               key: const ValueKey('actual-yield'),
               controller: _yieldCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: AppTypography.numeric,
+              style: AppTypography.num.copyWith(color: p.ink),
               decoration: InputDecoration(
                 labelText: legacy
                     ? 'Фактический выход готового блюда'
@@ -692,60 +716,83 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
           ],
           if (calc != null &&
               CalculationValidation.warnsImpossiblePer100g(calc)) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: Space.x2),
             YieldDensityWarning(
               key: const ValueKey('yield-density-warning'),
               result: calc,
             ),
           ],
-          if (showYieldField) ...[
-            if (legacy || rawNet > 0) ...[
-              const SizedBox(height: 10),
-              Container(
-                key: const ValueKey('yield-explanation'),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color:
-                      isDark ? AppColors.surfaceDark : AppColors.backgroundLight,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: isDark ? AppColors.borderDark : AppColors.borderLight,
+          if (showYieldField && (legacy || rawNet > 0)) ...[
+            const SizedBox(height: Space.x2),
+            InkWell(
+              key: const ValueKey('yield-explanation'),
+              onTap: () => setState(
+                () => _yieldDetailsExpanded = !_yieldDetailsExpanded,
+              ),
+              borderRadius: Radii.fieldAll,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: kMinTapTarget),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: Space.x3,
+                    vertical: Space.x2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: p.sunken,
+                    borderRadius: Radii.fieldAll,
+                    border: Border.all(color: p.borderStatic),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              explanation.badge,
+                              style: AppTypography.label.copyWith(color: p.ink),
+                            ),
+                          ),
+                          Icon(
+                            _yieldDetailsExpanded
+                                ? Icons.expand_less_rounded
+                                : Icons.expand_more_rounded,
+                            size: 18,
+                            color: p.inkMuted,
+                          ),
+                        ],
+                      ),
+                      if (_yieldDetailsExpanded) ...[
+                        const SizedBox(height: Space.x1),
+                        Text(
+                          explanation.description,
+                          style: AppTypography.bodySm
+                              .copyWith(color: p.inkSecondary),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(explanation.badge,
-                        style: Theme.of(context).textTheme.titleSmall),
-                    const SizedBox(height: 6),
-                    Text(
-                      explanation.description,
-                      style: AppTypography.bodySmall.copyWith(
-                        color: isDark
-                            ? AppColors.textSecondaryDark
-                            : AppColors.textSecondaryLight,
-                      ),
-                    ),
-                  ],
-                ),
               ),
-            ],
+            ),
           ],
         ],
       ),
     );
   }
 
-  Widget _buildEmptyState(BuildContext context, bool isDark) {
+  Widget _buildEmptyState(BuildContext context) {
+    final p = Palette.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+      padding: const EdgeInsets.symmetric(
+        horizontal: Space.x5,
+        vertical: Space.x6,
+      ),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.cardDark : AppColors.cardLight,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? AppColors.borderDark : AppColors.borderLight,
-          width: 1,
-        ),
+        color: p.surface,
+        borderRadius: Radii.cardAll,
+        border: Border.all(color: p.borderStatic, width: 1),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -754,28 +801,27 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
             width: 56,
             height: 56,
             decoration: BoxDecoration(
-              color: isDark ? AppColors.primaryContainerDark : AppColors.primaryContainerLight,
-              borderRadius: BorderRadius.circular(12),
+              color: p.sunken,
+              borderRadius: Radii.cardAll,
             ),
             child: Icon(
               Icons.restaurant_menu_rounded,
               size: 28,
-              color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+              color: p.ink,
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: Space.x3),
           Text(
             'Рецепт пока пуст',
-            style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w700),
+            style: AppTypography.title.copyWith(color: p.ink),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: Space.x2),
           Text(
-            'Нажмите «Добавить продукт», чтобы найти ингредиенты в справочнике '
-            'Скурихина и базе BLS 4.0, или откройте готовую раскладку мастера '
-            'кнопкой «Рецептуры мастеров» в шапке.',
+            'Нажмите «Добавить продукт», чтобы выбрать ингредиенты из '
+            'справочника Скурихина и базы BLS 4.0.',
             textAlign: TextAlign.center,
             style: AppTypography.bodySm.copyWith(
-              color: isDark ? AppColors.inkSecondaryDark : AppColors.inkSecondary,
+              color: p.inkSecondary,
               height: 1.5,
             ),
           ),
@@ -809,218 +855,6 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                 isGross: isGross,
               );
         },
-      ),
-    );
-  }
-
-  void _showMastersCatalogSheet(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Container(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.85,
-          ),
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Сборник рецептур мастеров',
-                          style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        Text(
-                          'Официальные эталонные раскладки (Ф. Л. Марчук, ГОСТ)',
-                          style: AppTypography.bodySmall.copyWith(
-                            color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: ListView.separated(
-                  itemCount: MastersRecipesCatalog.recipes.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (context, idx) {
-                    final recipe = MastersRecipesCatalog.recipes[idx];
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: isDark ? AppColors.cardDark : AppColors.backgroundLight,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: isDark ? AppColors.borderDark : AppColors.borderLight,
-                        ),
-                      ),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        title: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                recipe.name,
-                                style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w700),
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: isDark ? AppColors.accentDark : AppColors.accentLight,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                recipe.standardCode,
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  color: isDark ? AppColors.accentLight : AppColors.accent,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        subtitle: Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                recipe.description,
-                                style: AppTypography.bodySmall.copyWith(
-                                  fontSize: 11,
-                                  color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  Text(
-                                    'Выход: ${CalculationEngine.formatGrams(recipe.expectedYieldGrams)} г · ${recipe.ingredients.length} инг.',
-                                    style: AppTypography.numericSmall.copyWith(fontWeight: FontWeight.w600),
-                                  ),
-                                  const Spacer(),
-                                  Text(
-                                    recipe.culinaryProcess,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
-                        onTap: () {
-                          Navigator.pop(ctx);
-                          _loadMasterRecipe(recipe);
-                        },
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Загрузка эталонной рецептуры (аудит P0-3).
-  ///
-  /// Раньше мастер молча заменял текущее блюдо: `loadDish(newDish)` поверх
-  /// всех ингредиентов. Теперь, если в блюде уже что-то есть, сначала
-  /// спрашиваем: «Открыть как копию в черновик» / «Заменить текущий» /
-  /// «Отмена». Ни один из путей не уничтожает данные молча.
-  Future<void> _loadMasterRecipe(MasterRecipe master) async {
-    final current = ref.read(dishProvider);
-    final hasContent =
-        current.ingredients.isNotEmpty || current.title.trim().isNotEmpty;
-
-    var openAsCopy = true;
-    if (hasContent) {
-      final choice = await showDialog<_MasterLoadChoice>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Открыть рецептуру мастера?'),
-          content: Text(
-            'В текущем блюде ${current.ingredients.length} ингр. '
-            '(«${current.title.trim().isEmpty ? 'Без названия' : current.title.trim()}»).\n\n'
-            'Рецептура «${master.name}» может открыться как новый черновик '
-            'или заменить текущую раскладку.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () =>
-                  Navigator.pop(ctx, _MasterLoadChoice.cancel),
-              child: const Text('Отмена'),
-            ),
-            TextButton(
-              onPressed: () =>
-                  Navigator.pop(ctx, _MasterLoadChoice.replace),
-              child: const Text('Заменить текущий'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, _MasterLoadChoice.copy),
-              child: const Text('Открыть как копию в черновик'),
-            ),
-          ],
-        ),
-      );
-      if (choice == null || choice == _MasterLoadChoice.cancel) return;
-      openAsCopy = choice == _MasterLoadChoice.copy;
-    }
-
-    if (!mounted) return;
-    final notifier = ref.read(dishProvider.notifier);
-    final newDish = master.toDish();
-    if (openAsCopy) {
-      notifier.loadDishAsCopy(newDish);
-    } else {
-      notifier.loadDish(newDish);
-    }
-    final loaded = ref.read(dishProvider);
-    _syncControllers(loaded);
-    AppHaptics.commit();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Загружена эталонная рецептура: «${master.name}»'
-          '${openAsCopy ? ' (как копия)' : ''}',
-        ),
-        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -1082,6 +916,8 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
       text: CalculationEngine.formatPercent(dish.retentionCarbs),
     );
     bool showPer100g = dish.showPer100gRowInExport;
+    bool showTitleInExport = dish.showTitleInExport;
+    BlankMode blankMode = dish.blankMode;
     String? retentionError;
 
     void fillRetention(double protein, double fat, double carbs) {
@@ -1094,13 +930,11 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
-          // Тройка сохранности существует только у старого расчёта (legacy).
-          // Новый расчёт берёт потери из таблицы по группе каждого
-          // продукта (lib/core/calculation/loss_table.dart), поля «Белки / Жиры /
-          // Углев. %» для него не показываются.
+          final p = Palette.of(ctx);
           final currentProcess = ref.read(dishProvider).process;
           final legacy = currentProcess.isLegacy;
           final processNote = LossClarityHints.forDishProcess(currentProcess);
+          final denseDialog = MediaQuery.textScalerOf(ctx).scale(1) <= 1.2;
           return AlertDialog(
             title: const Text('Параметры расчета и бланка'),
             content: SingleChildScrollView(
@@ -1108,30 +942,26 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ГОСТ-01/02/03: способ обработки — главный переключатель
-                  // расчёта. Он здесь, а не в шапке редактора: шапка уже
-                  // занимает весь экран, и любая добавленная строка уводит
-                  // список ингредиентов за нижний край.
                   Text(
                     'Способ тепловой обработки',
-                    style: AppTypography.bodySmall
-                        .copyWith(fontWeight: FontWeight.w700),
+                    style: AppTypography.label.copyWith(color: p.ink),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: Space.x2),
                   DropdownButtonFormField<HeatProcess>(
                     key: const ValueKey('heat-process'),
-                    isDense: true,
+                    isDense: denseDialog,
+                    itemHeight: null,
                     value: ref.read(dishProvider).process,
                     isExpanded: true,
-                    decoration: const InputDecoration(isDense: true),
+                    decoration: InputDecoration(isDense: denseDialog),
                     items: HeatProcess.values
-                        .map((p) => DropdownMenuItem(
-                            value: p,
-                            child: Text(p.label, softWrap: true)))
+                        .map((proc) => DropdownMenuItem(
+                            value: proc,
+                            child: Text(proc.label, softWrap: true)))
                         .toList(),
-                    onChanged: (p) {
-                      if (p == null) return;
-                      ref.read(dishProvider.notifier).setHeatProcess(p);
+                    onChanged: (proc) {
+                      if (proc == null) return;
+                      ref.read(dishProvider.notifier).setHeatProcess(proc);
                       setDialogState(() {
                         retentionError = null;
                         final s = ref.read(dishProvider);
@@ -1142,7 +972,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                       });
                     },
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: Space.x1),
                   Text(
                     legacy
                         ? 'Старый расчёт: одна тройка сохранности на всё '
@@ -1152,53 +982,45 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                             'потерь для группы каждого продукта (МР '
                             '2.3.0419-26). Вес готового блюда вводите сами.',
                     key: const ValueKey('process-hint'),
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textSecondaryLight,
-                      fontSize: 11,
+                    style: AppTypography.caption.copyWith(
+                      color: p.inkSecondary,
                     ),
                   ),
                   if (processNote != null) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: Space.x2),
                     Container(
                       key: const ValueKey('process-clarity-hint'),
                       padding: const EdgeInsets.all(Space.x2),
                       decoration: BoxDecoration(
-                        color: Palette.of(ctx).accentSoft,
+                        color: p.accentSoft,
                         borderRadius: Radii.fieldAll,
-                        border: Border.all(
-                          color: Palette.of(ctx).accent.withOpacity(0.3),
-                        ),
+                        border: Border.all(color: p.borderStatic),
                       ),
                       child: Text(
                         processNote,
-                        style: AppTypography.bodySmall.copyWith(
-                          color: Palette.of(ctx).ink,
-                          fontSize: 11.5,
-                        ),
+                        style: AppTypography.caption.copyWith(color: p.ink),
                       ),
                     ),
                   ],
                   if (legacy) ...[
-                    const SizedBox(height: 16),
+                    const SizedBox(height: Space.x4),
                     Text(
                       'Коэффициенты сохранности нутриентов при т.о. (%)',
-                      style: AppTypography.bodySmall
-                          .copyWith(fontWeight: FontWeight.w700),
+                      style: AppTypography.label.copyWith(color: p.ink),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: Space.x1),
                     Text(
                       'Одна тройка на всё блюдо — так считались рецептуры '
                       'до 03.11.2026. 94/88/91 % — средние потери 6/12/9 % '
                       '(МР 2.3.0419-26, прил. 5).',
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.textSecondaryLight,
-                        fontSize: 11,
+                      style: AppTypography.caption.copyWith(
+                        color: p.inkSecondary,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: Space.x2),
                     Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
+                      spacing: Space.x2,
+                      runSpacing: Space.x2,
                       children: [
                         ActionChip(
                           label: const Text('Старый расчёт (94/88/91%)'),
@@ -1214,7 +1036,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: Space.x3),
                     Row(
                       children: [
                         Expanded(
@@ -1227,7 +1049,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: Space.x2),
                         Expanded(
                           child: TextField(
                             controller: fCtrl,
@@ -1238,7 +1060,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: Space.x2),
                         Expanded(
                           child: TextField(
                             controller: cCtrl,
@@ -1252,25 +1074,55 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                       ],
                     ),
                     if (retentionError != null) ...[
-                      const SizedBox(height: 8),
+                      const SizedBox(height: Space.x2),
                       Text(
                         retentionError!,
-                        style: const TextStyle(
-                            color: AppColors.error, fontSize: 12),
+                        style: AppTypography.caption.copyWith(color: p.danger),
                       ),
                     ],
                   ],
-                  const SizedBox(height: 14),
+                  const SizedBox(height: Space.x4),
+                  DropdownButtonFormField<BlankMode>(
+                    isDense: denseDialog,
+                    itemHeight: null,
+                    value: blankMode,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Режим бланка'),
+                    items: BlankMode.values
+                        .map((mode) => DropdownMenuItem(
+                            value: mode,
+                            child: Text(mode.shortName, softWrap: true)))
+                        .toList(),
+                    onChanged: (mode) {
+                      if (mode != null) {
+                        setDialogState(() => blankMode = mode);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: Space.x2),
                   SwitchListTile.adaptive(
                     contentPadding: EdgeInsets.zero,
                     materialTapTargetSize: MaterialTapTargetSize.padded,
-                    title: const Text(
-                      'Строка «В 100 г блюда» в бланке',
-                      style: TextStyle(fontSize: 13.5),
+                    title: Text(
+                      'Печатать название в заголовке бланка',
+                      style: AppTypography.bodySm.copyWith(color: p.ink),
                     ),
-                    subtitle: const Text(
+                    value: showTitleInExport,
+                    onChanged: (val) =>
+                        setDialogState(() => showTitleInExport = val),
+                  ),
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    materialTapTargetSize: MaterialTapTargetSize.padded,
+                    title: Text(
+                      'Строка «В 100 г блюда» в бланке',
+                      style: AppTypography.bodySm.copyWith(color: p.ink),
+                    ),
+                    subtitle: Text(
                       'По умолчанию скрыта для 1:1 совпадения с типовым бланком',
-                      style: TextStyle(fontSize: 11.5),
+                      style: AppTypography.caption.copyWith(
+                        color: p.inkSecondary,
+                      ),
                     ),
                     value: showPer100g,
                     onChanged: (val) => setDialogState(() => showPer100g = val),
@@ -1283,12 +1135,13 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                 onPressed: () => Navigator.pop(ctx),
                 child: const Text('Отмена'),
               ),
-              ElevatedButton(
+              FilledButton(
                 onPressed: () {
                   final notifier = ref.read(dishProvider.notifier);
                   final current = ref.read(dishProvider);
                   if (!current.process.isLegacy) {
-                    // Новый расчёт: тройки нет, применяется только бланк.
+                    notifier.setBlankMode(blankMode);
+                    notifier.toggleShowTitle(showTitleInExport);
                     notifier.toggleShowPer100gRow(showPer100g);
                     Navigator.pop(ctx);
                     return;
@@ -1321,6 +1174,8 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                     fat: fVal,
                     carbs: cVal,
                   );
+                  notifier.setBlankMode(blankMode);
+                  notifier.toggleShowTitle(showTitleInExport);
                   notifier.toggleShowPer100gRow(showPer100g);
                   Navigator.pop(ctx);
                 },
@@ -1334,6 +1189,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
   }
 
   void _showClearConfirmation(BuildContext context) {
+    final p = Palette.of(context);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1352,8 +1208,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
               _yieldCtrl.clear();
               Navigator.pop(ctx);
             },
-            child:
-                const Text('Очистить', style: TextStyle(color: AppColors.kcal)),
+            child: Text('Очистить', style: TextStyle(color: p.danger)),
           ),
         ],
       ),

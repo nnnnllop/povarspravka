@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'app_colors.dart';
 import 'app_space.dart';
 import 'app_typography.dart';
 
@@ -29,19 +28,15 @@ class AppTheme {
       primary: p.accent,
       onPrimary: p.onAccent,
       primaryContainer: p.accentSoft,
-      onPrimaryContainer: p.accent,
+      onPrimaryContainer: p.ink,
       secondary: p.ink,
-      onSecondary: brightness == Brightness.dark
-          ? AppColors.surfaceDark
-          : Colors.white,
+      onSecondary: p.surface,
       secondaryContainer: p.sunken,
       onSecondaryContainer: p.ink,
       tertiary: p.protein,
       onTertiary: Colors.white,
       error: p.danger,
-      onError: brightness == Brightness.dark
-          ? AppColors.surfaceDark
-          : Colors.white,
+      onError: p.surface,
       errorContainer: p.dangerSoft,
       onErrorContainer: p.danger,
       surface: p.surface,
@@ -54,7 +49,7 @@ class AppTheme {
       scrim: Colors.black,
       inverseSurface: p.ink,
       onInverseSurface: p.canvas,
-      inversePrimary: p.accent,
+      inversePrimary: p.canvas,
     );
 
     final base = ThemeData(
@@ -166,8 +161,9 @@ class AppTheme {
           disabledForegroundColor: p.inkMuted,
           elevation: 0,
           minimumSize: const Size(0, kMinTapTarget),
+          tapTargetSize: MaterialTapTargetSize.padded,
           padding: const EdgeInsets.symmetric(
-            horizontal: Space.x5,
+            horizontal: Space.x4,
             vertical: Space.x3,
           ),
           shape: RoundedRectangleBorder(borderRadius: Radii.fieldAll),
@@ -182,8 +178,9 @@ class AppTheme {
           disabledForegroundColor: p.inkMuted,
           elevation: 0,
           minimumSize: const Size(0, kMinTapTarget),
+          tapTargetSize: MaterialTapTargetSize.padded,
           padding: const EdgeInsets.symmetric(
-            horizontal: Space.x5,
+            horizontal: Space.x4,
             vertical: Space.x3,
           ),
           shape: RoundedRectangleBorder(borderRadius: Radii.fieldAll),
@@ -194,11 +191,12 @@ class AppTheme {
         style: OutlinedButton.styleFrom(
           foregroundColor: p.ink,
           minimumSize: const Size(0, kMinTapTarget),
+          tapTargetSize: MaterialTapTargetSize.padded,
           padding: const EdgeInsets.symmetric(
             horizontal: Space.x4,
             vertical: Space.x3,
           ),
-          // Кнопка — интерактивная: граница 3:1.
+          // Кнопка — интерактивная: граница >= 3:1.
           side: BorderSide(color: p.border, width: 1),
           shape: RoundedRectangleBorder(borderRadius: Radii.fieldAll),
           textStyle: AppTypography.label,
@@ -206,12 +204,14 @@ class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: p.accent,
+          foregroundColor: p.ink,
           minimumSize: const Size(0, kMinTapTarget),
+          tapTargetSize: MaterialTapTargetSize.padded,
           padding: const EdgeInsets.symmetric(
             horizontal: Space.x3,
             vertical: Space.x3,
           ),
+          shape: RoundedRectangleBorder(borderRadius: Radii.fieldAll),
           textStyle: AppTypography.label,
         ),
       ),
@@ -219,15 +219,25 @@ class AppTheme {
         style: IconButton.styleFrom(
           foregroundColor: p.ink,
           minimumSize: const Size(kMinTapTarget, kMinTapTarget),
+          tapTargetSize: MaterialTapTargetSize.padded,
         ),
       ),
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
           minimumSize: const WidgetStatePropertyAll(Size(0, kMinTapTarget)),
+          tapTargetSize: MaterialTapTargetSize.padded,
           padding: const WidgetStatePropertyAll(
             EdgeInsets.symmetric(horizontal: Space.x3, vertical: Space.x2),
           ),
           textStyle: WidgetStatePropertyAll(AppTypography.label),
+          backgroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) return p.accent;
+            return p.surface;
+          }),
+          foregroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) return p.onAccent;
+            return p.ink;
+          }),
           side: WidgetStatePropertyAll(BorderSide(color: p.border)),
           shape: const WidgetStatePropertyAll(
             RoundedRectangleBorder(borderRadius: Radii.fieldAll),
@@ -252,7 +262,7 @@ class AppTheme {
         behavior: SnackBarBehavior.floating,
         backgroundColor: p.ink,
         contentTextStyle: AppTypography.body.copyWith(color: p.canvas),
-        actionTextColor: p.accent,
+        actionTextColor: p.canvas,
         shape: RoundedRectangleBorder(borderRadius: Radii.fieldAll),
         insetPadding: const EdgeInsets.all(Space.x4),
       ),

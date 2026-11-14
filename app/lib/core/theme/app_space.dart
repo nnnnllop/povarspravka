@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'app_colors.dart';
+
 /// 4-dp сетка отступов (аудит §3.3).
 ///
 /// Правило: внутри карточки — [x3] (12), между карточками — [x2] (8),
@@ -14,6 +16,8 @@ class Space {
   static const double x6 = 24;
   static const double x8 = 32;
   static const double x10 = 40;
+
+  static const double maxWidth = 640;
 
   static const EdgeInsets screenH = EdgeInsets.symmetric(horizontal: x4);
   static const EdgeInsets card = EdgeInsets.all(x3);
@@ -62,45 +66,44 @@ class Palette {
   factory Palette.of(BuildContext context) =>
       Palette(Theme.of(context).brightness == Brightness.dark);
 
-  Color get canvas => isDark ? const Color(0xFF131311) : const Color(0xFFF7F5F1);
-  Color get surface => isDark ? const Color(0xFF1B1B19) : const Color(0xFFFFFFFF);
-  Color get sunken => isDark ? const Color(0xFF101010) : const Color(0xFFF1EEE8);
+  Color get canvas => isDark ? AppColors.canvasDark : AppColors.canvas;
+  Color get surface => isDark ? AppColors.surfaceDark : AppColors.surface;
+  Color get sunken =>
+      isDark ? AppColors.surfaceSunkenDark : AppColors.surfaceSunken;
 
-  /// Интерактивные границы: 3.02:1 (WCAG 1.4.11).
-  Color get border => isDark ? const Color(0xFF6A665E) : const Color(0xFF948D82);
+  /// Интерактивные границы (>= 3:1 WCAG 1.4.11).
+  Color get border => isDark ? AppColors.borderDark : AppColors.border;
 
-  /// Декоративные контуры карточек: осознанно мягкие.
+  /// Декоративные контуры карточек: тонкий 1px контур.
   Color get borderStatic =>
-      isDark ? const Color(0xFF3A3833) : const Color(0xFFDDD8CF);
+      isDark ? AppColors.borderStaticDark : AppColors.borderStatic;
 
-  Color get divider => isDark ? const Color(0xFF2A2925) : const Color(0xFFECE8E1);
+  Color get divider => isDark ? AppColors.dividerDark : AppColors.divider;
 
-  Color get ink => isDark ? const Color(0xFFF3F1ED) : const Color(0xFF1A1917);
+  Color get ink => isDark ? AppColors.inkDark : AppColors.ink;
   Color get inkSecondary =>
-      isDark ? const Color(0xFFB3AEA5) : const Color(0xFF5C5852);
-  Color get inkMuted => isDark ? const Color(0xFF8F8A81) : const Color(0xFF6B665D);
+      isDark ? AppColors.inkSecondaryDark : AppColors.inkSecondary;
+  Color get inkMuted => isDark ? AppColors.inkMutedDark : AppColors.inkMuted;
 
-  Color get accent => isDark ? const Color(0xFFE9B872) : const Color(0xFF9A5B14);
-  Color get onAccent =>
-      isDark ? const Color(0xFF1A1917) : const Color(0xFFFFFBF5);
+  Color get accent => isDark ? AppColors.accentDark : AppColors.accent;
+  Color get onAccent => isDark ? AppColors.accentOnDark : AppColors.accentOn;
   Color get accentSoft =>
-      isDark ? const Color(0xFF2C2216) : const Color(0xFFF6EEDF);
+      isDark ? AppColors.accentSoftDark : AppColors.accentSoft;
 
-  Color get protein => isDark ? const Color(0xFF8FD0A0) : const Color(0xFF2F6B3A);
-  Color get fat => isDark ? const Color(0xFFE4B96B) : const Color(0xFF8A5A00);
-  Color get carbs => isDark ? const Color(0xFF9CC0E8) : const Color(0xFF1F4E79);
-  Color get kcal => isDark ? const Color(0xFFF09A88) : const Color(0xFF9A2C1B);
+  Color get protein => isDark ? AppColors.proteinDark : AppColors.protein;
+  Color get fat => isDark ? AppColors.fatDark : AppColors.fat;
+  Color get carbs => isDark ? AppColors.carbsDark : AppColors.carbs;
+  Color get kcal => isDark ? AppColors.kcalDark : AppColors.kcal;
 
-  Color get sourceInk =>
-      isDark ? const Color(0xFFCFCAC0) : const Color(0xFF4A463F);
+  Color get sourceInk => isDark ? AppColors.sourceInkDark : AppColors.sourceInk;
   Color get sourceLine =>
-      isDark ? const Color(0xFF3A3833) : const Color(0xFFDDD8CF);
+      isDark ? AppColors.sourceLineDark : AppColors.sourceLine;
 
-  Color get danger => isDark ? const Color(0xFFF0A0A0) : const Color(0xFF9B1C1C);
+  Color get danger => isDark ? AppColors.dangerDark : AppColors.danger;
   Color get dangerSoft =>
-      isDark ? const Color(0xFF2C1919) : const Color(0xFFFBEAEA);
-  Color get warning => isDark ? const Color(0xFFE9B872) : const Color(0xFF7A4E00);
+      isDark ? AppColors.dangerSoftDark : AppColors.dangerSoft;
+  Color get warning => isDark ? AppColors.warningDark : AppColors.warning;
   Color get warningSoft =>
-      isDark ? const Color(0xFF2C2216) : const Color(0xFFFDF3DC);
-  Color get success => isDark ? const Color(0xFF8FD0A0) : const Color(0xFF1F6B3E);
+      isDark ? AppColors.warningSoftDark : AppColors.warningSoft;
+  Color get success => isDark ? AppColors.successDark : AppColors.success;
 }

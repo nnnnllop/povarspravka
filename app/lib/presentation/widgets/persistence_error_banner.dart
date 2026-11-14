@@ -68,7 +68,7 @@ class _PersistenceErrorBannerState extends State<PersistenceErrorBanner> {
                     widget.message,
                     style: AppTypography.caption.copyWith(
                       color: p.danger,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),

@@ -8,6 +8,7 @@ import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
 import 'adaptive_host.dart';
+import 'app_buttons.dart';
 import 'source_badge.dart';
 
 /// Ввод массы продукта (аудит P0-1, P0-2).
@@ -363,6 +364,8 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
 
     final seasonalPresets = _getSeasonalPresets();
     final canConfirm = parsedGrams >= .1 && parsedGrams <= 9999999;
+    final media = MediaQuery.sizeOf(context);
+    final sideBySide = media.width >= 520 && media.height < 460;
 
     return Container(
       decoration: BoxDecoration(
@@ -372,9 +375,54 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
       ),
       child: SafeArea(
         top: false,
-        child: AdaptiveHost(
-          body: _buildIntro(p, seasonalPresets, netGrams, hasWaste),
-          stickyFooter: _buildKeypadBlock(p, canConfirm, parsedGrams),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            if (sideBySide && constraints.maxWidth >= 520) {
+              final rightWidth =
+                  (constraints.maxWidth * 0.52).clamp(260.0, 340.0).toDouble();
+              final intro = _buildIntro(
+                p,
+                seasonalPresets,
+                netGrams,
+                hasWaste,
+                compactPane: true,
+              );
+              final keypad = _buildKeypadBlock(
+                p,
+                canConfirm,
+                parsedGrams,
+                compactLandscape: true,
+              );
+              if (constraints.hasBoundedHeight) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: intro),
+                    Container(width: 1, color: p.divider),
+                    SizedBox(
+                      width: rightWidth,
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        child: keypad,
+                      ),
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: intro),
+                  Container(width: 1, color: p.divider),
+                  SizedBox(width: rightWidth, child: keypad),
+                ],
+              );
+            }
+            return AdaptiveHost(
+              body: _buildIntro(p, seasonalPresets, netGrams, hasWaste),
+              stickyFooter: _buildKeypadBlock(p, canConfirm, parsedGrams),
+            );
+          },
         ),
       ),
     );
@@ -386,8 +434,9 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     Palette p,
     List<(String, double, bool)> seasonalPresets,
     double net,
-    bool hasWaste,
-  ) {
+    bool hasWaste, {
+    bool compactPane = false,
+  }) {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(Space.x4, Space.x1, Space.x4, Space.x2),
       child: Column(
@@ -395,7 +444,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
         children: [
           _buildHeader(p),
           const SizedBox(height: Space.x3),
-          _buildModeSelector(p),
+          _buildModeSelector(p, compact: compactPane),
           if (_deltaNote != null) ...[
             const SizedBox(height: Space.x2),
             _buildDeltaNote(p),
@@ -421,13 +470,23 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
 
   /// Нижний блок: ряд прибавок + кейпад с клавишей подтверждения.
   /// Прижат к нижней кромке — под большой палец.
-  Widget _buildKeypadBlock(Palette p, bool canConfirm, double parsedGrams) {
+  Widget _buildKeypadBlock(
+    Palette p,
+    bool canConfirm,
+    double parsedGrams, {
+    bool compactLandscape = false,
+  }) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         _buildQuickRow(p),
-        const SizedBox(height: Space.x2),
-        _buildKeypad(p, canConfirm, parsedGrams),
+        SizedBox(height: compactLandscape ? Space.x1 : Space.x2),
+        _buildKeypad(
+          p,
+          canConfirm,
+          parsedGrams,
+          compactLandscape: compactLandscape,
+        ),
       ],
     );
   }
@@ -439,7 +498,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
         Expanded(
           child: Text(
             widget.product.name,
-            style: AppTypography.title.copyWith(fontSize: 18),
+            style: AppTypography.title.copyWith(color: p.ink),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -450,26 +509,18 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     );
   }
 
-  Widget _buildModeSelector(Palette p) {
+  Widget _buildModeSelector(Palette p, {bool compact = false}) {
     // Контракт из аудита: старая подпись тумблера осталась доступной для
     // скринридера — она и есть подсказка к сегментам «Брутто | Нетто».
     const semanticsHint = 'Ввод чистой массы нетто · переключение Брутто/Нетто';
+    final isCompact = compact || MediaQuery.sizeOf(context).width < 380;
     return Semantics(
       label: semanticsHint,
       child: SizedBox(
         width: double.infinity,
         child: SegmentedButton<bool>(
           showSelectedIcon: false,
-          style: SegmentedButton.styleFrom(
-            minimumSize: const Size(0, kMinTapTarget),
-            backgroundColor: p.surface,
-            foregroundColor: p.inkSecondary,
-            selectedBackgroundColor: p.accentSoft,
-            selectedForegroundColor: p.accent,
-            side: BorderSide(color: p.border, width: 1),
-            shape: RoundedRectangleBorder(borderRadius: Radii.fieldAll),
-            textStyle: AppTypography.label,
-          ),
+          style: AppSegmentedStyle.of(p, compact: isCompact),
           segments: const [
             ButtonSegment(
               value: true,
@@ -585,20 +636,20 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
       text = '✓ чистая масса нетто';
       ok = true;
     }
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: Space.x1,
+      runSpacing: Space.x1,
       children: [
-        Flexible(
-          child: Text(
-            text,
-            textAlign: TextAlign.center,
-            style: AppTypography.numSm.copyWith(
-              color: ok ? p.inkSecondary : p.warning,
-            ),
+        Text(
+          text,
+          textAlign: TextAlign.center,
+          style: AppTypography.numSm.copyWith(
+            color: ok ? p.inkSecondary : p.warning,
           ),
         ),
-        if (hasWaste || _isGross) ...[
-          const SizedBox(width: Space.x1),
+        if (hasWaste || _isGross)
           TextButton(
             onPressed: _editWastePercentage,
             style: TextButton.styleFrom(
@@ -607,7 +658,6 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
             ),
             child: const Text('изменить %'),
           ),
-        ],
       ],
     );
   }
@@ -672,21 +722,33 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
           return Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 2),
-              child: InkWell(
-                // STATE-08: срабатывание по нажатию — быстрый ввод быстрыми
-                // нажатиями раньше терял часть приращений.
-                onTapDown: (_) => _onAdd(inc.$2),
-                borderRadius: Radii.fieldAll,
-                child: Container(
-                  height: kMinTapTarget,
-                  alignment: Alignment.center,
-                  child: Text(
-                    inc.$1,
-                    maxLines: 1,
-                    overflow: TextOverflow.clip,
-                    style: AppTypography.numSm.copyWith(
-                      color: p.accent,
-                      fontWeight: FontWeight.w700,
+              child: Material(
+                color: p.sunken,
+                borderRadius: Radii.chipAll,
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  // STATE-08: срабатывание по нажатию — быстрый ввод быстрыми
+                  // нажатиями раньше терял часть приращений.
+                  onTapDown: (_) => _onAdd(inc.$2),
+                  borderRadius: Radii.chipAll,
+                  child: Container(
+                    height: kMinTapTarget,
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(horizontal: Space.x1),
+                    decoration: BoxDecoration(
+                      borderRadius: Radii.chipAll,
+                      border: Border.all(color: p.borderStatic),
+                    ),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        inc.$1,
+                        maxLines: 1,
+                        style: AppTypography.numSm.copyWith(
+                          color: p.ink,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -698,7 +760,12 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     );
   }
 
-  Widget _buildKeypad(Palette p, bool canConfirm, double parsedGrams) {
+  Widget _buildKeypad(
+    Palette p,
+    bool canConfirm,
+    double parsedGrams, {
+    bool compactLandscape = false,
+  }) {
     const rows = <List<String>>[
       ['1', '2', '3'],
       ['4', '5', '6'],
@@ -706,14 +773,25 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
       ['⌫', '0', ','],
     ];
     final scaler = MediaQuery.textScalerOf(context).scale(1);
-    final keyGap = Space.x1;
-    // Клавиши 56 dp (было 48): больше поверхности нажатия — меньше промахов
-    // на кухне. При крупном тексте растём вместе с ним.
-    final keyHeight = 56.0 * (scaler > 1.3 ? scaler : 1.0);
+    final shortHeight =
+        compactLandscape || MediaQuery.sizeOf(context).height < 520;
+    final keyGap = compactLandscape ? 2.0 : Space.x1;
+    // Клавиши от 48 dp (компакт / альбом) до 62 dp при крупном тексте —
+    // не раздуваются до 450 dp при scale=2.0.
+    final double keyHeight = shortHeight
+        ? kMinTapTarget
+        : (52.0 * (scaler > 1.3 ? 1.15 : 1.0))
+            .clamp(kMinTapTarget, 62.0)
+            .toDouble();
     final gridHeight = keyHeight * 4 + keyGap * 4;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(Space.x3, 0, Space.x3, Space.x2),
+      padding: EdgeInsets.fromLTRB(
+        compactLandscape ? Space.x2 : Space.x3,
+        0,
+        compactLandscape ? Space.x2 : Space.x3,
+        compactLandscape ? Space.x1 : Space.x2,
+      ),
       child: SizedBox(
         height: gridHeight,
         child: Row(
@@ -795,12 +873,14 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                 label: k == ',' ? 'запятая' : k,
                 child: _keySurface(
                   p,
-                  child: Text(
-                    k,
-                    maxLines: 1,
-                    style: AppTypography.num.copyWith(
-                      fontSize: 24,
-                      color: p.ink,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      k,
+                      maxLines: 1,
+                      style: AppTypography.title.copyWith(
+                        color: p.ink,
+                      ),
                     ),
                   ),
                 ),
@@ -908,10 +988,12 @@ class _TapChip extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                   ],
-                  Text(
-                    label,
-                    style: AppTypography.label.copyWith(
-                      color: selected ? accent : p.ink,
+                  Flexible(
+                    child: Text(
+                      label,
+                      style: AppTypography.label.copyWith(
+                        color: selected ? accent : p.ink,
+                      ),
                     ),
                   ),
                 ],
@@ -921,8 +1003,8 @@ class _TapChip extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 1),
                   child: Text(
                     trailing!,
-                    style: AppTypography.numSm.copyWith(
-                      fontSize: 11,
+                    style: AppTypography.caption.copyWith(
+                      fontFeatures: const [FontFeature.tabularFigures()],
                       color: selected ? accent : p.inkSecondary,
                     ),
                   ),

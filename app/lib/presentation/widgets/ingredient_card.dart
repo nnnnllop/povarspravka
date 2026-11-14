@@ -91,20 +91,10 @@ class IngredientCard extends StatelessWidget {
           onTap: onTap,
           child: Padding(
             padding:
-                const EdgeInsets.fromLTRB(Space.x3, Space.x2, Space.x1, Space.x2),
+                const EdgeInsets.fromLTRB(Space.x3, Space.x3, Space.x1, Space.x3),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Тонкий маркер-«корешок» карточки.
-                Container(
-                  width: 3,
-                  height: 44,
-                  margin: const EdgeInsets.only(right: Space.x3, top: 2),
-                  decoration: BoxDecoration(
-                    color: p.sourceLine,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

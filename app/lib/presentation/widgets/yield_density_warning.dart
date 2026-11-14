@@ -46,7 +46,7 @@ class YieldDensityWarning extends StatelessWidget {
               'проверьте выход готового блюда.',
               style: AppTypography.bodySm.copyWith(
                 color: p.warning,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
