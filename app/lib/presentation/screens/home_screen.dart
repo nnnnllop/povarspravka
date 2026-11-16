@@ -9,6 +9,7 @@ import '../../core/calculation/models/dish.dart';
 import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
+import '../../data/repositories/custom_products_repository.dart';
 import '../providers/dish_provider.dart';
 import '../widgets/app_buttons.dart';
 import '../widgets/loss_clarity_hints.dart';
@@ -18,11 +19,26 @@ import 'search_product_modal.dart';
 
 /// Главный экран: активный черновик, библиотека «Мои блюда» и нижний док
 /// («Новый расчёт» и «Справочник»). Допущения вынесены в шторку «Как считается».
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  final TextEditingController _librarySearchCtrl = TextEditingController();
+  bool _librarySearchOpen = false;
+  String _libraryQuery = '';
+
+  @override
+  void dispose() {
+    _librarySearchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final p = Palette.of(context);
     final activeDish = ref.watch(dishProvider);
     final savedDishes = ref.watch(savedDishesProvider);
@@ -35,6 +51,20 @@ class HomeScreen extends ConsumerWidget {
     final listHPad = math.max(gutter, (width - Space.maxWidth) / 2);
     final hasActiveDraft =
         activeDish.ingredients.isNotEmpty || activeDish.title.trim().isNotEmpty;
+
+    final showSearchToggle = savedDishes.length >= 2;
+    final showSearchInput = _librarySearchOpen ||
+        savedDishes.length >= 6 ||
+        _libraryQuery.isNotEmpty;
+    final normQuery = CustomProductsRepository.normalizeText(_libraryQuery);
+    final filteredDishes = normQuery.isEmpty
+        ? savedDishes
+        : savedDishes.where((d) {
+            final t = d.title.trim().isEmpty
+                ? 'блюдо без названия'
+                : CustomProductsRepository.normalizeText(d.title);
+            return t.contains(normQuery);
+          }).toList();
 
     return Scaffold(
       backgroundColor: p.canvas,
@@ -126,12 +156,75 @@ class HomeScreen extends ConsumerWidget {
                 _SectionHeader(
                   title: 'Мои блюда',
                   trailing: savedDishes.isEmpty ? null : '${savedDishes.length}',
+                  onSearchToggle: showSearchToggle && savedDishes.length < 6
+                      ? () {
+                          setState(() {
+                            _librarySearchOpen = !_librarySearchOpen;
+                            if (!_librarySearchOpen) {
+                              _librarySearchCtrl.clear();
+                              _libraryQuery = '';
+                            }
+                          });
+                        }
+                      : null,
+                  searchActive: _librarySearchOpen,
                 ),
+                if (showSearchInput && savedDishes.isNotEmpty) ...[
+                  const SizedBox(height: Space.x2),
+                  TextField(
+                    key: const ValueKey('home-library-search'),
+                    controller: _librarySearchCtrl,
+                    onChanged: (v) => setState(() => _libraryQuery = v),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      hintText: 'Поиск по моим блюдам…',
+                      prefixIcon: Icon(Icons.search_rounded,
+                          size: 20, color: p.inkMuted),
+                      suffixIcon: _libraryQuery.isNotEmpty
+                          ? IconButton(
+                              tooltip: 'Очистить поиск',
+                              icon: Icon(Icons.close_rounded,
+                                  size: 18, color: p.inkMuted),
+                              onPressed: () {
+                                _librarySearchCtrl.clear();
+                                setState(() => _libraryQuery = '');
+                              },
+                            )
+                          : null,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: Space.x2),
                 if (savedDishes.isEmpty)
                   _EmptyLibrary(palette: p)
+                else if (filteredDishes.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(Space.x4),
+                    decoration: BoxDecoration(
+                      color: p.surface,
+                      borderRadius: Radii.cardAll,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'По запросу «${_libraryQuery.trim()}» блюд не найдено',
+                            style: AppTypography.bodySm
+                                .copyWith(color: p.inkSecondary),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            _librarySearchCtrl.clear();
+                            setState(() => _libraryQuery = '');
+                          },
+                          child: const Text('Сбросить'),
+                        ),
+                      ],
+                    ),
+                  )
                 else
-                  for (final dish in savedDishes) _SavedDishCard(dish: dish),
+                  for (final dish in filteredDishes) _SavedDishCard(dish: dish),
               ],
             ),
           ),
@@ -154,8 +247,11 @@ class HomeScreen extends ConsumerWidget {
   Future<void> _newCalculation(BuildContext context, WidgetRef ref) async {
     AppHaptics.commit();
     final notifier = ref.read(dishProvider.notifier);
-    // Черновик с ингредиентами не теряем: он уходит в библиотеку.
-    if (ref.read(dishProvider).ingredients.isNotEmpty) {
+    if (notifier.isDirty) {
+      final ok = await _confirmReplaceDirtyDraft(context, ref);
+      if (!ok || !context.mounted) return;
+    } else if (ref.read(dishProvider).ingredients.isNotEmpty) {
+      // Чистый активный черновик с составом фиксируем в библиотеке перед новым.
       try {
         await notifier.saveCurrentToLibrary();
       } catch (_) {
@@ -215,7 +311,8 @@ class HomeScreen extends ConsumerWidget {
                   style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
                 ),
                 const SizedBox(height: Space.x4),
-                _InfoBlock(
+                Divider(color: p.divider, height: Space.x5),
+                _InfoSection(
                   palette: p,
                   icon: Icons.functions_rounded,
                   title: 'Формула энергетической ценности',
@@ -227,8 +324,8 @@ class HomeScreen extends ConsumerWidget {
                       'после тепловой обработки; вклад алкоголя, пищевых волокон и '
                       'органических кислот формулой не учитывается.',
                 ),
-                const SizedBox(height: Space.x2),
-                _InfoBlock(
+                Divider(color: p.divider, height: Space.x5),
+                _InfoSection(
                   palette: p,
                   icon: Icons.thermostat_rounded,
                   title: 'Потери при тепловой обработке',
@@ -243,17 +340,17 @@ class HomeScreen extends ConsumerWidget {
                       '${LossClarityHints.overviewBullets}\n\n'
                       '$kNotGostNotice',
                 ),
-                const SizedBox(height: Space.x2),
-                _InfoBlock(
+                Divider(color: p.divider, height: Space.x5),
+                _InfoSection(
                   palette: p,
                   icon: Icons.splitscreen_rounded,
                   title: 'Два режима бланка',
                   body: '1. «Бланк с крестом (учебный)» — диагональный крест в '
-                      'колонке ккал сырья, калорийность только после т.о.\n'
+                      'колонке ккал сырья, калорийность только после готовки.\n'
                       '2. «Подробный расчёт» — калории рассчитаны для каждого продукта.',
                 ),
-                const SizedBox(height: Space.x2),
-                _InfoBlock(
+                Divider(color: p.divider, height: Space.x5),
+                _InfoSection(
                   palette: p,
                   icon: Icons.file_download_outlined,
                   title: 'Форматы экспорта',
@@ -261,8 +358,28 @@ class HomeScreen extends ConsumerWidget {
                       'и Excel (.xlsx) с живыми формулами — файлы сохраняются на '
                       'телефоне и печатаются оттуда.',
                 ),
-                const SizedBox(height: Space.x2),
-                _StorageLocationBlock(palette: p),
+                Divider(color: p.divider, height: Space.x5),
+                Theme(
+                  data: Theme.of(ctx).copyWith(dividerColor: Colors.transparent),
+                  child: ExpansionTile(
+                    key: const ValueKey('tech-info-expansion'),
+                    tilePadding: EdgeInsets.zero,
+                    childrenPadding: const EdgeInsets.only(bottom: Space.x2),
+                    leading: Icon(
+                      Icons.folder_open_rounded,
+                      size: 18,
+                      color: p.inkSecondary,
+                    ),
+                    title: Text(
+                      'Технические сведения',
+                      style: AppTypography.label.copyWith(color: p.ink),
+                    ),
+                    initiallyExpanded: false,
+                    children: [
+                      _StorageLocationBlock(palette: p),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: Space.x4),
                 FilledButton(
                   onPressed: () => Navigator.pop(ctx),
@@ -274,6 +391,70 @@ class HomeScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+}
+
+enum _HomeDraftChoice { stay, discard, save }
+
+Future<bool> _confirmReplaceDirtyDraft(
+  BuildContext context,
+  WidgetRef ref,
+) async {
+  final p = Palette.of(context);
+  final notifier = ref.read(dishProvider.notifier);
+  final canSave = ref.read(dishProvider).ingredients.isNotEmpty;
+  final choice = await showDialog<_HomeDraftChoice>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(
+        canSave ? 'Сохранить текущее блюдо?' : 'Заменить открытый черновик?',
+      ),
+      content: Text(
+        canSave
+            ? 'В открытом блюде есть несохранённые правки. '
+                'Сохранить их в «Мои блюда» перед переходом?'
+            : 'В открытом черновике есть несохранённые правки. '
+                'Если продолжить без сохранения, они пропадут.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, _HomeDraftChoice.stay),
+          child: const Text('Отмена'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, _HomeDraftChoice.discard),
+          style: TextButton.styleFrom(foregroundColor: p.danger),
+          child: const Text('Не сохранять'),
+        ),
+        if (canSave)
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, _HomeDraftChoice.save),
+            child: const Text('Сохранить и продолжить'),
+          ),
+      ],
+    ),
+  );
+  if (choice == null || choice == _HomeDraftChoice.stay) {
+    return false;
+  }
+  if (choice == _HomeDraftChoice.discard) {
+    notifier.discardChanges();
+    return true;
+  }
+  try {
+    await notifier.saveCurrentToLibrary();
+    return true;
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            friendlyErrorMessage(e, prefix: 'Не удалось сохранить расчёт'),
+          ),
+        ),
+      );
+    }
+    return false;
   }
 }
 
@@ -301,9 +482,8 @@ class _NoticeBanner extends StatelessWidget {
         key: bannerKey,
         padding: const EdgeInsets.all(Space.x3),
         decoration: BoxDecoration(
-          color: p.surface,
+          color: p.accentSoft,
           borderRadius: Radii.cardAll,
-          border: Border.all(color: p.accent, width: 1),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -346,14 +526,9 @@ class _StorageLocationBlock extends ConsumerWidget {
     final p = palette;
     final fileName = ref.read(dishStorageRepositoryProvider).storageFileName;
     final dirAsync = ref.watch(storageDirectoryPathProvider);
-    return Container(
+    return Padding(
       key: const ValueKey('storage-location-block'),
-      padding: const EdgeInsets.all(Space.x3),
-      decoration: BoxDecoration(
-        color: p.sunken,
-        borderRadius: Radii.fieldAll,
-        border: Border.all(color: p.borderStatic),
-      ),
+      padding: const EdgeInsets.only(top: Space.x1),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -431,13 +606,13 @@ class _StorageLocationBlock extends ConsumerWidget {
   }
 }
 
-class _InfoBlock extends StatelessWidget {
+class _InfoSection extends StatelessWidget {
   final Palette palette;
   final IconData icon;
   final String title;
   final String body;
 
-  const _InfoBlock({
+  const _InfoSection({
     required this.palette,
     required this.icon,
     required this.title,
@@ -447,31 +622,27 @@ class _InfoBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = palette;
-    return Container(
-      padding: const EdgeInsets.all(Space.x3),
-      decoration: BoxDecoration(
-        color: p.sunken,
-        borderRadius: Radii.fieldAll,
-        border: Border.all(color: p.borderStatic),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 18, color: p.inkSecondary),
-              const SizedBox(width: Space.x2),
-              Expanded(
-                child: Text(title,
-                    style: AppTypography.label.copyWith(color: p.ink)),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 18, color: p.inkSecondary),
+            const SizedBox(width: Space.x2),
+            Expanded(
+              child: Text(
+                title,
+                style: AppTypography.label.copyWith(color: p.ink),
               ),
-            ],
-          ),
-          const SizedBox(height: Space.x1),
-          Text(body,
-              style: AppTypography.bodySm.copyWith(color: p.inkSecondary)),
-        ],
-      ),
+            ),
+          ],
+        ),
+        const SizedBox(height: Space.x1),
+        Text(
+          body,
+          style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
+        ),
+      ],
     );
   }
 }
@@ -491,30 +662,40 @@ class _ActiveDraftCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
-    final hasContent = dish.ingredients.isNotEmpty;
+    final hasIngredients = dish.ingredients.isNotEmpty;
+    final hasTitle = dish.title.trim().isNotEmpty;
+    final hasDraft = hasIngredients || hasTitle;
     // STATE-01: карточка черновика не имеет права ронять домашний экран —
     // невычислимое блюдо показывает прочерки.
     final calc = CalculationEngine.tryCalculate(dish);
-    final title = dish.title.trim().isEmpty
-        ? (hasContent ? 'Черновик без названия' : 'Новый расчёт')
+    final title = !hasTitle
+        ? (hasIngredients ? 'Черновик без названия' : 'Новый расчёт')
         : dish.title.trim();
 
     return Container(
       decoration: BoxDecoration(
         color: p.surface,
         borderRadius: Radii.cardAll,
-        border: Border.all(color: hasContent ? p.accent : p.borderStatic),
       ),
       padding: const EdgeInsets.all(Space.x4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            hasContent ? 'ПРОДОЛЖИТЬ' : 'НАЧАТЬ',
-            style: AppTypography.caption.copyWith(
-              color: p.accent,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.8,
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: Space.x2,
+              vertical: 3,
+            ),
+            decoration: BoxDecoration(
+              color: hasDraft ? p.accentSoft : p.sunken,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              hasDraft ? 'Открытый расчёт' : 'Новый расчёт',
+              style: AppTypography.caption.copyWith(
+                color: hasDraft ? p.accent : p.inkSecondary,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           const SizedBox(height: Space.x1),
@@ -524,27 +705,40 @@ class _ActiveDraftCard extends StatelessWidget {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
-          if (hasContent) ...[
+          if (hasIngredients) ...[
             const SizedBox(height: Space.x1),
             Text(
               calc == null
-                  ? '${dish.ingredients.length} инг. · выход — г · — ккал'
-                  : '${dish.ingredients.length} инг. · '
+                  ? '${pluralIngredients(dish.ingredients.length)} · выход — г · — ккал'
+                  : '${pluralIngredients(dish.ingredients.length)} · '
                       '${calc.usesLossTable && !calc.hasYield ? 'вес готового блюда не указан' : 'выход ${CalculationEngine.formatGrams(calc.yieldGrams)} г'} · '
                       '${CalculationEngine.formatKcal(calc.cookedKcal)} ккал',
               style: AppTypography.numSm.copyWith(color: p.inkSecondary),
+            ),
+          ] else if (hasTitle) ...[
+            const SizedBox(height: Space.x1),
+            Text(
+              'Ингредиенты ещё не добавлены',
+              style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
             ),
           ],
           const SizedBox(height: Space.x3),
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: hasContent ? onOpen : onNew,
+              onPressed: hasDraft ? onOpen : onNew,
+              style: hasDraft
+                  ? FilledButton.styleFrom(
+                      backgroundColor: p.accentSoft,
+                      foregroundColor: p.accent,
+                      elevation: 0,
+                    )
+                  : null,
               icon: Icon(
-                hasContent ? Icons.edit_note_rounded : Icons.add_rounded,
+                hasDraft ? Icons.edit_note_rounded : Icons.add_rounded,
                 size: 20,
               ),
-              label: Text(hasContent ? 'Продолжить расчёт' : 'Новый расчёт'),
+              label: Text(hasDraft ? 'Продолжить расчёт' : 'Новый расчёт'),
             ),
           ),
         ],
@@ -556,8 +750,15 @@ class _ActiveDraftCard extends StatelessWidget {
 class _SectionHeader extends StatelessWidget {
   final String title;
   final String? trailing;
+  final VoidCallback? onSearchToggle;
+  final bool searchActive;
 
-  const _SectionHeader({required this.title, this.trailing});
+  const _SectionHeader({
+    required this.title,
+    this.trailing,
+    this.onSearchToggle,
+    this.searchActive = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -575,6 +776,19 @@ class _SectionHeader extends StatelessWidget {
             trailing!,
             style: AppTypography.numSm.copyWith(color: p.inkMuted),
           ),
+        if (onSearchToggle != null) ...[
+          const SizedBox(width: Space.x1),
+          IconButton(
+            key: const ValueKey('home-library-search-toggle'),
+            tooltip: 'Поиск по моим блюдам',
+            onPressed: onSearchToggle,
+            icon: Icon(
+              searchActive ? Icons.search_off_rounded : Icons.search_rounded,
+              size: 20,
+              color: searchActive ? p.accent : p.inkSecondary,
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -592,18 +806,36 @@ class _EmptyLibrary extends StatelessWidget {
       decoration: BoxDecoration(
         color: palette.surface,
         borderRadius: Radii.cardAll,
-        border: Border.all(color: palette.borderStatic),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.folder_open_rounded, size: 20, color: palette.inkMuted),
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: palette.accentSoft,
+              borderRadius: Radii.chipAll,
+            ),
+            child: Icon(Icons.menu_book_rounded,
+                size: 18, color: palette.accent),
+          ),
           const SizedBox(width: Space.x3),
           Expanded(
-            child: Text(
-              'Здесь появятся сохранённые блюда. Рассчитайте состав и нажмите '
-              '«Сохранить» в меню ⋮.',
-              style: AppTypography.bodySm.copyWith(color: palette.inkSecondary),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Здесь будут ваши блюда',
+                  style: AppTypography.label.copyWith(color: palette.ink),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Сохранённые рецепты появятся на этом экране — к ним можно вернуться в любой момент.',
+                  style:
+                      AppTypography.bodySm.copyWith(color: palette.inkSecondary),
+                ),
+              ],
             ),
           ),
         ],
@@ -626,74 +858,131 @@ class _SavedDishCard extends ConsumerWidget {
     final title =
         dish.title.trim().isEmpty ? 'Блюдо без названия' : dish.title.trim();
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: Space.x2),
-      decoration: BoxDecoration(
-        color: p.surface,
-        borderRadius: Radii.cardAll,
-        border: Border.all(color: p.borderStatic),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () {
-            ref.read(dishProvider.notifier).loadDish(dish);
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const RecipeEditorScreen()),
-            );
-          },
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-                Space.x4, Space.x3, Space.x1, Space.x3),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: AppTypography.body.copyWith(
-                            color: p.ink, fontWeight: FontWeight.w700),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        calc == null
-                            ? '${dish.ingredients.length} инг. · выход — г · — ккал'
-                            : '${dish.ingredients.length} инг. · '
-                                '${calc.usesLossTable && !calc.hasYield ? 'вес готового блюда не указан' : 'выход ${CalculationEngine.formatGrams(calc.yieldGrams)} г'} · '
-                                '${CalculationEngine.formatKcal(calc.cookedKcal)} ккал',
-                        style: AppTypography.numSm.copyWith(color: p.inkSecondary),
-                      ),
+    return TactilePress(
+      child: Container(
+        margin: const EdgeInsets.only(bottom: Space.x2),
+        decoration: BoxDecoration(
+          color: p.surface,
+          borderRadius: Radii.cardAll,
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () async {
+              final notifier = ref.read(dishProvider.notifier);
+              if (notifier.isDirty) {
+                final ok = await _confirmReplaceDirtyDraft(context, ref);
+                if (!ok || !context.mounted) return;
+              }
+              notifier.loadDish(dish);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const RecipeEditorScreen()),
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  Space.x4, Space.x3, Space.x1, Space.x3),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: AppTypography.body.copyWith(
+                              color: p.ink, fontWeight: FontWeight.w700),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          calc == null
+                              ? '${pluralIngredients(dish.ingredients.length)} · выход — г · — ккал'
+                              : '${pluralIngredients(dish.ingredients.length)} · '
+                                  '${calc.usesLossTable && !calc.hasYield ? 'вес готового блюда не указан' : 'выход ${CalculationEngine.formatGrams(calc.yieldGrams)} г'} · '
+                                  '${CalculationEngine.formatKcal(calc.cookedKcal)} ккал',
+                          style:
+                              AppTypography.numSm.copyWith(color: p.inkSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  PopupMenuButton<String>(
+                    tooltip: 'Действия с блюдом',
+                    icon: Icon(Icons.more_vert_rounded, color: p.inkMuted),
+                    onSelected: (value) async {
+                      final notifier = ref.read(savedDishesProvider.notifier);
+                      if (value == 'delete') {
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Удалить блюдо?'),
+                            content: Text(
+                              'Блюдо «$title» будет удалено из «Моих блюд».',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: const Text('Отмена'),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, true),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: p.danger,
+                                ),
+                                child: const Text('Удалить'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirmed != true || !context.mounted) return;
+                      }
+                      try {
+                        if (value == 'copy') await notifier.duplicateDish(dish);
+                        if (value == 'delete') {
+                          await notifier.deleteDish(dish.id);
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context)
+                            ..hideCurrentSnackBar()
+                            ..showSnackBar(
+                              SnackBar(
+                                content: Text('Удалено: $title'),
+                                action: SnackBarAction(
+                                  label: 'Отменить',
+                                  onPressed: () {
+                                    notifier
+                                        .saveDish(dish)
+                                        .then<void>((_) {}, onError: (Object _) {});
+                                  },
+                                ),
+                              ),
+                            );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                friendlyErrorMessage(
+                                  e,
+                                  prefix: 'Не удалось выполнить действие',
+                                ),
+                              ),
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'copy', child: Text('Дублировать')),
+                      PopupMenuItem(value: 'delete', child: Text('Удалить')),
                     ],
                   ),
-                ),
-                PopupMenuButton<String>(
-                  tooltip: 'Действия с блюдом',
-                  icon: Icon(Icons.more_vert_rounded, color: p.inkMuted),
-                  onSelected: (value) async {
-                    final notifier = ref.read(savedDishesProvider.notifier);
-                    try {
-                      if (value == 'copy') await notifier.duplicateDish(dish);
-                      if (value == 'delete') await notifier.deleteDish(dish.id);
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Не удалось: $e')),
-                        );
-                      }
-                    }
-                  },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'copy', child: Text('Дублировать')),
-                    PopupMenuItem(value: 'delete', child: Text('Удалить')),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

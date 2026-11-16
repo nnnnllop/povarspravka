@@ -6,6 +6,7 @@ import '../../core/calculation/models/blank_mode.dart';
 import '../../core/calculation/models/calculation_result.dart';
 import '../../core/calculation/models/dish.dart';
 import '../../core/export/export_service.dart';
+import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
@@ -33,11 +34,14 @@ class BlankPreviewScreen extends ConsumerStatefulWidget {
 }
 
 class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
-  static const double _minScale = 0.35;
+  static const double _minScale = 0.2;
   static const double _maxScale = 2.5;
+  static const double _baseDocWidth = 758.0;
 
   final _transform = TransformationController();
   double _scale = 1;
+  double _fitScale = 1;
+  bool _initialFitApplied = false;
   bool _busy = false;
 
   @override
@@ -60,20 +64,17 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
     }
   }
 
-  void _zoomBy(double factor) {
-    final next = (_scale * factor).clamp(_minScale, _maxScale);
+  void _applyScale(double scale) {
+    final next = scale.clamp(_minScale, _maxScale);
     setState(() {
       _scale = next;
-      _transform.value = Matrix4.identity()..scale(next);
+      _transform.value = Matrix4.diagonal3Values(next, next, 1.0);
     });
   }
 
-  void _resetZoom() {
-    setState(() {
-      _scale = 1;
-      _transform.value = Matrix4.identity();
-    });
-  }
+  void _zoomBy(double factor) => _applyScale(_scale * factor);
+
+  void _resetZoom() => _applyScale(_fitScale);
 
   Future<void> _run(Future<void> Function() action,
       {String failure = 'Ошибка при экспорте'}) async {
@@ -85,8 +86,9 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
     } catch (e) {
       AppHaptics.error();
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$failure: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(friendlyErrorMessage(e, prefix: failure))),
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -130,38 +132,79 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
           final media = MediaQuery.sizeOf(context);
           final textScale = MediaQuery.textScalerOf(context).scale(1.0);
           final inlineModeBanner =
-              (media.height < 680 && textScale > 1.3) || media.height < 420;
+              (media.height < 680 && textScale > 1.3) ||
+              (textScale > 1.5 && media.height < 900) ||
+              media.height < 420;
+          final stackModeBanner = textScale > 1.15 || media.width < 420;
+          final modeIcon = Icon(
+            dish.blankMode == BlankMode.photoCross
+                ? Icons.grid_on_rounded
+                : Icons.view_list_rounded,
+            size: 16,
+            color: p.inkSecondary,
+          );
+
+          final docScale = MediaQuery.textScalerOf(context).scale(9.5) / 9.5;
+          final docOuterWidth =
+              _baseDocWidth * docScale + 40.0 + Space.x4 * 2;
 
           final modeBanner = Container(
             padding: const EdgeInsets.symmetric(
                 horizontal: Space.x4, vertical: Space.x2),
             decoration: BoxDecoration(
-              color: p.sunken,
+              color: p.surface,
               border: Border(bottom: BorderSide(color: p.divider)),
             ),
-            child: Row(
-              children: [
-                Icon(
-                  dish.blankMode == BlankMode.photoCross
-                      ? Icons.grid_on_rounded
-                      : Icons.view_list_rounded,
-                  size: 16,
-                  color: p.inkSecondary,
-                ),
-                const SizedBox(width: Space.x2),
-                Expanded(
-                  child: Text(
-                    'Режим: ${dish.blankMode.displayName}',
-                    style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
+            child: stackModeBanner
+                ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 3),
+                        child: modeIcon,
+                      ),
+                      const SizedBox(width: Space.x2),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Режим: ${dish.blankMode.displayName}',
+                              style: AppTypography.bodySm
+                                  .copyWith(color: p.inkSecondary),
+                            ),
+                            Text(
+                              pluralIngredients(dish.ingredients.length),
+                              style: AppTypography.numSm
+                                  .copyWith(color: p.inkSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      modeIcon,
+                      const SizedBox(width: Space.x2),
+                      Expanded(
+                        child: Text(
+                          'Режим: ${dish.blankMode.displayName}',
+                          style: AppTypography.bodySm
+                              .copyWith(color: p.inkSecondary),
+                        ),
+                      ),
+                      const SizedBox(width: Space.x2),
+                      Flexible(
+                        child: Text(
+                          pluralIngredients(dish.ingredients.length),
+                          style: AppTypography.numSm
+                              .copyWith(color: p.inkSecondary),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(width: Space.x2),
-                Text(
-                  '${dish.ingredients.length} инг.',
-                  style: AppTypography.numSm.copyWith(color: p.inkSecondary),
-                ),
-              ],
-            ),
           );
 
           final previewDoc = calc == null
@@ -176,7 +219,7 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
               : _BlankPreviewDocument(
                   dish: dish,
                   calc: calc,
-                  scale: MediaQuery.textScalerOf(context).scale(9.5) / 9.5,
+                  scale: docScale,
                 );
 
           return Column(
@@ -185,33 +228,54 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
               // а на тесных с крупным текстом прокручивается вместе с листом.
               if (!inlineModeBanner) modeBanner,
 
-              // Лист бланка: пинч-зум и перетаскивание.
+              // Лист бланка: пинч-зум, автоподгонка по ширине и перетаскивание.
               Expanded(
-                child: InteractiveViewer(
-                  transformationController: _transform,
-                  minScale: _minScale,
-                  maxScale: _maxScale,
-                  // Лист больше экрана — панорамируем свободно по обеим осям.
-                  constrained: false,
-                  boundaryMargin: const EdgeInsets.all(80),
-                  child: Container(
-                    padding: const EdgeInsets.all(Space.x4),
-                    child: inlineModeBanner
-                        ? Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              SizedBox(
-                                width: (media.width - Space.x8)
-                                    .clamp(240.0, double.infinity),
-                                child: modeBanner,
-                              ),
-                              const SizedBox(height: Space.x3),
-                              previewDoc,
-                            ],
-                          )
-                        : previewDoc,
-                  ),
+                child: LayoutBuilder(
+                  builder: (context, viewerConstraints) {
+                    final viewportW = viewerConstraints.maxWidth;
+                    final nextFit = (calc != null &&
+                            viewportW.isFinite &&
+                            viewportW > 0)
+                        ? (viewportW / docOuterWidth).clamp(_minScale, 1.0)
+                        : 1.0;
+                    _fitScale = nextFit;
+                    if (!_initialFitApplied &&
+                        calc != null &&
+                        viewportW.isFinite &&
+                        viewportW > 0) {
+                      _initialFitApplied = true;
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted) return;
+                        _applyScale(_fitScale);
+                      });
+                    }
+                    return InteractiveViewer(
+                      transformationController: _transform,
+                      minScale: _minScale,
+                      maxScale: _maxScale,
+                      // Лист больше экрана — панорамируем свободно по обеим осям.
+                      constrained: false,
+                      boundaryMargin: const EdgeInsets.all(80),
+                      child: Container(
+                        padding: const EdgeInsets.all(Space.x4),
+                        child: inlineModeBanner
+                            ? Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  SizedBox(
+                                    width: (media.width - Space.x8)
+                                        .clamp(240.0, double.infinity),
+                                    child: modeBanner,
+                                  ),
+                                  const SizedBox(height: Space.x3),
+                                  previewDoc,
+                                ],
+                              )
+                            : previewDoc,
+                      ),
+                    );
+                  },
                 ),
               ),
 
@@ -325,6 +389,7 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
               subtitle: 'Векторный, идентичен типовому бланку',
               onTap: () => Navigator.pop(ctx, ExportType.pdf),
             ),
+            Divider(color: p.divider, height: 1),
             _ExportTile(
               palette: p,
               icon: Icons.description_rounded,
@@ -332,6 +397,7 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
               subtitle: 'Редактируемый документ',
               onTap: () => Navigator.pop(ctx, ExportType.docx),
             ),
+            Divider(color: p.divider, height: 1),
             _ExportTile(
               palette: p,
               icon: Icons.table_chart_rounded,
@@ -367,39 +433,37 @@ class _ExportTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = palette;
-    return Container(
-      margin: const EdgeInsets.only(bottom: Space.x2),
-      decoration: BoxDecoration(
-        color: p.surface,
-        borderRadius: Radii.fieldAll,
-        border: Border.all(color: p.border),
-      ),
-      clipBehavior: Clip.antiAlias,
+    return TactilePress(
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(Space.x3),
-            child: Row(
-              children: [
-                Icon(icon, size: 22, color: p.inkSecondary),
-                const SizedBox(width: Space.x3),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title,
-                          style: AppTypography.body.copyWith(
-                              color: p.ink, fontWeight: FontWeight.w700)),
-                      Text(subtitle,
-                          style: AppTypography.caption
-                              .copyWith(color: p.inkSecondary)),
-                    ],
+          borderRadius: Radii.fieldAll,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: kMinTapTarget),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: Space.x1, vertical: Space.x3),
+              child: Row(
+                children: [
+                  Icon(icon, size: 22, color: p.inkSecondary),
+                  const SizedBox(width: Space.x3),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title,
+                            style: AppTypography.body.copyWith(
+                                color: p.ink, fontWeight: FontWeight.w700)),
+                        Text(subtitle,
+                            style: AppTypography.caption
+                                .copyWith(color: p.inkSecondary)),
+                      ],
+                    ),
                   ),
-                ),
-                Icon(Icons.chevron_right_rounded, color: p.inkMuted),
-              ],
+                  Icon(Icons.chevron_right_rounded, color: p.inkMuted),
+                ],
+              ),
             ),
           ),
         ),
@@ -440,11 +504,11 @@ class _BlankPreviewDocument extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: Colors.black26, width: 1),
-        boxShadow: [
+        boxShadow: const [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Color.fromRGBO(0, 0, 0, 0.06),
             blurRadius: 8,
-            offset: const Offset(0, 2),
+            offset: Offset(0, 2),
           ),
         ],
       ),
@@ -820,7 +884,7 @@ class _BlankPreviewDocument extends StatelessWidget {
       alignment: Alignment.center,
       padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: AppColors.paperHeader,
         border: Border.all(color: Colors.black, width: 0.6),
       ),
       child: Text(

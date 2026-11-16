@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../core/calculation/calculation_engine.dart';
 import '../../core/calculation/models/product.dart';
 import '../../core/calculation/models/ingredient.dart';
+import '../../core/calculation/models/source_label.dart';
 import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
@@ -15,19 +16,17 @@ import 'source_badge.dart';
 ///
 /// Ключевые решения:
 /// * «Брутто | Нетто» — это **единица измерения числа**, а не тумблер
-///   функции: `SegmentedButton` 48 dp над полем, а не `SwitchListTile`.
-/// * При смене единицы число конвертируется, но рядом на 2 с появляется
-///   дельта-подпись «← 250 г нетто · 312,5 г брутто (отходы 20 %)» — видно,
-///   что и почему изменилось.
-/// * Подтверждение — правая нижняя клавиша кейпада (позиция Enter), клавиши
-///   высотой 56 dp.
-/// * `⌫` (не латинская `C`): тап — удалить символ, долгое нажатие — сброс.
-/// * Только прибавки (`+10 / +50 / +100 / +250`), никаких «пресетов-замен».
-/// * Каждое нажатие — тактильный отклик.
+///   функции: `SegmentedButton` 48 dp над полем.
+/// * При смене единицы число конвертируется, рядом на 2 с появляется
+///   дельта-подпись — видно, что и почему изменилось.
+/// * Инлайн-переключение процента отходов прямо в том же нумпаде (без диалогов)
+///   и инлайн-счётчик бытовых мер («− 1 +») без сброса режима Брутто.
+/// * Явная кнопка сброса `C`, плюс удержание `⌫` тоже сбрасывает.
+/// * Все клавиши срабатывают по `onTapDown` с тактильным сжатием `TactilePress`.
 ///
-/// Сохранены публичные контракты (тип `CustomNumpadSheet`, параметры,
-/// тексты «Добавить в блюдо» / «Сохранить изменения», диалоги мер и процента
-/// отходов, ключ `measure-count`) — на них завязаны тесты.
+/// Сохранены публичные контракты (`CustomNumpadSheet`, `AnimatedSwitcher`
+/// дисплея, ключи `key-0..9`, `key-,`, `key-⌫`, долгое нажатие на `⌫`,
+/// `SegmentedButton<bool>`, тексты «Добавить в блюдо» / «Сохранить изменения»).
 class CustomNumpadSheet extends StatefulWidget {
   final Product product;
   final double initialGrams;
@@ -35,6 +34,9 @@ class CustomNumpadSheet extends StatefulWidget {
   final bool isEditing;
   final Function(double grams, bool isGross) onConfirm;
   final void Function(Product product)? onProductUpdated;
+
+  /// Колбэк удаления ингредиента из блюда (доступен в режиме редактирования).
+  final VoidCallback? onDelete;
 
   const CustomNumpadSheet({
     super.key,
@@ -44,6 +46,7 @@ class CustomNumpadSheet extends StatefulWidget {
     this.isEditing = false,
     required this.onConfirm,
     this.onProductUpdated,
+    this.onDelete,
   });
 
   @override
@@ -56,7 +59,15 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
   late double _wastePct;
   bool _isFreshInput = true;
 
-  /// Дельта-подпись, показываемая 2 с после смены единицы.
+  bool _isEditingWaste = false;
+  String _wasteInput = '0';
+  bool _isFreshWasteInput = true;
+  String? _wasteError;
+
+  ProductMeasure? _selectedMeasure;
+  int _measureCount = 1;
+
+  /// Дельта-подпись, показываемая 2 с после смены единицы или параметра.
   String? _deltaNote;
   Timer? _deltaTimer;
 
@@ -88,56 +99,63 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
   void _onKey(String k) {
     AppHaptics.key();
     setState(() {
-      if (k == ',') {
-        if (_isFreshInput) {
-          _currentInput = '0,';
-          _isFreshInput = false;
-        } else if (!_currentInput.contains(',') &&
-            !_currentInput.contains('.')) {
-          _currentInput += ',';
-        }
+      if (_isEditingWaste) {
+        final (next, fresh) = _appendNumpadKeyValue(
+          _wasteInput,
+          _isFreshWasteInput,
+          k,
+          maxLength: 4,
+        );
+        _wasteInput = next;
+        _isFreshWasteInput = fresh;
+        _wasteError = null;
         return;
       }
-
-      if (_isFreshInput) {
-        _currentInput = k;
-        _isFreshInput = false;
-        return;
-      }
-
-      if (_currentInput == '0') {
-        // STATE-08: на дисплее уже «0» — первая значащая цифра заменяет его,
-        // а не дописывается в дробную часть. Иначе «0» → «0» → «,» → «0,7»
-        // превращалось в «0,9»: весь хвост ввода уходил в копейки.
-        _currentInput = k;
-        _isFreshInput = false;
-      } else if (_currentInput.length < 7) {
-        _currentInput += k;
-      }
+      final (next, fresh) = _appendNumpadKeyValue(
+        _currentInput,
+        _isFreshInput,
+        k,
+        maxLength: 7,
+      );
+      _currentInput = next;
+      _isFreshInput = fresh;
+      _selectedMeasure = null;
+      _measureCount = 1;
     });
   }
+
   void _onBackspace() {
     AppHaptics.key();
     setState(() {
-      _isFreshInput = false;
-      if (_currentInput.length > 1) {
-        _currentInput = _currentInput.substring(0, _currentInput.length - 1);
-      } else {
-        // STATE-08: стёрли всё — снова «свежий» ввод, как после сброса.
-        // Без этого следующий «0» оставался «0», а запятая превращала его в
-        // «0,», и весь дальнейший ввод уходил в дробную часть.
-        _currentInput = '0';
-        _isFreshInput = true;
+      if (_isEditingWaste) {
+        final (next, fresh) = _backspaceNumpadString(_wasteInput);
+        _wasteInput = next;
+        _isFreshWasteInput = fresh;
+        _wasteError = null;
+        return;
       }
+      final (next, fresh) = _backspaceNumpadString(_currentInput);
+      _currentInput = next;
+      _isFreshInput = fresh;
+      _selectedMeasure = null;
+      _measureCount = 1;
     });
   }
 
   void _onClear() {
     AppHaptics.error();
     setState(() {
+      if (_isEditingWaste) {
+        _wasteInput = '0';
+        _isFreshWasteInput = true;
+        _wasteError = null;
+        return;
+      }
       _currentInput = '0';
       _isFreshInput = true;
       _deltaNote = null;
+      _selectedMeasure = null;
+      _measureCount = 1;
     });
   }
 
@@ -148,15 +166,28 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     setState(() {
       _currentInput = CalculationEngine.formatGrams(newVal);
       _isFreshInput = false;
+      _selectedMeasure = null;
+      _measureCount = 1;
     });
   }
 
   void _setMode(bool gross) {
-    if (gross == _isGross) return;
+    if (gross == _isGross && !_isEditingWaste) return;
     AppHaptics.toggle();
     final mass = CalculationEngine.parseInputDouble(_currentInput);
     if (mass == null) {
-      setState(() => _isGross = gross);
+      setState(() {
+        _isGross = gross;
+        _isEditingWaste = false;
+        _wasteError = null;
+      });
+      return;
+    }
+    if (gross == _isGross) {
+      setState(() {
+        _isEditingWaste = false;
+        _wasteError = null;
+      });
       return;
     }
     final converted = gross
@@ -172,13 +203,15 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     final convertedStr = CalculationEngine.formatGrams(converted);
     setState(() {
       _isGross = gross;
+      _isEditingWaste = false;
+      _wasteError = null;
       _currentInput = convertedStr;
       _isFreshInput = true;
     });
     // Дельта-подпись: пользователь видит, ЧТО и ПОЧЕМУ поменялось.
     final beforeStr = CalculationEngine.formatGrams(mass);
     final wasteNote = _wastePct > 0
-        ? ' (отходы ${CalculationEngine.formatWastePercent(_wastePct)}%)'
+        ? ' (отходы ${CalculationEngine.formatWastePercent(_wastePct)} %)'
         : '';
     if (gross) {
       _showDelta('← $beforeStr г нетто · $convertedStr г брутто$wasteNote');
@@ -191,126 +224,119 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     AppHaptics.toggle();
     setState(() {
       _wastePct = newPct;
+      _isEditingWaste = false;
+      _wasteError = null;
     });
-  }
-
-  Future<void> _editWastePercentage() async {
-    AppHaptics.key();
-    final controller = TextEditingController(
-      text: _wastePct > 0 ? CalculationEngine.formatWastePercent(_wastePct) : '0',
-    );
-    String? error;
-    final newPct = await showDialog<double>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Процент отходов при холодной обработке'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Продукт: ${widget.product.name}\nЗадайте процент технологических отходов (0–99%).',
-                style: AppTypography.bodySm,
-              ),
-              const SizedBox(height: Space.x3),
-              TextFormField(
-                controller: controller,
-                autofocus: true,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(
-                  labelText: 'Отходы, %',
-                  errorText: error,
-                  suffixText: '%',
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Отмена'),
-            ),
-            TextButton(
-              onPressed: () {
-                final parsed = CalculationEngine.parseInputDouble(controller.text);
-                if (parsed == null || parsed < 0 || parsed >= 100) {
-                  AppHaptics.warn();
-                  setDialogState(() {
-                    error = 'Введите число от 0 до 99';
-                  });
-                  return;
-                }
-                Navigator.pop(ctx, parsed);
-              },
-              child: const Text('Сохранить'),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (newPct != null) {
-      _setWastePct(newPct);
+    if (_selectedMeasure != null && _isGross) {
+      _applySelectedMeasure(showToast: false);
     }
   }
 
-  Future<void> _chooseMeasure(ProductMeasure measure) async {
+  void _toggleWasteEdit() {
     AppHaptics.key();
-    var countText = '1';
-    String? error;
-    final count = await showDialog<double>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-          builder: (ctx, update) => AlertDialog(
-                title: Text(measure.name),
-                content: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Text(
-                      '1 мера = ${CalculationEngine.formatGrams(measure.grams)} г нетто. Источник: ${widget.product.sourceLabel}.'),
-                  const SizedBox(height: Space.x3),
-                  TextFormField(
-                      key: const ValueKey('measure-count'),
-                      initialValue: '1',
-                      onChanged: (text) => countText = text,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                      decoration: InputDecoration(
-                          labelText: 'Количество мер', errorText: error)),
-                ]),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('Отмена')),
-                  TextButton(
-                      onPressed: () {
-                        final value =
-                            CalculationEngine.parseInputDouble(countText);
-                        final grams =
-                            value == null ? null : value * measure.grams;
-                        if (grams == null ||
-                            !grams.isFinite ||
-                            grams < .1 ||
-                            grams > 9999999) {
-                          AppHaptics.warn();
-                          update(() => error =
-                              'Количество должно давать от 0,1 до 9999999 г');
-                          return;
-                        }
-                        Navigator.pop(ctx, value);
-                      },
-                      child: const Text('Использовать')),
-                ],
-              )),
-    );
-    if (!mounted || count == null) return;
     setState(() {
-      _isGross = false;
-      _currentInput = (measure.grams * count).toString().replaceAll('.', ',');
-      _isFreshInput = true;
-      _deltaNote =
-          '✓ ${CalculationEngine.formatGrams(measure.grams * count)} г нетто · ${measure.name}';
+      if (_isEditingWaste) {
+        _isEditingWaste = false;
+        _wasteError = null;
+      } else {
+        _isEditingWaste = true;
+        _wasteInput =
+            _wastePct > 0 ? CalculationEngine.formatWastePercent(_wastePct) : '0';
+        _isFreshWasteInput = true;
+        _wasteError = null;
+      }
     });
+  }
+
+  void _applyWastePreset(String value) {
+    AppHaptics.key();
+    setState(() {
+      _wasteInput = value;
+      _isFreshWasteInput = false;
+      _wasteError = null;
+    });
+  }
+
+  void _confirmWasteEdit() {
+    final parsed = CalculationEngine.parseInputDouble(_wasteInput);
+    if (parsed == null || !parsed.isFinite || parsed < 0 || parsed >= 100) {
+      AppHaptics.warn();
+      setState(() {
+        _wasteError = 'Введите число от 0 до 99';
+      });
+      return;
+    }
+    AppHaptics.toggle();
+    setState(() {
+      _wastePct = parsed;
+      _isEditingWaste = false;
+      _wasteError = null;
+    });
+    if (_selectedMeasure != null && _isGross) {
+      _applySelectedMeasure(showToast: false);
+    }
+    _showDelta(
+        '✓ Отходы: ${CalculationEngine.formatWastePercent(parsed)} %');
+  }
+
+  void _selectMeasure(ProductMeasure measure) {
+    AppHaptics.key();
+    setState(() {
+      _isEditingWaste = false;
+      _wasteError = null;
+      if (_selectedMeasure?.name == measure.name) {
+        _measureCount = (_measureCount + 1).clamp(1, 99);
+      } else {
+        _selectedMeasure = measure;
+        _measureCount = 1;
+      }
+    });
+    _applySelectedMeasure();
+  }
+
+  void _stepMeasureCount(int delta) {
+    if (_selectedMeasure == null) return;
+    final next = (_measureCount + delta).clamp(1, 99);
+    if (next == _measureCount) return;
+    AppHaptics.key();
+    setState(() => _measureCount = next);
+    _applySelectedMeasure();
+  }
+
+  void _clearMeasureSelection() {
+    AppHaptics.key();
+    setState(() {
+      _selectedMeasure = null;
+      _measureCount = 1;
+    });
+  }
+
+  void _applySelectedMeasure({bool showToast = true}) {
+    final measure = _selectedMeasure;
+    if (measure == null) return;
+    final netTotal = measure.grams * _measureCount;
+    final targetGrams =
+        _isGross ? Ingredient.grossFromNet(netTotal, _wastePct) : netTotal;
+    if (targetGrams == null ||
+        !targetGrams.isFinite ||
+        targetGrams < .1 ||
+        targetGrams > 9999999) {
+      AppHaptics.warn();
+      return;
+    }
+    final formattedTarget = CalculationEngine.formatGrams(targetGrams);
+    setState(() {
+      _currentInput = formattedTarget;
+      _isFreshInput = true;
+    });
+    if (!showToast) return;
+    final netStr = CalculationEngine.formatGrams(netTotal);
+    if (_isGross) {
+      _showDelta(
+          '← ${measure.name} × $_measureCount ($netStr г нетто → $formattedTarget г брутто)');
+    } else {
+      _showDelta('✓ ${measure.name} × $_measureCount · $netStr г нетто');
+    }
   }
 
   List<(String, double, bool)> _getSeasonalPresets() {
@@ -338,6 +364,14 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     return const [];
   }
 
+  void _deleteFromDish() {
+    AppHaptics.error();
+    widget.onDelete?.call();
+    if (mounted && Navigator.canPop(context)) {
+      Navigator.pop(context);
+    }
+  }
+
   void _confirm(double parsedGrams) {
     AppHaptics.commit();
     final effectiveProduct = _wastePct != widget.product.wastePct
@@ -347,7 +381,9 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
       widget.onProductUpdated?.call(effectiveProduct);
     }
     widget.onConfirm(parsedGrams, _isGross);
-    Navigator.pop(context);
+    if (mounted && Navigator.canPop(context)) {
+      Navigator.pop(context);
+    }
   }
 
   @override
@@ -355,6 +391,8 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     final p = Palette.of(context);
     final parsedGrams =
         CalculationEngine.parseInputDouble(_currentInput) ?? 0.0;
+    final parsedWaste =
+        _isEditingWaste ? CalculationEngine.parseInputDouble(_wasteInput) : null;
     final hasWaste = _wastePct > 0;
 
     double netGrams = parsedGrams;
@@ -363,7 +401,12 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     }
 
     final seasonalPresets = _getSeasonalPresets();
-    final canConfirm = parsedGrams >= .1 && parsedGrams <= 9999999;
+    final canConfirm = _isEditingWaste
+        ? (parsedWaste != null &&
+            parsedWaste.isFinite &&
+            parsedWaste >= 0 &&
+            parsedWaste < 100)
+        : (parsedGrams >= .1 && parsedGrams <= 9999999);
     final media = MediaQuery.sizeOf(context);
     final sideBySide = media.width >= 520 && media.height < 460;
 
@@ -445,7 +488,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
           _buildHeader(p),
           const SizedBox(height: Space.x3),
           _buildModeSelector(p, compact: compactPane),
-          if (_deltaNote != null) ...[
+          if (_deltaNote != null && !_isEditingWaste) ...[
             const SizedBox(height: Space.x2),
             _buildDeltaNote(p),
           ],
@@ -453,13 +496,13 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
           _buildReadout(p, net, hasWaste),
           const SizedBox(height: Space.x3),
           if (seasonalPresets.isNotEmpty) ...[
-            _buildSectionLabel(p, 'НОРМА ОТХОДОВ · СЕЗОН'),
+            _buildSectionLabel(p, 'Отходы по сезону'),
             const SizedBox(height: Space.x2),
             _buildWasteChips(p, seasonalPresets),
             const SizedBox(height: Space.x3),
           ],
           if (widget.product.calculationMeasures.isNotEmpty) ...[
-            _buildSectionLabel(p, 'БЫТОВЫЕ МЕРЫ'),
+            _buildSectionLabel(p, 'Бытовые меры'),
             const SizedBox(height: Space.x2),
             _buildMeasures(p),
           ],
@@ -468,7 +511,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     );
   }
 
-  /// Нижний блок: ряд прибавок + кейпад с клавишей подтверждения.
+  /// Нижний блок: ряд прибавок + кейпад с клавишами сброса и подтверждения.
   /// Прижат к нижней кромке — под большой палец.
   Widget _buildKeypadBlock(
     Palette p,
@@ -476,42 +519,96 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     double parsedGrams, {
     bool compactLandscape = false,
   }) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _buildQuickRow(p),
-        SizedBox(height: compactLandscape ? Space.x1 : Space.x2),
-        _buildKeypad(
-          p,
-          canConfirm,
-          parsedGrams,
-          compactLandscape: compactLandscape,
-        ),
-      ],
+    final quickItems = _isEditingWaste
+        ? <(String, VoidCallback)>[
+            ('0%', () => _applyWastePreset('0')),
+            ('15%', () => _applyWastePreset('15')),
+            ('25%', () => _applyWastePreset('25')),
+            ('35%', () => _applyWastePreset('35')),
+          ]
+        : <(String, VoidCallback)>[
+            ('+10 г', () => _onAdd(10)),
+            ('+50 г', () => _onAdd(50)),
+            ('+100 г', () => _onAdd(100)),
+            ('+250 г', () => _onAdd(250)),
+          ];
+    final confirmLabel = _isEditingWaste
+        ? 'Готово'
+        : (widget.isEditing ? 'Сохранить изменения' : 'Добавить в блюдо');
+
+    return _NumpadKeypadBlock(
+      quickItems: quickItems,
+      confirmLabel: confirmLabel,
+      canConfirm: canConfirm,
+      confirmMaterialKey:
+          _isEditingWaste ? const ValueKey('waste-edit-done') : null,
+      compactLandscape: compactLandscape,
+      onKey: _onKey,
+      onBackspace: _onBackspace,
+      onClear: _onClear,
+      onConfirm: () =>
+          _isEditingWaste ? _confirmWasteEdit() : _confirm(parsedGrams),
     );
   }
 
   Widget _buildHeader(Palette p) {
+    final canPop = Navigator.canPop(context);
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Expanded(
-          child: Text(
-            widget.product.name,
-            style: AppTypography.title.copyWith(color: p.ink),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.product.name,
+                style: AppTypography.title.copyWith(color: p.ink),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '${CalculationEngine.formatKcal(widget.product.kcal)} ккал / 100 г · ${SourceLabel.of(widget.product.source, fallback: widget.product.source)}',
+                style: AppTypography.caption.copyWith(color: p.inkMuted),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
         ),
-        const SizedBox(width: Space.x2),
-        SourceBadge(source: widget.product.source, compact: true),
+        if (widget.isEditing && widget.onDelete != null) ...[
+          const SizedBox(width: Space.x1),
+          IconButton(
+            key: const ValueKey('numpad-delete'),
+            onPressed: _deleteFromDish,
+            tooltip: 'Удалить из блюда',
+            constraints: const BoxConstraints(
+              minWidth: kMinTapTarget,
+              minHeight: kMinTapTarget,
+            ),
+            icon: Icon(Icons.delete_outline_rounded, size: 22, color: p.danger),
+          ),
+        ],
+        if (canPop) ...[
+          const SizedBox(width: Space.x1),
+          IconButton(
+            onPressed: () => Navigator.maybePop(context),
+            tooltip: 'Закрыть',
+            constraints: const BoxConstraints(
+              minWidth: kMinTapTarget,
+              minHeight: kMinTapTarget,
+            ),
+            icon: Icon(Icons.close_rounded, size: 22, color: p.inkSecondary),
+          ),
+        ] else if (!(widget.isEditing && widget.onDelete != null)) ...[
+          const SizedBox(width: Space.x2),
+          SourceBadge(source: widget.product.source, compact: true),
+        ],
       ],
     );
   }
 
   Widget _buildModeSelector(Palette p, {bool compact = false}) {
-    // Контракт из аудита: старая подпись тумблера осталась доступной для
-    // скринридера — она и есть подсказка к сегментам «Брутто | Нетто».
     const semanticsHint = 'Ввод чистой массы нетто · переключение Брутто/Нетто';
     final isCompact = compact || MediaQuery.sizeOf(context).width < 380;
     return Semantics(
@@ -565,59 +662,118 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
   }
 
   Widget _buildReadout(Palette p, double net, bool hasWaste) {
-    const digits = TextStyle(
-      fontFamily: AppTypography.fontName,
-      fontSize: 34,
-      height: 1,
-      fontWeight: FontWeight.w700,
-      letterSpacing: -0.8,
-      fontFeatures: [FontFeature.tabularFigures()],
-    );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        // Число — дисплей-кегль: единственное значение на шите. Смена
-        // единицы анимируется: fade + slide 8 dp (подтверждение изменения,
-        // которого раньше не было вообще).
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            Flexible(
-              child: AnimatedSwitcher(
-                duration: Motion.base,
-                switchInCurve: Motion.ease,
-                transitionBuilder: (child, animation) => FadeTransition(
-                  opacity: animation,
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0, 0.12),
-                      end: Offset.zero,
-                    ).animate(animation),
-                    child: child,
-                  ),
-                ),
-                child: Text(
-                  _currentInput,
-                  key: ValueKey<String>(_currentInput),
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: digits.copyWith(color: p.ink),
+    final displayText = _isEditingWaste ? _wasteInput : _currentInput;
+    final isFresh = _isEditingWaste ? _isFreshWasteInput : _isFreshInput;
+    final unit = _isEditingWaste ? '%' : 'г';
+    final safeNet = (net.isFinite && net > 0) ? net : 0.0;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: Space.x4,
+        vertical: Space.x3,
+      ),
+      decoration: BoxDecoration(
+        color: p.sunken,
+        borderRadius: Radii.cardAll,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          if (_isEditingWaste)
+            Padding(
+              padding: const EdgeInsets.only(bottom: Space.x1),
+              child: Text(
+                'Процент отходов при обработке (0–99%)',
+                textAlign: TextAlign.center,
+                style: AppTypography.caption.copyWith(
+                  color: p.accent,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
-            const SizedBox(width: Space.x1),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Flexible(
+                child: AnimatedContainer(
+                  duration: Motion.fast,
+                  curve: Motion.ease,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isFresh ? Space.x2 : 0,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isFresh ? p.accentSoft : Colors.transparent,
+                    borderRadius: Radii.chipAll,
+                  ),
+                  child: AnimatedSwitcher(
+                    duration: Duration.zero,
+                    child: Text(
+                      displayText,
+                      key: ValueKey<String>(displayText),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.numLg.copyWith(
+                        color: isFresh ? p.accent : p.ink,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: Space.x1),
+              Text(
+                unit,
+                style: AppTypography.title.copyWith(color: p.inkSecondary),
+              ),
+            ],
+          ),
+          if (isFresh && !_isEditingWaste) ...[
+            const SizedBox(height: 2),
             Text(
-              'г',
-              style: AppTypography.title.copyWith(color: p.inkSecondary),
+              'цифра заменит значение · +г прибавит',
+              textAlign: TextAlign.center,
+              style: AppTypography.caption.copyWith(color: p.inkMuted),
             ),
           ],
+          const SizedBox(height: Space.x1),
+          if (_isEditingWaste)
+            _buildWasteEditCaption(p)
+          else ...[
+            _buildLiveCaption(p, net, hasWaste),
+            const SizedBox(height: Space.x2),
+            _buildLiveMacrosRow(p, safeNet),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWasteEditCaption(Palette p) {
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: Space.x2,
+      runSpacing: Space.x1,
+      children: [
+        Text(
+          _wasteError ?? 'масса: $_currentInput г · нажмите «Готово»',
+          textAlign: TextAlign.center,
+          style: AppTypography.numSm.copyWith(
+            color: _wasteError != null ? p.danger : p.inkSecondary,
+          ),
         ),
-        const SizedBox(height: Space.x2),
-        // Живая подпись вместо второго мелкого абзаца.
-        _buildLiveCaption(p, net, hasWaste),
+        TextButton(
+          key: const ValueKey('waste-edit-cancel'),
+          onPressed: _toggleWasteEdit,
+          style: TextButton.styleFrom(
+            minimumSize: const Size(kMinTapTarget, kMinTapTarget),
+            padding: const EdgeInsets.symmetric(horizontal: Space.x2),
+          ),
+          child: const Text('Отмена'),
+        ),
       ],
     );
   }
@@ -626,8 +782,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     final String text;
     final bool ok;
     if (_isGross && hasWaste) {
-      text =
-          '✓ съедобная часть ${CalculationEngine.formatGrams(net)} г · отходы ${CalculationEngine.formatWastePercent(_wastePct)}%';
+      text = '✓ съедобная часть ${CalculationEngine.formatGrams(net)} г';
       ok = true;
     } else if (_isGross) {
       text = 'отходы не заданы — брутто равно нетто';
@@ -651,13 +806,55 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
         ),
         if (hasWaste || _isGross)
           TextButton(
-            onPressed: _editWastePercentage,
+            key: const ValueKey('waste-edit-toggle'),
+            onPressed: _toggleWasteEdit,
             style: TextButton.styleFrom(
               minimumSize: const Size(kMinTapTarget, kMinTapTarget),
               padding: const EdgeInsets.symmetric(horizontal: Space.x2),
             ),
-            child: const Text('изменить %'),
+            child: Text(
+              'отходы ${CalculationEngine.formatWastePercent(_wastePct)} % · изменить',
+            ),
           ),
+      ],
+    );
+  }
+
+  Widget _buildLiveMacrosRow(Palette p, double safeNet) {
+    final kcal = widget.product.kcal * safeNet / 100.0;
+    final protein = widget.product.protein * safeNet / 100.0;
+    final fat = widget.product.fat * safeNet / 100.0;
+    final carbs = widget.product.carbs * safeNet / 100.0;
+    final cells = <Widget>[
+      InlineMacroCell(
+        type: NutrientType.protein,
+        value: CalculationEngine.formatMacro(protein),
+        compact: true,
+      ),
+      InlineMacroCell(
+        type: NutrientType.fat,
+        value: CalculationEngine.formatMacro(fat),
+        compact: true,
+      ),
+      InlineMacroCell(
+        type: NutrientType.carbs,
+        value: CalculationEngine.formatMacro(carbs),
+        compact: true,
+      ),
+      InlineMacroCell(
+        type: NutrientType.kcal,
+        value: CalculationEngine.formatKcal(kcal),
+        compact: true,
+      ),
+    ];
+    return Wrap(
+      key: const ValueKey('numpad-live-macros'),
+      alignment: WrapAlignment.center,
+      spacing: Space.x3,
+      runSpacing: Space.x1,
+      children: [
+        for (final cell in cells)
+          FittedBox(fit: BoxFit.scaleDown, child: cell),
       ],
     );
   }
@@ -667,8 +864,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
       text,
       style: AppTypography.caption.copyWith(
         color: p.inkMuted,
-        letterSpacing: 0.8,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w500,
       ),
     );
   }
@@ -693,60 +889,198 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
   }
 
   Widget _buildMeasures(Palette p) {
-    return Wrap(
-      spacing: Space.x2,
-      runSpacing: Space.x2,
-      children: widget.product.calculationMeasures.map((m) {
-        return _TapChip(
-          label: m.name,
-          trailing: '${CalculationEngine.formatGrams(m.grams)} г',
-          accent: p.accent,
-          selected: false,
-          onTap: () => _chooseMeasure(m),
-        );
-      }).toList(),
+    final selected = _selectedMeasure;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Wrap(
+          spacing: Space.x2,
+          runSpacing: Space.x2,
+          children: widget.product.calculationMeasures.map((m) {
+            return _TapChip(
+              key: ValueKey('measure-${m.name}'),
+              label: m.name,
+              trailing: '${CalculationEngine.formatGrams(m.grams)} г',
+              accent: p.accent,
+              selected: selected?.name == m.name,
+              onTap: () => _selectMeasure(m),
+            );
+          }).toList(),
+        ),
+        if (selected != null) ...[
+          const SizedBox(height: Space.x2),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: Space.x3,
+              vertical: Space.x1,
+            ),
+            decoration: BoxDecoration(
+              color: p.sunken,
+              borderRadius: Radii.chipAll,
+            ),
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: Space.x2,
+              runSpacing: Space.x1,
+              children: [
+                Text(
+                  '${selected.name} · ${CalculationEngine.formatGrams(selected.grams)} г нетто',
+                  style: AppTypography.caption.copyWith(color: p.inkSecondary),
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      key: const ValueKey('measure-dec'),
+                      onPressed:
+                          _measureCount > 1 ? () => _stepMeasureCount(-1) : null,
+                      tooltip: 'Уменьшить количество мер',
+                      constraints: const BoxConstraints(
+                        minWidth: kMinTapTarget,
+                        minHeight: kMinTapTarget,
+                      ),
+                      icon: const Icon(Icons.remove_rounded, size: 20),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: Space.x1),
+                      child: Text(
+                        '$_measureCount',
+                        key: const ValueKey('measure-count-label'),
+                        style: AppTypography.num.copyWith(color: p.ink),
+                      ),
+                    ),
+                    IconButton(
+                      key: const ValueKey('measure-inc'),
+                      onPressed:
+                          _measureCount < 99 ? () => _stepMeasureCount(1) : null,
+                      tooltip: 'Увеличить количество мер',
+                      constraints: const BoxConstraints(
+                        minWidth: kMinTapTarget,
+                        minHeight: kMinTapTarget,
+                      ),
+                      icon: const Icon(Icons.add_rounded, size: 20),
+                    ),
+                    IconButton(
+                      key: const ValueKey('measure-clear'),
+                      onPressed: _clearMeasureSelection,
+                      tooltip: 'Сбросить выбор меры',
+                      constraints: const BoxConstraints(
+                        minWidth: kMinTapTarget,
+                        minHeight: kMinTapTarget,
+                      ),
+                      icon: Icon(Icons.close_rounded,
+                          size: 18, color: p.inkMuted),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+}
+
+(String next, bool nextFresh) _appendNumpadKeyValue(
+  String current,
+  bool isFresh,
+  String key, {
+  required int maxLength,
+}) {
+  if (key == ',') {
+    if (isFresh) return ('0,', false);
+    if (!current.contains(',') && !current.contains('.')) {
+      return ('$current,', false);
+    }
+    return (current, false);
+  }
+  if (isFresh || current == '0') {
+    return (key, false);
+  }
+  if (current.length < maxLength) {
+    return ('$current$key', false);
+  }
+  return (current, false);
+}
+
+(String next, bool nextFresh) _backspaceNumpadString(String current) {
+  if (current.length > 1) {
+    return (current.substring(0, current.length - 1), false);
+  }
+  return ('0', true);
+}
+
+class _NumpadKeypadBlock extends StatelessWidget {
+  final List<(String, VoidCallback)> quickItems;
+  final String confirmLabel;
+  final bool canConfirm;
+  final Key? confirmMaterialKey;
+  final bool compactLandscape;
+  final void Function(String key) onKey;
+  final VoidCallback onBackspace;
+  final VoidCallback onClear;
+  final VoidCallback onConfirm;
+
+  const _NumpadKeypadBlock({
+    required this.quickItems,
+    required this.confirmLabel,
+    required this.canConfirm,
+    this.confirmMaterialKey,
+    this.compactLandscape = false,
+    required this.onKey,
+    required this.onBackspace,
+    required this.onClear,
+    required this.onConfirm,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildQuickRow(p),
+        SizedBox(height: compactLandscape ? Space.x1 : Space.x2),
+        _buildKeypad(context, p),
+      ],
     );
   }
 
   Widget _buildQuickRow(Palette p) {
-    const increments = <(String, double)>[
-      ('+10 г', 10),
-      ('+50 г', 50),
-      ('+100 г', 100),
-      ('+250 г', 250),
-    ];
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: Space.x3),
       child: Row(
-        children: increments.map((inc) {
-          return Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2),
-              child: Material(
-                color: p.sunken,
-                borderRadius: Radii.chipAll,
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  // STATE-08: срабатывание по нажатию — быстрый ввод быстрыми
-                  // нажатиями раньше терял часть приращений.
-                  onTapDown: (_) => _onAdd(inc.$2),
-                  borderRadius: Radii.chipAll,
-                  child: Container(
-                    height: kMinTapTarget,
-                    alignment: Alignment.center,
-                    padding: const EdgeInsets.symmetric(horizontal: Space.x1),
-                    decoration: BoxDecoration(
+        children: [
+          for (final item in quickItems)
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: TactilePress(
+                  child: Material(
+                    color: p.sunken,
+                    borderRadius: Radii.chipAll,
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTapDown: (_) => item.$2(),
                       borderRadius: Radii.chipAll,
-                      border: Border.all(color: p.borderStatic),
-                    ),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        inc.$1,
-                        maxLines: 1,
-                        style: AppTypography.numSm.copyWith(
-                          color: p.ink,
-                          fontWeight: FontWeight.w700,
+                      child: Container(
+                        height: kMinTapTarget,
+                        alignment: Alignment.center,
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: Space.x1),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            item.$1,
+                            maxLines: 1,
+                            style: AppTypography.numSm.copyWith(
+                              color: p.ink,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -754,18 +1088,12 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                 ),
               ),
             ),
-          );
-        }).toList(),
+        ],
       ),
     );
   }
 
-  Widget _buildKeypad(
-    Palette p,
-    bool canConfirm,
-    double parsedGrams, {
-    bool compactLandscape = false,
-  }) {
+  Widget _buildKeypad(BuildContext context, Palette p) {
     const rows = <List<String>>[
       ['1', '2', '3'],
       ['4', '5', '6'],
@@ -776,14 +1104,13 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     final shortHeight =
         compactLandscape || MediaQuery.sizeOf(context).height < 520;
     final keyGap = compactLandscape ? 2.0 : Space.x1;
-    // Клавиши от 48 dp (компакт / альбом) до 62 dp при крупном тексте —
-    // не раздуваются до 450 dp при scale=2.0.
     final double keyHeight = shortHeight
         ? kMinTapTarget
         : (52.0 * (scaler > 1.3 ? 1.15 : 1.0))
             .clamp(kMinTapTarget, 62.0)
             .toDouble();
     final gridHeight = keyHeight * 4 + keyGap * 4;
+    final confirmHeight = keyHeight * 3 + keyGap * 2;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -796,7 +1123,6 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
         height: gridHeight,
         child: Row(
           children: [
-            // 3 классические колонки цифр.
             Expanded(
               flex: 3,
               child: Column(
@@ -821,13 +1147,16 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
               ),
             ),
             const SizedBox(width: Space.x1),
-            // Колонка Enter: подтверждение — под большим пальцем, как Enter
-            // на нормальном калькуляторе.
             Expanded(
               flex: 2,
-              child: Padding(
-                padding: EdgeInsets.only(bottom: keyGap),
-                child: _buildConfirmKey(p, canConfirm, parsedGrams, keyHeight * 4 + keyGap * 3),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: EdgeInsets.only(bottom: keyGap),
+                    child: _buildClearKey(p, keyHeight),
+                  ),
+                  _buildConfirmKey(p, confirmHeight),
+                ],
               ),
             ),
           ],
@@ -839,90 +1168,99 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
   Widget _buildKey(Palette p, String k, double height) {
     final isBackspace = k == '⌫';
     return SizedBox(
-      // Стабильный ключ клавиши: по нему тесты проверяют размеры нажатия
-      // (WCAG 2.5.5) и не зависят от порядка обхода дерева.
       key: ValueKey('key-$k'),
       height: height,
-      child: isBackspace
-          ? GestureDetector(
-              onLongPress: _onClear,
-              child: Semantics(
-                button: true,
-                label: 'Удалить символ. Долгое нажатие — сброс',
-                child: InkWell(
-                  onTap: _onBackspace,
-                  borderRadius: Radii.fieldAll,
-                  child: _keySurface(
-                    p,
-                    child:
-                        Icon(Icons.backspace_outlined, size: 22, color: p.ink),
-                  ),
-                ),
-              ),
-            )
-          // STATE-08: клавиша срабатывает по НАЖАТИЮ, а не по отпусканию.
-          // `InkWell.onTap` разрешается ареной жестов на tap-up, и быстрый
-          // ввод (палец/несколько касаний в одном кадре, автотесты с
-          // pump(Duration.zero)) терял символы — до 20 из 30 нажатий.
-          // Реагируем по down: задержка нулевая, потеря исключена.
-          : GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapDown: (_) => _onKey(k),
-              child: Semantics(
-                button: true,
-                label: k == ',' ? 'запятая' : k,
-                child: _keySurface(
-                  p,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      k,
-                      maxLines: 1,
-                      style: AppTypography.title.copyWith(
-                        color: p.ink,
+      child: TactilePress(
+        child: Semantics(
+          button: true,
+          label: isBackspace
+              ? 'Удалить символ. Долгое нажатие — сброс'
+              : (k == ',' ? 'запятая' : k),
+          child: Material(
+            color: p.sunken,
+            borderRadius: Radii.fieldAll,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTapDown: (_) => isBackspace ? onBackspace() : onKey(k),
+              onLongPress: isBackspace ? onClear : null,
+              borderRadius: Radii.fieldAll,
+              child: Center(
+                child: isBackspace
+                    ? Icon(Icons.backspace_outlined, size: 22, color: p.ink)
+                    : FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          k,
+                          maxLines: 1,
+                          style: AppTypography.title.copyWith(color: p.ink),
+                        ),
                       ),
-                    ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildClearKey(Palette p, double height) {
+    return SizedBox(
+      key: const ValueKey('key-C'),
+      height: height,
+      child: TactilePress(
+        child: Semantics(
+          button: true,
+          label: 'Сбросить значение',
+          child: Material(
+            color: p.sunken,
+            borderRadius: Radii.fieldAll,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTapDown: (_) => onClear(),
+              borderRadius: Radii.fieldAll,
+              child: Center(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    'C',
+                    maxLines: 1,
+                    style: AppTypography.title.copyWith(color: p.danger),
                   ),
                 ),
               ),
             ),
-    );
-  }
-
-  Widget _keySurface(Palette p, {required Widget child}) {
-    return Container(
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: p.surface,
-        borderRadius: Radii.fieldAll,
-        border: Border.all(color: p.border, width: 1),
+          ),
+        ),
       ),
-      child: child,
     );
   }
 
-  Widget _buildConfirmKey(
-      Palette p, bool canConfirm, double parsedGrams, double height) {
-    final label = widget.isEditing ? 'Сохранить изменения' : 'Добавить в блюдо';
+  Widget _buildConfirmKey(Palette p, double height) {
     return Semantics(
       button: true,
       enabled: canConfirm,
-      label: label,
-      child: Material(
-        color: canConfirm ? p.accent : p.borderStatic,
-        borderRadius: Radii.fieldAll,
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: canConfirm ? () => _confirm(parsedGrams) : null,
-          child: Container(
-            height: height,
-            alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: Space.x2),
-            child: Text(
-              label,
-              textAlign: TextAlign.center,
-              style: AppTypography.label.copyWith(
-                color: canConfirm ? p.onAccent : p.inkMuted,
+      label: confirmLabel,
+      child: TactilePress(
+        enabled: canConfirm,
+        child: Material(
+          key: confirmMaterialKey,
+          color: canConfirm ? p.accent : p.borderStatic,
+          borderRadius: Radii.fieldAll,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: canConfirm ? onConfirm : null,
+            child: Container(
+              height: height,
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: Space.x2),
+              child: Text(
+                confirmLabel,
+                textAlign: TextAlign.center,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.label.copyWith(
+                  color: canConfirm ? p.onAccent : p.inkMuted,
+                ),
               ),
             ),
           ),
@@ -932,8 +1270,209 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
   }
 }
 
-/// Чип с высотой 48 dp, опциональной подписью-значением и янтарным маркером
-/// активного сезона (2 dp подчёркивание, а не «ещё одна рамка»).
+/// Упрощённый цифровой нумпад для быстрого ввода веса готового блюда одной рукой.
+class SimpleGramsNumpadSheet extends StatefulWidget {
+  final String title;
+  final String? subtitle;
+  final double? initialGrams;
+  final double minGrams;
+  final double maxGrams;
+  final void Function(double grams) onConfirm;
+  final VoidCallback? onClearValue;
+
+  const SimpleGramsNumpadSheet({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.initialGrams,
+    this.minGrams = 1.0,
+    this.maxGrams = 9999999.0,
+    required this.onConfirm,
+    this.onClearValue,
+  });
+
+  @override
+  State<SimpleGramsNumpadSheet> createState() => _SimpleGramsNumpadSheetState();
+}
+
+class _SimpleGramsNumpadSheetState extends State<SimpleGramsNumpadSheet> {
+  late String _input;
+  bool _isFresh = true;
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = widget.initialGrams;
+    _input = (initial != null && initial > 0)
+        ? CalculationEngine.formatGrams(initial)
+        : '0';
+  }
+
+  void _onKey(String k) {
+    AppHaptics.key();
+    setState(() {
+      final (next, fresh) =
+          _appendNumpadKeyValue(_input, _isFresh, k, maxLength: 7);
+      _input = next;
+      _isFresh = fresh;
+    });
+  }
+
+  void _onBackspace() {
+    AppHaptics.key();
+    setState(() {
+      final (next, fresh) = _backspaceNumpadString(_input);
+      _input = next;
+      _isFresh = fresh;
+    });
+  }
+
+  void _onClear() {
+    AppHaptics.error();
+    setState(() {
+      _input = '0';
+      _isFresh = true;
+    });
+  }
+
+  void _onAdd(double delta) {
+    AppHaptics.key();
+    final val = CalculationEngine.parseInputDouble(_input) ?? 0.0;
+    final next = (val + delta).clamp(widget.minGrams, 99999.0);
+    setState(() {
+      _input = CalculationEngine.formatGrams(next);
+      _isFresh = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final parsed = CalculationEngine.parseInputDouble(_input);
+    final canConfirm = parsed != null &&
+        parsed.isFinite &&
+        parsed >= widget.minGrams &&
+        parsed <= widget.maxGrams;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: Radii.sheetTop,
+      ),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                    Space.x4, Space.x1, Space.x1, Space.x2),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.title,
+                            style: AppTypography.title.copyWith(color: p.ink),
+                          ),
+                          if (widget.subtitle != null)
+                            Text(
+                              widget.subtitle!,
+                              style: AppTypography.caption
+                                  .copyWith(color: p.inkMuted),
+                            ),
+                        ],
+                      ),
+                    ),
+                    if (widget.onClearValue != null &&
+                        widget.initialGrams != null)
+                      TextButton(
+                        onPressed: () {
+                          AppHaptics.toggle();
+                          widget.onClearValue!();
+                          Navigator.pop(context);
+                        },
+                        child: const Text('Сбросить'),
+                      ),
+                    IconButton(
+                      onPressed: () => Navigator.maybePop(context),
+                      tooltip: 'Закрыть',
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: Space.x4),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: Space.x4,
+                    vertical: Space.x3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: p.sunken,
+                    borderRadius: Radii.cardAll,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          _input,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.numLg.copyWith(
+                            color: _isFresh ? p.accent : p.ink,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: Space.x1),
+                      Text(
+                        'г',
+                        style: AppTypography.title.copyWith(
+                          color: p.inkSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: Space.x3),
+              _NumpadKeypadBlock(
+                quickItems: [
+                  ('+10 г', () => _onAdd(10)),
+                  ('+50 г', () => _onAdd(50)),
+                  ('+100 г', () => _onAdd(100)),
+                  ('+250 г', () => _onAdd(250)),
+                ],
+                confirmLabel: 'Применить',
+                canConfirm: canConfirm,
+                compactLandscape: MediaQuery.sizeOf(context).height < 460,
+                onKey: _onKey,
+                onBackspace: _onBackspace,
+                onClear: _onClear,
+                onConfirm: () {
+                  if (!canConfirm) return;
+                  AppHaptics.commit();
+                  widget.onConfirm(parsed);
+                  Navigator.pop(context);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Чип с высотой 48 dp и одним чётким выделением активного состояния.
 class _TapChip extends StatelessWidget {
   final String label;
   final String? trailing;
@@ -955,70 +1494,61 @@ class _TapChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
-    return Material(
-      color: selected ? p.accentSoft : p.surface,
-      borderRadius: Radii.chipAll,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: kMinTapTarget),
-          padding: const EdgeInsets.symmetric(
-              horizontal: Space.x3, vertical: Space.x1),
-          decoration: BoxDecoration(
-            borderRadius: Radii.chipAll,
-            border: Border.all(color: p.border, width: 1),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (season) ...[
-                    Container(
-                      width: 4,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: accent,
-                        shape: BoxShape.circle,
+    return TactilePress(
+      child: Material(
+        color: selected ? p.accentSoft : p.sunken,
+        borderRadius: Radii.chipAll,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            constraints: const BoxConstraints(minHeight: kMinTapTarget),
+            padding: const EdgeInsets.symmetric(
+              horizontal: Space.x3,
+              vertical: Space.x1,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (season) ...[
+                      Container(
+                        width: 4,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: accent,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                    Flexible(
+                      child: Text(
+                        label,
+                        style: AppTypography.label.copyWith(
+                          color: selected ? accent : p.ink,
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 4),
                   ],
-                  Flexible(
+                ),
+                if (trailing != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 1),
                     child: Text(
-                      label,
-                      style: AppTypography.label.copyWith(
-                        color: selected ? accent : p.ink,
+                      trailing!,
+                      style: AppTypography.caption.copyWith(
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                        color: selected ? accent : p.inkSecondary,
                       ),
                     ),
                   ),
-                ],
-              ),
-              if (trailing != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 1),
-                  child: Text(
-                    trailing!,
-                    style: AppTypography.caption.copyWith(
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                      color: selected ? accent : p.inkSecondary,
-                    ),
-                  ),
-                ),
-              Container(
-                height: 2,
-                margin: const EdgeInsets.only(top: 3),
-                constraints: const BoxConstraints(minWidth: 24),
-                decoration: BoxDecoration(
-                  color: selected ? accent : Colors.transparent,
-                  borderRadius: BorderRadius.circular(1),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

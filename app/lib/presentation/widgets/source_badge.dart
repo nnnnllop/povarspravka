@@ -33,11 +33,13 @@ class SourceBadge extends StatelessWidget {
       SourceLabel.of(source, fallback: source);
 
   static IconData iconFor(String source) {
-    switch (source.toLowerCase()) {
+    switch (source.trim().toLowerCase()) {
       case 'skurikhin':
         return Icons.menu_book_rounded;
       case 'bls':
         return Icons.public_rounded;
+      case 'custom':
+        return Icons.edit_note_rounded;
       default:
         return Icons.add_circle_outline_rounded;
     }
@@ -50,13 +52,12 @@ class SourceBadge extends StatelessWidget {
 
     return Container(
       padding: EdgeInsets.symmetric(
-        horizontal: compact ? 6 : 8,
-        vertical: compact ? 2 : 3,
+        horizontal: compact ? 7 : 9,
+        vertical: compact ? 2 : 4,
       ),
       decoration: BoxDecoration(
-        color: Colors.transparent,
+        color: p.sunken,
         borderRadius: Radii.chipAll,
-        border: Border.all(color: p.sourceLine, width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -70,7 +71,6 @@ class SourceBadge extends StatelessWidget {
           Text(
             label,
             style: AppTypography.caption.copyWith(
-              fontSize: compact ? 11 : 12,
               fontWeight: FontWeight.w400,
               color: p.sourceInk,
             ),

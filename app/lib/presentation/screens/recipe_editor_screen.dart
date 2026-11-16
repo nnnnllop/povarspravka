@@ -100,8 +100,8 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
       }
     });
 
-    final actions = _buildActions(dish);
     final isDirty = ref.read(dishProvider.notifier).isDirty;
+    final actions = _buildActions(dish, isDirty);
 
     // Защита от тихой потери работы (аудит P0-3): системный «назад»,
     // жестовый back и кнопка в AppBar проходят через один и тот же вопрос.
@@ -123,12 +123,13 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Черновик сохранён')),
             );
-          } catch (_) {
+          } catch (e) {
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content:
-                    Text('Не удалось сохранить блюдо. Повторите попытку.'),
+              SnackBar(
+                content: Text(
+                  friendlyErrorMessage(e, prefix: 'Не удалось сохранить блюдо'),
+                ),
               ),
             );
           }
@@ -174,7 +175,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                     const SizedBox(height: Space.x1),
                     if (dish.ingredients.isNotEmpty)
                       Text(
-                        '⟷ перетащить · ← смахнуть, чтобы удалить',
+                        'Нажмите на продукт, чтобы изменить вес',
                         style: AppTypography.caption.copyWith(color: p.inkMuted),
                       ),
                     const SizedBox(height: Space.x3),
@@ -210,7 +211,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                       onLossTap: dish.process.isLegacy
                           ? null
                           : () => _editIngredientLoss(context, ing.id),
-                      onTap: () => _editIngredient(context, ing),
+                      onTap: () => _editIngredient(context, ing, index),
                       onDelete: () => _removeIngredient(ing, index),
                     ),
                   );
@@ -225,7 +226,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
     );
   }
 
-  /// Плоский нижний док редактора: краткий итог «После т.о.» + действия.
+  /// Плоский нижний док редактора: краткий итог «После готовки» + действия.
   Widget _buildBottomDock(CalculationResult? calc, Dish dish) {
     final p = Palette.of(context);
     final media = MediaQuery.sizeOf(context);
@@ -237,7 +238,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
 
     final summaryWidget = calc == null
         ? Text(
-            'После т.о. · — Б — Ж — У — ккал',
+            'После готовки · — Б — Ж — У — ккал',
             style: AppTypography.numSm.copyWith(color: p.inkMuted),
           )
         : MacroSummaryBar(
@@ -361,8 +362,44 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
     );
   }
 
-  List<Widget> _buildActions(Dish dish) {
+  Future<void> _saveToLibrary() async {
+    try {
+      await ref.read(dishProvider.notifier).saveCurrentToLibrary();
+      if (!mounted) return;
+      AppHaptics.commit();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Блюдо сохранено в «Мои блюда»')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            friendlyErrorMessage(e, prefix: 'Не удалось сохранить блюдо'),
+          ),
+        ),
+      );
+    }
+  }
+
+  List<Widget> _buildActions(Dish dish, bool isDirty) {
+    final p = Palette.of(context);
+    final isSavedInLibrary =
+        ref.watch(savedDishesProvider).any((d) => d.id == dish.id);
+    final hasContent =
+        dish.ingredients.isNotEmpty || dish.title.trim().isNotEmpty;
+    final needsSave = (isDirty || !isSavedInLibrary) && hasContent;
+
     return [
+      IconButton(
+        key: const ValueKey('save-recipe-btn'),
+        icon: Icon(
+          needsSave ? Icons.bookmark_add_outlined : Icons.bookmark_added_rounded,
+          color: needsSave ? p.accent : null,
+        ),
+        tooltip: 'Сохранить в мои блюда',
+        onPressed: hasContent ? _saveToLibrary : null,
+      ),
       IconButton(
         icon: const Icon(Icons.tune_rounded),
         tooltip: 'Параметры',
@@ -370,27 +407,17 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
       ),
       PopupMenuButton<String>(
         tooltip: 'Другие действия',
-        onSelected: (value) async {
-          if (value == 'save') {
-            try {
-              await ref.read(dishProvider.notifier).saveCurrentToLibrary();
-              if (!mounted) return;
-              AppHaptics.commit();
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text('Блюдо сохранено в список рецептов')));
-            } catch (_) {
-              if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content:
-                      Text('Не удалось сохранить блюдо. Повторите попытку.')));
-            }
-          } else if (value == 'clear') {
+        onSelected: (value) {
+          if (value == 'clear') {
             _showClearConfirmation(context);
           }
         },
-        itemBuilder: (_) => const [
-          PopupMenuItem(value: 'save', child: Text('Сохранить в мои блюда')),
-          PopupMenuItem(value: 'clear', child: Text('Очистить рецепт')),
+        itemBuilder: (_) => [
+          PopupMenuItem(
+            value: 'clear',
+            enabled: hasContent,
+            child: const Text('Очистить рецепт'),
+          ),
         ],
       ),
     ];
@@ -517,7 +544,6 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                     decoration: BoxDecoration(
                       color: Palette.of(ctx).accentSoft,
                       borderRadius: Radii.fieldAll,
-                      border: Border.all(color: Palette.of(ctx).borderStatic),
                     ),
                     child: Text(
                       clarityHint,
@@ -540,7 +566,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
     );
   }
 
-  double _cookedMacroMass(Dish dish,
+  static double _cookedMacroMass(Dish dish,
       {double? protein, double? fat, double? carbs}) {
     final probe = dish.copyWith(
       customYieldGrams: 999999,
@@ -580,7 +606,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
     final macroMass = _cookedMacroMass(dish);
     if (parsed < macroMass) {
       setState(() => _yieldError =
-          'Выход меньше суммарной массы БЖУ после т.о. '
+          'Выход меньше суммарной массы БЖУ после готовки '
           '(${CalculationEngine.formatMacro(macroMass)} г). '
           '${dish.process.isLegacy ? 'Сохранён прежний выход — увеличьте выход или уменьшите сохранность.' : 'Сохранён прежний выход — проверьте вес готового блюда.'}');
       return;
@@ -608,13 +634,14 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
     final rawNet = _safeGrams(() => dish.totalRawNetGrams);
     final effYield = _safeGrams(() => dish.effectiveYieldGrams);
     final explanation = YieldExplanation(rawNet, effYield);
+    final hideEditLabel = MediaQuery.sizeOf(context).width < 380 &&
+        MediaQuery.textScalerOf(context).scale(1.0) > 1.5;
 
     return Container(
       padding: const EdgeInsets.all(Space.x4),
       decoration: BoxDecoration(
         color: p.surface,
         borderRadius: Radii.cardAll,
-        border: Border.all(color: p.borderStatic, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -646,11 +673,17 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                       style: AppTypography.bodySm.copyWith(color: p.ink),
                     ),
                   ),
-                  Text(
-                    'Изменить',
-                    style: AppTypography.label.copyWith(color: p.inkSecondary),
-                  ),
-                  const SizedBox(width: Space.x1),
+                  if (!hideEditLabel) ...[
+                    Flexible(
+                      child: Text(
+                        'Изменить',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.label.copyWith(color: p.inkSecondary),
+                      ),
+                    ),
+                    const SizedBox(width: Space.x1),
+                  ],
                   Icon(Icons.chevron_right_rounded,
                       size: 18, color: p.inkMuted),
                 ],
@@ -662,7 +695,9 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
             legacy || dish.hasCustomYield
                 ? 'Выход готового блюда: ${CalculationEngine.formatGrams(effYield)} г'
                 : 'Вес готового блюда не указан',
-            style: AppTypography.headline.copyWith(color: p.ink),
+            style: (legacy || dish.hasCustomYield
+                    ? AppTypography.headline.copyWith(color: p.ink)
+                    : AppTypography.bodySm.copyWith(color: p.inkSecondary)),
           ),
           if (legacy)
             SwitchListTile.adaptive(
@@ -708,6 +743,13 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                     : 'Нужен для расчёта на 100 г и на порцию',
                 helperMaxLines: 2,
                 suffixText: 'г',
+                suffixIcon: IconButton(
+                  key: const ValueKey('yield-numpad-btn'),
+                  tooltip: 'Ввести на цифровой клавиатуре',
+                  icon: Icon(Icons.dialpad_rounded,
+                      size: 20, color: p.inkSecondary),
+                  onPressed: () => _openYieldNumpad(dish),
+                ),
                 errorMaxLines: 3,
                 errorText: _yieldError,
               ),
@@ -724,6 +766,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
           ],
           if (showYieldField && (legacy || rawNet > 0)) ...[
             const SizedBox(height: Space.x2),
+            Divider(color: p.divider, height: 1),
             InkWell(
               key: const ValueKey('yield-explanation'),
               onTap: () => setState(
@@ -732,16 +775,8 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
               borderRadius: Radii.fieldAll,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(minHeight: kMinTapTarget),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: Space.x3,
-                    vertical: Space.x2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: p.sunken,
-                    borderRadius: Radii.fieldAll,
-                    border: Border.all(color: p.borderStatic),
-                  ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: Space.x2),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -792,22 +827,21 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
       decoration: BoxDecoration(
         color: p.surface,
         borderRadius: Radii.cardAll,
-        border: Border.all(color: p.borderStatic, width: 1),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: 56,
-            height: 56,
+            width: 52,
+            height: 52,
             decoration: BoxDecoration(
-              color: p.sunken,
+              color: p.accentSoft,
               borderRadius: Radii.cardAll,
             ),
             child: Icon(
               Icons.restaurant_menu_rounded,
-              size: 28,
-              color: p.ink,
+              size: 26,
+              color: p.accent,
             ),
           ),
           const SizedBox(height: Space.x3),
@@ -815,14 +849,13 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
             'Рецепт пока пуст',
             style: AppTypography.title.copyWith(color: p.ink),
           ),
-          const SizedBox(height: Space.x2),
+          const SizedBox(height: Space.x1),
           Text(
-            'Нажмите «Добавить продукт», чтобы выбрать ингредиенты из '
-            'справочника Скурихина и базы BLS 4.0.',
+            'Нажмите «Добавить продукт», чтобы выбрать ингредиенты.',
             textAlign: TextAlign.center,
             style: AppTypography.bodySm.copyWith(
               color: p.inkSecondary,
-              height: 1.5,
+              height: 1.45,
             ),
           ),
         ],
@@ -830,11 +863,56 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
     );
   }
 
-  void _editIngredient(BuildContext context, Ingredient ing) {
-    showModalBottomSheet(
+  void _openYieldNumpad(Dish dish) {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final macroMass = _cookedMacroMass(dish);
+    final minGrams = math.max(
+      CalculationValidation.minCustomYieldGrams,
+      macroMass,
+    );
+    showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      useSafeArea: true,
+      showDragHandle: MediaQuery.sizeOf(context).height >= 460,
+      backgroundColor: Palette.of(context).surface,
+      shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
+      builder: (_) => SimpleGramsNumpadSheet(
+        title: dish.process.isLegacy
+            ? 'Фактический выход'
+            : 'Вес готового блюда',
+        subtitle: macroMass > 0
+            ? 'Минимум ${CalculationEngine.formatMacro(macroMass)} г (сумма БЖУ после готовки)'
+            : 'Для расчёта на 100 г и на порцию',
+        initialGrams: dish.customYieldGrams,
+        minGrams: minGrams,
+        maxGrams: CalculationValidation.maxCustomYieldGrams,
+        onClearValue: dish.process.isLegacy
+            ? null
+            : () {
+                _yieldCtrl.clear();
+                ref.read(dishProvider.notifier).setCustomYield(null);
+                setState(() => _yieldError = null);
+              },
+        onConfirm: (grams) {
+          final formatted = CalculationEngine.formatGrams(grams);
+          _yieldCtrl.text = formatted;
+          setState(() => _yieldError = null);
+          ref.read(dishProvider.notifier).setCustomYield(grams);
+        },
+      ),
+    );
+  }
+
+  void _editIngredient(BuildContext context, Ingredient ing, int index) {
+    FocusManager.instance.primaryFocus?.unfocus();
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: MediaQuery.sizeOf(context).height >= 460,
+      backgroundColor: Palette.of(context).surface,
+      shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
       builder: (_) => CustomNumpadSheet(
         product: ing.product,
         initialGrams: ing.weightGrams,
@@ -855,12 +933,14 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                 isGross: isGross,
               );
         },
+        onDelete: () => _removeIngredient(ing, index),
       ),
     );
   }
 
   /// Подтверждение выхода с несохранёнными правками (аудит P0-3).
   Future<bool> _confirmDiscardChanges() async {
+    final p = Palette.of(context);
     final choice = await showDialog<_ExitChoice>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -871,24 +951,28 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, _ExitChoice.stay),
-            child: const Text('Продолжить редактирование'),
+            child: const Text('Остаться'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, _ExitChoice.discard),
+            style: TextButton.styleFrom(foregroundColor: p.danger),
             child: const Text('Выйти без сохранения'),
           ),
-          TextButton(
+          FilledButton(
             onPressed: () async {
               try {
                 await ref.read(dishProvider.notifier).saveCurrentToLibrary();
                 if (ctx.mounted) Navigator.pop(ctx, _ExitChoice.saveAndExit);
-              } catch (_) {
+              } catch (e) {
                 if (ctx.mounted) Navigator.pop(ctx, _ExitChoice.stay);
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
+                    SnackBar(
                       content: Text(
-                        'Не удалось сохранить блюдо. Изменения не закрыты — повторите попытку.',
+                        friendlyErrorMessage(
+                          e,
+                          prefix: 'Не удалось сохранить блюдо',
+                        ),
                       ),
                     ),
                   );
@@ -901,290 +985,24 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
       ),
     );
     if (choice == null || choice == _ExitChoice.stay) return false;
+    if (choice == _ExitChoice.discard) {
+      ref.read(dishProvider.notifier).discardChanges();
+    }
     AppHaptics.commit();
     return true;
   }
 
   void _showRetentionSettingsDialog(BuildContext context, Dish dish) {
-    final pCtrl = TextEditingController(
-      text: CalculationEngine.formatPercent(dish.retentionProtein),
-    );
-    final fCtrl = TextEditingController(
-      text: CalculationEngine.formatPercent(dish.retentionFat),
-    );
-    final cCtrl = TextEditingController(
-      text: CalculationEngine.formatPercent(dish.retentionCarbs),
-    );
-    bool showPer100g = dish.showPer100gRowInExport;
-    bool showTitleInExport = dish.showTitleInExport;
-    BlankMode blankMode = dish.blankMode;
-    String? retentionError;
-
-    void fillRetention(double protein, double fat, double carbs) {
-      pCtrl.text = CalculationEngine.formatPercent(protein);
-      fCtrl.text = CalculationEngine.formatPercent(fat);
-      cCtrl.text = CalculationEngine.formatPercent(carbs);
-    }
-
-    showDialog(
+    FocusManager.instance.primaryFocus?.unfocus();
+    final p = Palette.of(context);
+    showModalBottomSheet<void>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
-          final p = Palette.of(ctx);
-          final currentProcess = ref.read(dishProvider).process;
-          final legacy = currentProcess.isLegacy;
-          final processNote = LossClarityHints.forDishProcess(currentProcess);
-          final denseDialog = MediaQuery.textScalerOf(ctx).scale(1) <= 1.2;
-          return AlertDialog(
-            title: const Text('Параметры расчета и бланка'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Способ тепловой обработки',
-                    style: AppTypography.label.copyWith(color: p.ink),
-                  ),
-                  const SizedBox(height: Space.x2),
-                  DropdownButtonFormField<HeatProcess>(
-                    key: const ValueKey('heat-process'),
-                    isDense: denseDialog,
-                    itemHeight: null,
-                    value: ref.read(dishProvider).process,
-                    isExpanded: true,
-                    decoration: InputDecoration(isDense: denseDialog),
-                    items: HeatProcess.values
-                        .map((proc) => DropdownMenuItem(
-                            value: proc,
-                            child: Text(proc.label, softWrap: true)))
-                        .toList(),
-                    onChanged: (proc) {
-                      if (proc == null) return;
-                      ref.read(dishProvider.notifier).setHeatProcess(proc);
-                      setDialogState(() {
-                        retentionError = null;
-                        final s = ref.read(dishProvider);
-                        if (s.process.isLegacy) {
-                          fillRetention(s.retentionProtein, s.retentionFat,
-                              s.retentionCarbs);
-                        }
-                      });
-                    },
-                  ),
-                  const SizedBox(height: Space.x1),
-                  Text(
-                    legacy
-                        ? 'Старый расчёт: одна тройка сохранности на всё '
-                            'блюдо (по умолчанию 94/88/91 %), выход = сумма '
-                            'нетто, если вес готового блюда не указан.'
-                        : 'Потери белков, жиров и углеводов — по таблице '
-                            'потерь для группы каждого продукта (МР '
-                            '2.3.0419-26). Вес готового блюда вводите сами.',
-                    key: const ValueKey('process-hint'),
-                    style: AppTypography.caption.copyWith(
-                      color: p.inkSecondary,
-                    ),
-                  ),
-                  if (processNote != null) ...[
-                    const SizedBox(height: Space.x2),
-                    Container(
-                      key: const ValueKey('process-clarity-hint'),
-                      padding: const EdgeInsets.all(Space.x2),
-                      decoration: BoxDecoration(
-                        color: p.accentSoft,
-                        borderRadius: Radii.fieldAll,
-                        border: Border.all(color: p.borderStatic),
-                      ),
-                      child: Text(
-                        processNote,
-                        style: AppTypography.caption.copyWith(color: p.ink),
-                      ),
-                    ),
-                  ],
-                  if (legacy) ...[
-                    const SizedBox(height: Space.x4),
-                    Text(
-                      'Коэффициенты сохранности нутриентов при т.о. (%)',
-                      style: AppTypography.label.copyWith(color: p.ink),
-                    ),
-                    const SizedBox(height: Space.x1),
-                    Text(
-                      'Одна тройка на всё блюдо — так считались рецептуры '
-                      'до 03.11.2026. 94/88/91 % — средние потери 6/12/9 % '
-                      '(МР 2.3.0419-26, прил. 5).',
-                      style: AppTypography.caption.copyWith(
-                        color: p.inkSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: Space.x2),
-                    Wrap(
-                      spacing: Space.x2,
-                      runSpacing: Space.x2,
-                      children: [
-                        ActionChip(
-                          label: const Text('Старый расчёт (94/88/91%)'),
-                          onPressed: () => setDialogState(() => fillRetention(
-                              kLegacyRetentionProtein,
-                              kLegacyRetentionFat,
-                              kLegacyRetentionCarbs)),
-                        ),
-                        ActionChip(
-                          label: const Text('Без потерь (100%)'),
-                          onPressed: () =>
-                              setDialogState(() => fillRetention(1, 1, 1)),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: Space.x3),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: pCtrl,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: 'Белки %',
-                              isDense: true,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: Space.x2),
-                        Expanded(
-                          child: TextField(
-                            controller: fCtrl,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: 'Жиры %',
-                              isDense: true,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: Space.x2),
-                        Expanded(
-                          child: TextField(
-                            controller: cCtrl,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: 'Углев. %',
-                              isDense: true,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (retentionError != null) ...[
-                      const SizedBox(height: Space.x2),
-                      Text(
-                        retentionError!,
-                        style: AppTypography.caption.copyWith(color: p.danger),
-                      ),
-                    ],
-                  ],
-                  const SizedBox(height: Space.x4),
-                  DropdownButtonFormField<BlankMode>(
-                    isDense: denseDialog,
-                    itemHeight: null,
-                    value: blankMode,
-                    isExpanded: true,
-                    decoration: const InputDecoration(labelText: 'Режим бланка'),
-                    items: BlankMode.values
-                        .map((mode) => DropdownMenuItem(
-                            value: mode,
-                            child: Text(mode.shortName, softWrap: true)))
-                        .toList(),
-                    onChanged: (mode) {
-                      if (mode != null) {
-                        setDialogState(() => blankMode = mode);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: Space.x2),
-                  SwitchListTile.adaptive(
-                    contentPadding: EdgeInsets.zero,
-                    materialTapTargetSize: MaterialTapTargetSize.padded,
-                    title: Text(
-                      'Печатать название в заголовке бланка',
-                      style: AppTypography.bodySm.copyWith(color: p.ink),
-                    ),
-                    value: showTitleInExport,
-                    onChanged: (val) =>
-                        setDialogState(() => showTitleInExport = val),
-                  ),
-                  SwitchListTile.adaptive(
-                    contentPadding: EdgeInsets.zero,
-                    materialTapTargetSize: MaterialTapTargetSize.padded,
-                    title: Text(
-                      'Строка «В 100 г блюда» в бланке',
-                      style: AppTypography.bodySm.copyWith(color: p.ink),
-                    ),
-                    subtitle: Text(
-                      'По умолчанию скрыта для 1:1 совпадения с типовым бланком',
-                      style: AppTypography.caption.copyWith(
-                        color: p.inkSecondary,
-                      ),
-                    ),
-                    value: showPer100g,
-                    onChanged: (val) => setDialogState(() => showPer100g = val),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Отмена'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  final notifier = ref.read(dishProvider.notifier);
-                  final current = ref.read(dishProvider);
-                  if (!current.process.isLegacy) {
-                    notifier.setBlankMode(blankMode);
-                    notifier.toggleShowTitle(showTitleInExport);
-                    notifier.toggleShowPer100gRow(showPer100g);
-                    Navigator.pop(ctx);
-                    return;
-                  }
-                  final values = [pCtrl.text, fCtrl.text, cCtrl.text]
-                      .map(CalculationEngine.parseInputDouble)
-                      .toList();
-                  // B1.2: сохранность 0 % физически невозможна (весь нутриент
-                  // исчез), поэтому нижняя граница — 1 %, как в валидаторе.
-                  if (values.any((v) => v == null || v < 1 || v > 100)) {
-                    setDialogState(() => retentionError =
-                        'Введите каждый процент от 1 до 100.');
-                    return;
-                  }
-                  final pVal = values[0]! / 100;
-                  final fVal = values[1]! / 100;
-                  final cVal = values[2]! / 100;
-                  final mass = _cookedMacroMass(current,
-                      protein: pVal, fat: fVal, carbs: cVal);
-                  if (mass > current.effectiveYieldGrams) {
-                    setDialogState(() => retentionError =
-                        'При этих коэффициентах масса БЖУ после т.о. '
-                        '${CalculationEngine.formatMacro(mass)} г превышает выход '
-                        '${CalculationEngine.formatGrams(current.effectiveYieldGrams)} г. '
-                        'Увеличьте выход или уменьшите сохранность.');
-                    return;
-                  }
-                  notifier.setRetention(
-                    protein: pVal,
-                    fat: fVal,
-                    carbs: cVal,
-                  );
-                  notifier.setBlankMode(blankMode);
-                  notifier.toggleShowTitle(showTitleInExport);
-                  notifier.toggleShowPer100gRow(showPer100g);
-                  Navigator.pop(ctx);
-                },
-                child: const Text('Применить'),
-              ),
-            ],
-          );
-        },
-      ),
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      backgroundColor: p.surface,
+      shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
+      builder: (_) => _RecipeSettingsDialog(initialDish: dish),
     );
   }
 
@@ -1211,6 +1029,450 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
             child: Text('Очистить', style: TextStyle(color: p.danger)),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _RecipeSettingsDialog extends ConsumerStatefulWidget {
+  final Dish initialDish;
+
+  const _RecipeSettingsDialog({required this.initialDish});
+
+  @override
+  ConsumerState<_RecipeSettingsDialog> createState() =>
+      _RecipeSettingsDialogState();
+}
+
+class _RecipeSettingsDialogState extends ConsumerState<_RecipeSettingsDialog> {
+  late final TextEditingController _pCtrl;
+  late final TextEditingController _fCtrl;
+  late final TextEditingController _cCtrl;
+  late HeatProcess _process;
+  late bool _showPer100g;
+  late bool _showTitleInExport;
+  late BlankMode _blankMode;
+  String? _retentionError;
+
+  @override
+  void initState() {
+    super.initState();
+    final d = widget.initialDish;
+    _process = d.process;
+    _showPer100g = d.showPer100gRowInExport;
+    _showTitleInExport = d.showTitleInExport;
+    _blankMode = d.blankMode;
+    _pCtrl = TextEditingController(
+      text: CalculationEngine.formatPercent(d.retentionProtein),
+    );
+    _fCtrl = TextEditingController(
+      text: CalculationEngine.formatPercent(d.retentionFat),
+    );
+    _cCtrl = TextEditingController(
+      text: CalculationEngine.formatPercent(d.retentionCarbs),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pCtrl.dispose();
+    _fCtrl.dispose();
+    _cCtrl.dispose();
+    super.dispose();
+  }
+
+  void _fillRetention(double protein, double fat, double carbs) {
+    _pCtrl.text = CalculationEngine.formatPercent(protein);
+    _fCtrl.text = CalculationEngine.formatPercent(fat);
+    _cCtrl.text = CalculationEngine.formatPercent(carbs);
+  }
+
+  void _apply() {
+    final notifier = ref.read(dishProvider.notifier);
+    final current = ref.read(dishProvider);
+
+    if (!_process.isLegacy) {
+      if (_process != current.process) {
+        notifier.setHeatProcess(_process);
+      }
+      notifier.setBlankMode(_blankMode);
+      notifier.toggleShowTitle(_showTitleInExport);
+      notifier.toggleShowPer100gRow(_showPer100g);
+      Navigator.pop(context);
+      return;
+    }
+
+    final values = [_pCtrl.text, _fCtrl.text, _cCtrl.text]
+        .map(CalculationEngine.parseInputDouble)
+        .toList();
+    // B1.2: сохранность 0 % физически невозможна (весь нутриент
+    // исчез), поэтому нижняя граница — 1 %, как в валидаторе.
+    if (values.any((v) => v == null || v < 1 || v > 100)) {
+      setState(
+        () => _retentionError = 'Введите каждый процент от 1 до 100.',
+      );
+      return;
+    }
+
+    final pVal = values[0]! / 100;
+    final fVal = values[1]! / 100;
+    final cVal = values[2]! / 100;
+    final probedDish = current.copyWith(process: _process);
+    final mass = _RecipeEditorScreenState._cookedMacroMass(
+      probedDish,
+      protein: pVal,
+      fat: fVal,
+      carbs: cVal,
+    );
+    if (mass > probedDish.effectiveYieldGrams) {
+      setState(() => _retentionError =
+          'При этих коэффициентах масса БЖУ после готовки '
+          '${CalculationEngine.formatMacro(mass)} г превышает выход '
+          '${CalculationEngine.formatGrams(probedDish.effectiveYieldGrams)} г. '
+          'Увеличьте выход или уменьшите сохранность.');
+      return;
+    }
+
+    if (_process != current.process) {
+      notifier.setHeatProcess(_process);
+    }
+    notifier.setRetention(
+      protein: pVal,
+      fat: fVal,
+      carbs: cVal,
+    );
+    notifier.setBlankMode(_blankMode);
+    notifier.toggleShowTitle(_showTitleInExport);
+    notifier.toggleShowPer100gRow(_showPer100g);
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final legacy = _process.isLegacy;
+    final processNote = LossClarityHints.forDishProcess(_process);
+    final size = MediaQuery.sizeOf(context);
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final denseDialog = textScale <= 1.2;
+    final stackFooter =
+        (size.width < 360 && textScale > 1.35) || size.width < 300;
+    final stackRetentionFields = size.width < 360 || textScale > 1.35;
+
+    final cancelBtn = TextButton(
+      onPressed: () => Navigator.pop(context),
+      child: const Text('Отмена'),
+    );
+    final applyBtn = FilledButton(
+      onPressed: _apply,
+      child: const Text('Применить', textAlign: TextAlign.center),
+    );
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: size.height * 0.9),
+      child: Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                    Space.x4, 0, Space.x1, Space.x2),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Параметры расчета и бланка',
+                        style: AppTypography.title.copyWith(color: p.ink),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.maybePop(context),
+                      tooltip: 'Закрыть',
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+              ),
+              Divider(height: 1, color: p.divider),
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(
+                      Space.x4, Space.x3, Space.x4, Space.x4),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Способ тепловой обработки',
+                        style: AppTypography.label.copyWith(color: p.ink),
+                      ),
+                      const SizedBox(height: Space.x2),
+                      DropdownButtonFormField<HeatProcess>(
+                        key: const ValueKey('heat-process'),
+                        isDense: denseDialog,
+                        itemHeight: null,
+                        value: _process,
+                        isExpanded: true,
+                        decoration: InputDecoration(isDense: denseDialog),
+                        items: HeatProcess.values
+                            .map(
+                              (proc) => DropdownMenuItem(
+                                value: proc,
+                                child: Text(proc.label, softWrap: true),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (proc) {
+                          if (proc == null) return;
+                          setState(() {
+                            _process = proc;
+                            _retentionError = null;
+                            if (proc.isLegacy) {
+                              if (widget.initialDish.process.isLegacy) {
+                                _fillRetention(
+                                  widget.initialDish.retentionProtein,
+                                  widget.initialDish.retentionFat,
+                                  widget.initialDish.retentionCarbs,
+                                );
+                              } else {
+                                _fillRetention(
+                                  kLegacyRetentionProtein,
+                                  kLegacyRetentionFat,
+                                  kLegacyRetentionCarbs,
+                                );
+                              }
+                            }
+                          });
+                        },
+                      ),
+                      const SizedBox(height: Space.x1),
+                      Text(
+                        legacy
+                            ? 'Старый расчёт: одна тройка сохранности на всё '
+                                'блюдо (по умолчанию 94/88/91 %), выход = сумма '
+                                'нетто, если вес готового блюда не указан.'
+                            : 'Потери белков, жиров и углеводов — по таблице '
+                                'потерь для группы каждого продукта (МР '
+                                '2.3.0419-26). Вес готового блюда вводите сами.',
+                        key: const ValueKey('process-hint'),
+                        style: AppTypography.caption
+                            .copyWith(color: p.inkSecondary),
+                      ),
+                      if (processNote != null) ...[
+                        const SizedBox(height: Space.x2),
+                        Container(
+                          key: const ValueKey('process-clarity-hint'),
+                          padding: const EdgeInsets.all(Space.x2),
+                          decoration: BoxDecoration(
+                            color: p.accentSoft,
+                            borderRadius: Radii.fieldAll,
+                          ),
+                          child: Text(
+                            processNote,
+                            style: AppTypography.caption.copyWith(color: p.ink),
+                          ),
+                        ),
+                      ],
+                      if (legacy) ...[
+                        const SizedBox(height: Space.x4),
+                        Text(
+                          'Коэффициенты сохранности нутриентов при готовке (%)',
+                          style: AppTypography.label.copyWith(color: p.ink),
+                        ),
+                        const SizedBox(height: Space.x1),
+                        Text(
+                          'Одна тройка на всё блюдо — так считались рецептуры '
+                          'до 03.11.2026. 94/88/91 % — средние потери 6/12/9 % '
+                          '(МР 2.3.0419-26, прил. 5).',
+                          style: AppTypography.caption
+                              .copyWith(color: p.inkSecondary),
+                        ),
+                        const SizedBox(height: Space.x2),
+                        Wrap(
+                          spacing: Space.x2,
+                          runSpacing: Space.x2,
+                          children: [
+                            ActionChip(
+                              label: const Text('Старый расчёт (94/88/91%)'),
+                              onPressed: () => setState(
+                                () => _fillRetention(
+                                  kLegacyRetentionProtein,
+                                  kLegacyRetentionFat,
+                                  kLegacyRetentionCarbs,
+                                ),
+                              ),
+                            ),
+                            ActionChip(
+                              label: const Text('Без потерь (100%)'),
+                              onPressed: () =>
+                                  setState(() => _fillRetention(1, 1, 1)),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: Space.x3),
+                        if (stackRetentionFields) ...[
+                          TextField(
+                            controller: _pCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Белки %',
+                              isDense: true,
+                            ),
+                          ),
+                          const SizedBox(height: Space.x2),
+                          TextField(
+                            controller: _fCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Жиры %',
+                              isDense: true,
+                            ),
+                          ),
+                          const SizedBox(height: Space.x2),
+                          TextField(
+                            controller: _cCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Углев. %',
+                              isDense: true,
+                            ),
+                          ),
+                        ] else
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _pCtrl,
+                                  keyboardType: TextInputType.number,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Белки %',
+                                    isDense: true,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: Space.x2),
+                              Expanded(
+                                child: TextField(
+                                  controller: _fCtrl,
+                                  keyboardType: TextInputType.number,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Жиры %',
+                                    isDense: true,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: Space.x2),
+                              Expanded(
+                                child: TextField(
+                                  controller: _cCtrl,
+                                  keyboardType: TextInputType.number,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Углев. %',
+                                    isDense: true,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        if (_retentionError != null) ...[
+                          const SizedBox(height: Space.x2),
+                          Text(
+                            _retentionError!,
+                            style:
+                                AppTypography.caption.copyWith(color: p.danger),
+                          ),
+                        ],
+                      ],
+                      const SizedBox(height: Space.x4),
+                      DropdownButtonFormField<BlankMode>(
+                        isDense: denseDialog,
+                        itemHeight: null,
+                        value: _blankMode,
+                        isExpanded: true,
+                        decoration:
+                            const InputDecoration(labelText: 'Режим бланка'),
+                        items: BlankMode.values
+                            .map(
+                              (mode) => DropdownMenuItem(
+                                value: mode,
+                                child: Text(mode.shortName, softWrap: true),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (mode) {
+                          if (mode != null) {
+                            setState(() => _blankMode = mode);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: Space.x2),
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        materialTapTargetSize: MaterialTapTargetSize.padded,
+                        title: Text(
+                          'Печатать название в заголовке бланка',
+                          style: AppTypography.bodySm.copyWith(color: p.ink),
+                        ),
+                        value: _showTitleInExport,
+                        onChanged: (val) =>
+                            setState(() => _showTitleInExport = val),
+                      ),
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        materialTapTargetSize: MaterialTapTargetSize.padded,
+                        title: Text(
+                          'Строка «В 100 г блюда» в бланке',
+                          style: AppTypography.bodySm.copyWith(color: p.ink),
+                        ),
+                        subtitle: Text(
+                          'По умолчанию скрыта для 1:1 совпадения с типовым бланком',
+                          style: AppTypography.caption
+                              .copyWith(color: p.inkSecondary),
+                        ),
+                        value: _showPer100g,
+                        onChanged: (val) => setState(() => _showPer100g = val),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: p.surface,
+                  border: Border(top: BorderSide(color: p.divider)),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                      Space.x4, Space.x2, Space.x4, Space.x2),
+                  child: stackFooter
+                      ? Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            applyBtn,
+                            const SizedBox(height: Space.x1),
+                            cancelBtn,
+                          ],
+                        )
+                      : IntrinsicHeight(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              cancelBtn,
+                              const SizedBox(width: Space.x2),
+                              Expanded(child: applyBtn),
+                            ],
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

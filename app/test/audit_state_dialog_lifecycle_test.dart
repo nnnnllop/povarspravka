@@ -134,8 +134,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('STATE-07 dialog plumbing', () {
-    testWidgets('the waste-% dialog closes cleanly; the controller it creates '
-        'is never disposed (no observable error in a widget test)',
+    testWidgets('inline waste-% editor toggles and cancels cleanly without AlertDialog',
         (tester) async {
       tester.view.physicalSize = const Size(390, 900);
       tester.view.devicePixelRatio = 1;
@@ -156,30 +155,27 @@ void main() {
         ),
       ));
       await tester.pump();
-      await tester.tap(find.text('изменить %'));
-      await tester.pumpAndSettle();
-      final field = find.descendant(
-          of: find.byType(AlertDialog), matching: find.byType(TextFormField));
-      await tester.enterText(field, '35');
-      await tester.pump();
-      await tester.tap(find.text('Отмена'));
+      await tester.tap(find.byKey(const ValueKey('waste-edit-toggle')));
       await tester.pumpAndSettle();
       expect(find.byType(AlertDialog), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('key-3')));
+      await tester.tap(find.byKey(const ValueKey('key-5')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('waste-edit-cancel')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('waste-edit-cancel')), findsNothing);
       expect(tester.takeException(), isNull,
-          reason: 'the dialog itself closes cleanly');
+          reason: 'inline waste edit cancels cleanly without controller errors');
       await tester.tap(find.text('Добавить в блюдо'));
       await tester.pump();
       expect(confirmed, 200.0);
       expect(tester.takeException(), isNull);
-      // The controller allocated in `_editWastePercentage`
-      // (custom_numpad.dart:191) has no owner that disposes it. No crash is
-      // observable from a widget test → MINOR hygiene, not a red test.
     });
   });
 
   group('STATE-11 waste % from the search sheet', () {
-    testWidgets('DEFECT: a waste % typed in the sheet never reaches the '
-        'ingredient added from SearchProductModal', (tester) async {
+    testWidgets('FIXED: a waste % typed inline reaches the ingredient added '
+        'from SearchProductModal', (tester) async {
       tester.view.physicalSize = const Size(390, 900);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
@@ -202,39 +198,40 @@ void main() {
       await tester.tap(find.text('Картофель').first);
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('изменить %'));
+      await tester.ensureVisible(find.byKey(const ValueKey('waste-edit-toggle')));
       await tester.pumpAndSettle();
-      final field = find.descendant(
-          of: find.byType(AlertDialog), matching: find.byType(TextFormField));
-      await tester.enterText(field, '40');
+      await tester.tap(find.byKey(const ValueKey('waste-edit-toggle')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('key-4')));
+      await tester.tap(find.byKey(const ValueKey('key-0')));
       await tester.pump();
-      await tester.tap(find.text('Сохранить'));
+      await tester.ensureVisible(find.byKey(const ValueKey('waste-edit-done')));
       await tester.pumpAndSettle();
-      expect(find.textContaining('40%'), findsNothing,
-          reason: 'the sheet stores 40 % internally but shows no confirmation '
-              'before the mass is committed');
+      await tester.tap(find.byKey(const ValueKey('waste-edit-done')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('40 %'), findsWidgets);
 
       final add = find.text('Добавить в блюдо');
       await tester.ensureVisible(add);
       await tester.pumpAndSettle();
-      await tester.tap(add, warnIfMissed: false);
+      await tester.tap(add);
       await tester.pumpAndSettle();
 
       expect(notifier.state.ingredients, hasLength(1));
       final ingested = notifier.state.ingredients.single.product.wastePct;
       // ignore: avoid_print
-      print('STATE-11: wastePct in the recipe ingredient = $ingested '
-          '(typed 40, product default 20)');
+      print('STATE-11: wastePct in the recipe ingredient = $ingested');
       expect(ingested, 40.0,
-          reason: 'DEFECT STATE-11: `_addToRecipe(product, grams, isGross)` '
-              '(search_product_modal.dart:482) re-uses the ORIGINAL `product` '
-              'and `onProductUpdated` is a no-op (line 480), so the hand-typed '
-              'waste % is silently thrown away even though the sheet already '
-              'used it for gross→net conversion');
+          reason: 'SearchProductModal forwards onProductUpdated into _addToRecipe');
     });
 
     testWidgets('CONTROL: the same 40 % IS applied when the caller forwards '
         'onProductUpdated', (tester) async {
+      tester.view.physicalSize = const Size(390, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
       final notifier = _QuietDish(NoopStorage());
       addTearDown(disposeOnce(notifier));
       Product? updated;
@@ -257,22 +254,23 @@ void main() {
         ),
       ));
       await tester.pump();
-      await tester.tap(find.text('изменить %'));
+      await tester.ensureVisible(find.byKey(const ValueKey('waste-edit-toggle')));
+      await tester.tap(find.byKey(const ValueKey('waste-edit-toggle')));
       await tester.pumpAndSettle();
-      await tester.enterText(
-          find.descendant(
-              of: find.byType(AlertDialog),
-              matching: find.byType(TextFormField)),
-          '40');
+      await tester.ensureVisible(find.byKey(const ValueKey('key-4')));
+      await tester.tap(find.byKey(const ValueKey('key-4')));
+      await tester.ensureVisible(find.byKey(const ValueKey('key-0')));
+      await tester.tap(find.byKey(const ValueKey('key-0')));
       await tester.pump();
-      await tester.tap(find.text('Сохранить'));
+      await tester.ensureVisible(find.byKey(const ValueKey('waste-edit-done')));
+      await tester.tap(find.byKey(const ValueKey('waste-edit-done')));
       await tester.pumpAndSettle();
       expect(updated, isNull,
           reason: 'the new % is only handed over at CONFIRM time');
       final confirm = find.text('Сохранить изменения');
       await tester.ensureVisible(confirm);
       await tester.pumpAndSettle();
-      await tester.tap(confirm, warnIfMissed: false);
+      await tester.tap(confirm);
       await tester.pumpAndSettle();
       expect(updated?.wastePct, 40.0);
       expect(notifier.state.ingredients.single.product.wastePct, 40.0);
@@ -281,8 +279,8 @@ void main() {
   });
 
   group('STATE-12 measure converter', () {
-    testWidgets('"1,5 меры" × 80 g → 120 g (the kopeck part is NOT lost, but '
-        'the readout is not canonicalised: "120,0")', (tester) async {
+    testWidgets('inline measure stepper converts 2 × 80 g → "160" canonical '
+        'readout and preserves Брутто conversion', (tester) async {
       double? confirmed;
       await tester.pumpWidget(MaterialApp(
         theme: AppTheme.light,
@@ -291,39 +289,46 @@ void main() {
             child: CustomNumpadSheet(
               product: potato(),
               initialGrams: 0,
+              initialIsGross: true,
               onConfirm: (g, _) => confirmed = g,
             ),
           ),
         ),
       ));
       await tester.pump();
-      final chip = find.text('клубень');
+      final chip = find.byKey(const ValueKey('measure-клубень'));
       await tester.ensureVisible(chip);
       await tester.pumpAndSettle();
       await tester.tap(chip);
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('measure-count')), findsOneWidget);
-      await tester.enterText(find.byKey(const ValueKey('measure-count')), '1,5');
-      await tester.pump();
-      await tester.tap(find.text('Использовать'));
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('measure-count-label'))).data,
+        '1',
+      );
+      await tester.tap(find.byKey(const ValueKey('measure-inc')));
       await tester.pumpAndSettle();
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('measure-count-label'))).data,
+        '2',
+      );
+      // 2 × 80 г нетто при 20 % отходов = 200 г брутто, без ",0"
       final readout = tester
-          .widgetList<Text>(find.byType(Text))
-          .where((t) => t.style?.fontSize == 34)
-          .map((t) => t.data)
-          .toList();
-      // ignore: avoid_print
-      print('STATE-12 readout after "1,5 меры" = $readout');
-      expect(readout.first, '120,0',
-          reason: 'custom_numpad.dart:301 uses '
-              '`(grams * count).toString().replaceAll(".", ",")` instead of '
-              '`CalculationEngine.formatGrams`');
-      await tester.tap(find.text('Добавить в блюдо'), warnIfMissed: false);
+          .widget<AnimatedSwitcher>(find.byType(AnimatedSwitcher).first)
+          .child as Text;
+      expect(readout.data, '200');
+      await tester.ensureVisible(find.text('Добавить в блюдо'));
+      await tester.tap(find.text('Добавить в блюдо'));
       await tester.pump();
-      expect(confirmed, 120.0);
+      expect(confirmed, 200.0);
     });
 
-    testWidgets('a garbage count keeps the measure dialog open', (tester) async {
+    testWidgets('measure-dec is disabled at 1 and invalid waste-% >= 100 '
+        'disables confirm and keeps inline waste edit open', (tester) async {
+      tester.view.physicalSize = const Size(390, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
       await tester.pumpWidget(MaterialApp(
         theme: AppTheme.light,
         home: Scaffold(
@@ -337,38 +342,62 @@ void main() {
         ),
       ));
       await tester.pump();
-      await tester.ensureVisible(find.text('клубень'));
+      final chip = find.byKey(const ValueKey('measure-клубень'));
+      await tester.ensureVisible(chip);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('клубень'));
+      await tester.tap(chip);
       await tester.pumpAndSettle();
-      await tester.enterText(
-          find.byKey(const ValueKey('measure-count')), 'abc');
+      final dec = tester.widget<IconButton>(find.byKey(const ValueKey('measure-dec')));
+      expect(dec.onPressed, isNull, reason: 'cannot decrement below 1');
+      await tester.tap(find.byKey(const ValueKey('measure-clear')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('measure-count-label')), findsNothing);
+
+      await tester.ensureVisible(find.byKey(const ValueKey('waste-edit-toggle')));
+      await tester.tap(find.byKey(const ValueKey('waste-edit-toggle')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const ValueKey('key-1')));
+      await tester.tap(find.byKey(const ValueKey('key-1')));
+      await tester.tap(find.byKey(const ValueKey('key-0')));
+      await tester.tap(find.byKey(const ValueKey('key-0')));
       await tester.pump();
-      await tester.tap(find.text('Использовать'));
-      await tester.pumpAndSettle();
-      expect(find.byType(AlertDialog), findsOneWidget,
-          reason: 'invalid count keeps the dialog open');
+      final doneInk = tester.widget<InkWell>(
+        find.descendant(
+          of: find.byKey(const ValueKey('waste-edit-done')),
+          matching: find.byType(InkWell),
+        ),
+      );
+      expect(doneInk.onTap, isNull,
+          reason: 'waste >= 100 % keeps confirm disabled');
+      expect(find.byKey(const ValueKey('waste-edit-cancel')), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });
 
   group('STATE-13 draft loss without a prompt', () {
-    testWidgets('DEFECT: "Новый расчёт" replaces 300 g of unsaved work with '
-        'no confirmation', (tester) async {
+    testWidgets('FIXED: "Новый расчёт" asks confirmation before replacing '
+        'unsaved work', (tester) async {
       tester.view.physicalSize = const Size(390, 900);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      final notifier = _QuietDish(NoopStorage());
+      final saved = quietSaved();
+      final notifier = DishNotifier(
+        storage: NoopStorage(),
+        savedDishesNotifier: saved,
+      );
+      addTearDown(disposeOnce(notifier));
+      await notifier.flushPendingSaves();
       notifier.addIngredient(potato(), 300);
       notifier.setTitle('Мой суп');
+      await notifier.flushPendingSaves();
       expect(notifier.isDirty, isTrue);
 
       await tester.pumpWidget(ProviderScope(
         overrides: [
           dishProvider.overrideWith((ref) => notifier),
-          savedDishesProvider.overrideWith((ref) => quietSaved()),
+          savedDishesProvider.overrideWith((ref) => saved),
           productRepositoryProvider.overrideWithValue(OneRepo()),
         ],
         child: MaterialApp(theme: AppTheme.light, home: const HomeScreen()),
@@ -376,17 +405,25 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Мой суп'), findsWidgets);
 
-      await tester.tap(find.text('Новый расчёт').first);
+      final newCalcBtn = find.text('Новый расчёт').first;
+      await tester.ensureVisible(newCalcBtn);
+      await tester.tap(newCalcBtn);
       await tester.pumpAndSettle();
-      // ignore: avoid_print
-      print('STATE-13 after "Новый расчёт": ingredients='
-          '${notifier.state.ingredients.length}, '
-          'title="${notifier.state.title}", isDirty=${notifier.isDirty}, '
-          'dialogs=${find.byType(AlertDialog).evaluate().length}');
+      expect(find.text('Сохранить текущее блюдо?'), findsOneWidget);
+
+      await tester.tap(find.text('Отмена'));
+      await tester.pumpAndSettle();
+      expect(notifier.state.ingredients, hasLength(1));
+      expect(notifier.state.title, 'Мой суп');
+
+      await tester.ensureVisible(newCalcBtn);
+      await tester.tap(newCalcBtn);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Не сохранять'));
+      await tester.pumpAndSettle();
       expect(notifier.state.ingredients, isEmpty);
-      expect(find.byType(AlertDialog), findsNothing,
-          reason: 'DEFECT STATE-13: no «Не сохранять изменения?» prompt for the '
-              'unsaved DRAFT (the editor has one, the home screen does not)');
+      expect(notifier.state.title, isEmpty);
+      expect(notifier.isDirty, isFalse);
     });
   });
 

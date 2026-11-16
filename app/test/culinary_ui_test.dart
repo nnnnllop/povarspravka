@@ -107,12 +107,12 @@ void main() {
     // кнопкой «Инспектор расчёта». Ниже проверяется ровно тот же контракт
     // чисел, но там, где эти цифры теперь живут.
     await reveal(tester, find.byType(MacroSummaryBar));
-    expect(find.text('После т.о. · на всё блюдо'), findsOneWidget);
+    expect(find.text('После готовки · на всё блюдо'), findsOneWidget);
     expect(tester.widget<Text>(find.byKey(const ValueKey('macro-Белки'))).data,
         '1,41 г');
     await screenshot(tester, 'light_auto_summary');
 
-    // Полная полоса «Сырьё → После т.о. → Порция» в текущем дереве.
+    // Полная полоса «Сырьё → После готовки → Порция» в текущем дереве.
     final r = CalculationEngine.calculate(
         ProviderScope.containerOf(tester.element(find.byType(RecipeEditorScreen)))
             .read(dishProvider));
@@ -128,7 +128,7 @@ void main() {
     expect(tester.widget<Text>(find.byKey(const ValueKey('macro-Белки'))).data,
         '1,41 г');
     expect(find.text('Сырьё'), findsOneWidget);
-    expect(find.text('После т.о.'), findsOneWidget);
+    expect(find.text('После готовки'), findsOneWidget);
     expect(find.text('Порция'), findsOneWidget);
 
     // Инспектор открывается из полной полосы — проверяем по шагам
@@ -294,7 +294,7 @@ void main() {
     expect([r.cookedProtein, r.cookedFat, r.cookedCarbs], [1.5, .1, 8.8],
         reason: 'без обработки потерь нет');
     await reveal(tester, find.byType(MacroSummaryBar));
-    expect(find.text('После т.о. · на всё блюдо'), findsOneWidget);
+    expect(find.text('После готовки · на всё блюдо'), findsOneWidget);
     expect(tester.widget<Text>(find.byKey(const ValueKey('macro-Белки'))).data,
         '1,50 г');
     await screenshot(tester, 'new_cold_no_weight');

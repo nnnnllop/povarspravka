@@ -10,28 +10,20 @@ import 'app_buttons.dart';
 import 'loss_clarity_hints.dart';
 import 'yield_density_warning.dart';
 
-/// Итоги блюда как **жизненный цикл** (аудит P1-6).
+/// Итоги блюда как **жизненный цикл** (аудит P1-6, доработка v1.2).
 ///
-/// Было: 4 цветные пастельные карточки Б/Ж/У/ккал, под ними текстовый блок
-/// «Сырьё → т.о. → готовое блюдо», всё это — в подвале прокручиваемой ленты,
-/// то есть далеко от глаз и под клавиатурой. Читатель не понимал, к какой
-/// стадии относятся цифры.
+/// Три ступени сверху вниз, в той последовательности, в которой существует
+/// блюдо:
+/// 1. Сырьё — нетто-масса и Б/Ж/У до готовки;
+/// 2. После готовки — что осталось после тепловой обработки;
+/// 3. Порция — на 100 г, на всё блюдо, любая масса и быстрые пресеты.
 ///
-/// Стало: три ступени сверху вниз, ровно в той последовательности, в которой
-/// существует блюдо:
-///
-/// | Ступень | Что показывает | Почему |
-/// |---|---|---|
-/// | 1. Сырьё | нетто-масса и Б/Ж/У до т.о. | «сколько положили в кастрюлю» |
-/// | 2. После т.о. | что выжило после сохранности | «что осталось» |
-/// | 3. Порция | на 100 г, на всё блюдо, любая масса | «что съел гость» |
-///
-/// Числа — tabular figures, без цветных заливок; цвет — только 2-dp маркер.
+/// Числа — tabular figures, без цветных заливок; цвет — только акцент цифры.
 class MacroSummaryBar extends StatefulWidget {
   final CalculationResult result;
 
   /// Компактный режим для нижней закреплённой полосы на коротком экране:
-  /// одна строка + «Инспектор расчёта» + переключатель.
+  /// одна строка + «Инспектор расчёта».
   final bool compact;
 
   const MacroSummaryBar({
@@ -46,8 +38,6 @@ class MacroSummaryBar extends StatefulWidget {
 
 class _MacroSummaryBarState extends State<MacroSummaryBar> {
   bool _showPer100g = false;
-  double _portionGrams = 200;
-  String? _portionError;
 
   String m(double value) => CalculationEngine.formatMacro(value);
   String g(double value) => CalculationEngine.formatGrams(value);
@@ -74,10 +64,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                 Expanded(
                   child: Text(
                     'Пищевая ценность готового блюда',
-                    style: AppTypography.label.copyWith(
-                      color: p.ink,
-                      letterSpacing: 0.4,
-                    ),
+                    style: AppTypography.label.copyWith(color: p.ink),
                   ),
                 ),
                 _buildInspectorButton(p, dense: true),
@@ -92,17 +79,18 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
               title: 'Сырьё',
               subtitle: 'нетто ${g(r.rawTotalWeight)} г',
               cells: [
-                ('Б', m(r.rawTotalProtein), p.protein),
-                ('Ж', m(r.rawTotalFat), p.fat),
-                ('У', m(r.rawTotalCarbs), p.carbs),
+                (NutrientType.protein, m(r.rawTotalProtein)),
+                (NutrientType.fat, m(r.rawTotalFat)),
+                (NutrientType.carbs, m(r.rawTotalCarbs)),
               ],
               muted: true,
             ),
-            // ── Ступень 2: После т.о. ───────────────────────────────────
+            Divider(color: p.divider, height: Space.x2),
+            // ── Ступень 2: После готовки ────────────────────────────────
             _StageRow(
               palette: p,
               number: 2,
-              title: 'После т.о.',
+              title: 'После готовки',
               // Новый расчёт: потери — по группе каждого продукта, одной
               // тройки на блюдо нет (детали — в инспекторе расчёта).
               subtitle: r.usesLossTable
@@ -111,14 +99,15 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                       '${CalculationEngine.formatPercent(r.retentionFat)} / '
                       '${CalculationEngine.formatPercent(r.retentionCarbs)} %',
               cells: [
-                ('Б', m(r.cookedProtein), p.protein),
-                ('Ж', m(r.cookedFat), p.fat),
-                ('У', m(r.cookedCarbs), p.carbs),
+                (NutrientType.protein, m(r.cookedProtein)),
+                (NutrientType.fat, m(r.cookedFat)),
+                (NutrientType.carbs, m(r.cookedCarbs)),
               ],
               trailing: '${k(r.cookedKcal)} ккал',
               trailingTint: p.kcal,
               onTap: () => _inspect(context),
             ),
+            Divider(color: p.divider, height: Space.x3),
             // ── Ступень 3: Порция ───────────────────────────────────────
             _buildPortionStage(context, p, r),
           ],
@@ -130,7 +119,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
   Widget _buildInspectorButton(Palette p, {required bool dense}) {
     return TextButton.icon(
       onPressed: () => _inspect(context),
-      icon: const Icon(Icons.tune_rounded, size: 16),
+      icon: const Icon(Icons.analytics_outlined, size: 16),
       label: const Text('Инспектор расчёта'),
       style: TextButton.styleFrom(
         foregroundColor: p.accent,
@@ -143,41 +132,33 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
   }
 
   /// Ступень 3: «Порция» — переключатель «на всё блюдо / на 100 г» верхней
-  /// строкой, затем 4 значения в ряд и калькулятор произвольной массы.
+  /// строкой, 4 значения в ряд, быстрые пресеты и поле произвольной массы.
   Widget _buildPortionStage(BuildContext context, Palette p, CalculationResult r) {
-    // Новый расчёт без веса готового блюда: итог — только на всё блюдо,
-    // «на 100 г» и «на порцию» не показываются (вес не угадываем).
-    // Старый расчёт (legacy) показывается как раньше.
     final needsYield = r.usesLossTable && !r.hasYield;
     final per100 = _showPer100g && !needsYield;
     final totalLabel =
         needsYield ? 'На всё блюдо' : 'На всё блюдо (${g(r.yieldGrams)} г)';
-    final per100Label = 'На 100 г готового блюда';
+    const per100Label = 'На 100 г готового блюда';
 
-    return Container(
-      padding: const EdgeInsets.all(Space.x3),
-      decoration: BoxDecoration(
-        color: p.surface,
-        borderRadius: Radii.cardAll,
-        border: Border.all(color: p.border),
-      ),
+    return Padding(
+      padding: const EdgeInsets.only(top: Space.x1),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
               Container(
-                width: 20,
-                height: 20,
+                width: 22,
+                height: 22,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: p.accent,
-                  borderRadius: BorderRadius.circular(4),
+                  color: p.accentSoft,
+                  borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
                   '3',
                   style: AppTypography.caption.copyWith(
-                    color: p.onAccent,
+                    color: p.accent,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -203,30 +184,29 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
               ),
             )
           else
-          // Выбор ответа: «на всё блюдо» или «на 100 г».
-          SegmentedButton<bool>(
-            showSelectedIcon: false,
-            style: AppSegmentedStyle.of(p, compact: true),
-            segments: [
-              ButtonSegment(
-                value: false,
-                label: Text(totalLabel,
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis),
-              ),
-              ButtonSegment(
-                value: true,
-                label: Text(per100Label,
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis),
-              ),
-            ],
-            selected: {_showPer100g},
-            onSelectionChanged: (value) =>
-                setState(() => _showPer100g = value.single),
-          ),
+            SegmentedButton<bool>(
+              showSelectedIcon: false,
+              style: AppSegmentedStyle.of(p, compact: true),
+              segments: [
+                ButtonSegment(
+                  value: false,
+                  label: Text(totalLabel,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis),
+                ),
+                const ButtonSegment(
+                  value: true,
+                  label: Text(per100Label,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis),
+                ),
+              ],
+              selected: {_showPer100g},
+              onSelectionChanged: (value) =>
+                  setState(() => _showPer100g = value.single),
+            ),
           if (!needsYield && CalculationValidation.warnsImpossiblePer100g(r)) ...[
             const SizedBox(height: Space.x2),
             YieldDensityWarning(
@@ -235,77 +215,48 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
             ),
           ],
           const SizedBox(height: Space.x3),
-          // Четыре числа — одна строка, tabular figures, 2-dp маркеры.
+          // Четыре числа через единый InlineMacroCell (ключи macro-* сохранены).
           Wrap(
             spacing: Space.x4,
             runSpacing: Space.x2,
             children: [
-              _ValueCell(
-                tint: p.protein,
-                title: 'Белки',
+              InlineMacroCell(
+                type: NutrientType.protein,
+                label: 'Белки',
                 value: m(per100 ? r.per100gProtein : r.cookedProtein),
                 unit: 'г',
-                palette: p,
+                stacked: true,
+                valueKey: const ValueKey('macro-Белки'),
               ),
-              _ValueCell(
-                tint: p.fat,
-                title: 'Жиры',
+              InlineMacroCell(
+                type: NutrientType.fat,
+                label: 'Жиры',
                 value: m(per100 ? r.per100gFat : r.cookedFat),
                 unit: 'г',
-                palette: p,
+                stacked: true,
+                valueKey: const ValueKey('macro-Жиры'),
               ),
-              _ValueCell(
-                tint: p.carbs,
-                title: 'Углеводы',
+              InlineMacroCell(
+                type: NutrientType.carbs,
+                label: 'Углеводы',
                 value: m(per100 ? r.per100gCarbs : r.cookedCarbs),
                 unit: 'г',
-                palette: p,
+                stacked: true,
+                valueKey: const ValueKey('macro-Углеводы'),
               ),
-              _ValueCell(
-                tint: p.kcal,
-                title: 'Энергия',
+              InlineMacroCell(
+                type: NutrientType.kcal,
+                label: 'Энергия',
                 value: k(per100 ? r.per100gKcal : r.cookedKcal),
                 unit: 'ккал',
-                palette: p,
+                stacked: true,
+                valueKey: const ValueKey('macro-Энергия'),
               ),
             ],
           ),
           if (r.yieldGrams > 0) ...[
             const SizedBox(height: Space.x3),
-            TextFormField(
-              key: const ValueKey('portion-grams'),
-              initialValue: '200',
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              style: AppTypography.num,
-              decoration: InputDecoration(
-                isDense: true,
-                labelText: 'Масса порции, г',
-                errorText: _portionError,
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: Space.x3, vertical: Space.x2),
-              ),
-              onChanged: (text) {
-                final v = CalculationEngine.parseInputDouble(text);
-                setState(() {
-                  if (v == null || v < .1 || v > 9999999) {
-                    _portionError = 'Введите массу от 0,1 до 9999999 г';
-                  } else {
-                    _portionGrams = v;
-                    _portionError = null;
-                  }
-                });
-              },
-            ),
-            const SizedBox(height: Space.x2),
-            Builder(builder: (_) {
-              final portion = r.portion(_portionGrams);
-              return Text(
-                'Порция ${g(_portionGrams)} г: ${macros(portion.protein, portion.fat, portion.carbs)} · ${k(portion.kcal)} ккал',
-                key: const ValueKey('portion-result'),
-                style: AppTypography.numSm.copyWith(color: p.ink),
-              );
-            }),
+            _PortionCalculator(result: r),
           ],
         ],
       ),
@@ -315,112 +266,137 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
   /// Компактная полоса для нижнего дока: одна числовая строка + инспектор.
   ///
   /// Выход блюда здесь сознательно НЕ дублируется: он уже выведен крупной
-  /// строкой в карточке параметров выше, а повтор в доке — это второй ответ
-  /// на тот же вопрос.
+  /// строкой в карточке параметров выше.
   Widget _buildCompact(BuildContext context, Palette p, CalculationResult r) {
-    final shortHeight = MediaQuery.sizeOf(context).height < 460;
+    final media = MediaQuery.sizeOf(context);
+    final shortHeight = media.height < 460;
     final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final inlineCells =
+        shortHeight || (media.height < 640 && textScale > 1.35);
     final ultraCompact = shortHeight && textScale > 1.35;
-    final cells = <(Color, String, String, String, String)>[
-      (p.protein, 'Белки', 'Б', m(r.cookedProtein), 'г'),
-      (p.fat, 'Жиры', 'Ж', m(r.cookedFat), 'г'),
-      (p.carbs, 'Углеводы', 'У', m(r.cookedCarbs), 'г'),
-      (p.kcal, 'Энергия', '', k(r.cookedKcal), 'ккал'),
+    final compactLabels = textScale > 1.35 || media.width < 360;
+    final cells = <(NutrientType, Color, String, String, String, String)>[
+      (NutrientType.protein, p.protein, 'Белки', 'Б', m(r.cookedProtein), 'г'),
+      (NutrientType.fat, p.fat, 'Жиры', 'Ж', m(r.cookedFat), 'г'),
+      (NutrientType.carbs, p.carbs, 'Углеводы', 'У', m(r.cookedCarbs), 'г'),
+      (NutrientType.kcal, p.kcal, 'Энергия', '', k(r.cookedKcal), 'ккал'),
     ];
 
     return Padding(
-      padding: EdgeInsets.only(bottom: shortHeight ? 0 : Space.x1),
+      padding: EdgeInsets.only(bottom: inlineCells ? 0 : Space.x1),
       child: Row(
         children: [
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (!ultraCompact) ...[
-                  Text(
-                    'После т.о. · на всё блюдо',
-                    style:
-                        AppTypography.caption.copyWith(color: p.inkSecondary),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                ],
-                if (shortHeight)
-                  Semantics(
-                    label:
-                        'После т.о. · на всё блюдо: Белки ${m(r.cookedProtein)} г, Жиры ${m(r.cookedFat)} г, Углеводы ${m(r.cookedCarbs)} г, Энергия ${k(r.cookedKcal)} ккал',
-                    child: Text.rich(
-                      TextSpan(
-                        style: AppTypography.caption.copyWith(
-                          color: p.ink,
-                          fontWeight: FontWeight.w700,
-                        ),
-                        children: [
-                          for (var i = 0; i < cells.length; i++) ...[
-                            if (i > 0)
-                              TextSpan(
-                                text: ' · ',
-                                style: AppTypography.caption
-                                    .copyWith(color: p.inkMuted),
-                              ),
-                            WidgetSpan(
-                              alignment: PlaceholderAlignment.middle,
-                              child: Container(
-                                width: 6,
-                                height: 6,
-                                margin: const EdgeInsets.only(right: 3),
-                                decoration: BoxDecoration(
-                                  color: cells[i].$1,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                            ),
-                            TextSpan(
-                              text: ultraCompact
-                                  ? (cells[i].$3.isEmpty
-                                      ? '${cells[i].$4} ${cells[i].$5}'
-                                      : '${cells[i].$3} ${cells[i].$4}')
-                                  : '${cells[i].$2} ${cells[i].$4} ${cells[i].$5}',
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  )
-                else
-                  // Wrap не даёт строгих ограничений по ширине ни ОДНОМУ
-                  // ребёнку и переносит их сам — поэтому внутренние Column
-                  // здесь безопасны, а при крупном шрифте строка уйдёт вниз.
-                  Wrap(
-                    spacing: Space.x3,
-                    runSpacing: 2,
-                    crossAxisAlignment: WrapCrossAlignment.start,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => _inspect(context),
+                borderRadius: Radii.fieldAll,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: kMinTapTarget),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      for (final cell in cells)
-                        _ValueCell(
-                          tint: cell.$1,
-                          title: cell.$2,
-                          value: cell.$4,
-                          unit: cell.$5,
-                          palette: p,
-                          compact: true,
+                      if (!ultraCompact) ...[
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                'После готовки · на всё блюдо',
+                                style: AppTypography.caption
+                                    .copyWith(color: p.inkSecondary),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (r.hasYield && !compactLabels && !shortHeight)
+                              Text(
+                                ' · ${k(r.per100gKcal)} / 100 г',
+                                style: AppTypography.caption.copyWith(
+                                  color: p.accent,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                      ],
+                      if (inlineCells)
+                        Semantics(
+                          label:
+                              'После готовки · на всё блюдо: Белки ${m(r.cookedProtein)} г, Жиры ${m(r.cookedFat)} г, Углеводы ${m(r.cookedCarbs)} г, Энергия ${k(r.cookedKcal)} ккал',
+                          child: Text.rich(
+                            TextSpan(
+                              style: AppTypography.caption.copyWith(
+                                color: p.ink,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              children: [
+                                for (var i = 0; i < cells.length; i++) ...[
+                                  if (i > 0)
+                                    TextSpan(
+                                      text: ' · ',
+                                      style: AppTypography.caption
+                                          .copyWith(color: p.inkMuted),
+                                    ),
+                                  WidgetSpan(
+                                    alignment: PlaceholderAlignment.middle,
+                                    child: Container(
+                                      width: 6,
+                                      height: 6,
+                                      margin: const EdgeInsets.only(right: 3),
+                                      decoration: BoxDecoration(
+                                        color: cells[i].$2,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: compactLabels
+                                        ? (cells[i].$4.isEmpty
+                                            ? '${cells[i].$5} ${cells[i].$6}'
+                                            : '${cells[i].$4} ${cells[i].$5}')
+                                        : '${cells[i].$3} ${cells[i].$5} ${cells[i].$6}',
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        )
+                      else
+                        Wrap(
+                          spacing: Space.x3,
+                          runSpacing: 2,
+                          crossAxisAlignment: WrapCrossAlignment.start,
+                          children: [
+                            for (final cell in cells)
+                              InlineMacroCell(
+                                type: cell.$1,
+                                label: cell.$3,
+                                value: cell.$5,
+                                unit: cell.$6,
+                                stacked: true,
+                                compact: true,
+                                valueKey: ValueKey('macro-${cell.$3}'),
+                              ),
+                          ],
                         ),
                     ],
                   ),
-              ],
+                ),
+              ),
             ),
           ),
           IconButton(
-            // В компактном доке места на текст нет — подпись уходит в
-            // семантику и tooltip, чтобы кнопка оставалась находимой
-            // скринридером и голосовым управлением.
             tooltip: 'Инспектор расчёта',
             onPressed: () => _inspect(context),
             icon: Semantics(
               label: 'Инспектор расчёта',
-              child: Icon(Icons.tune_rounded, size: 20, color: p.accent),
+              child:
+                  Icon(Icons.analytics_outlined, size: 20, color: p.accent),
             ),
           ),
         ],
@@ -462,7 +438,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                 style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
               ),
               const SizedBox(height: Space.x4),
-              _buildStepCard(
+              _buildStepSection(
                 palette: p,
                 title: '1. Сырье — нетто ${g(r.rawTotalWeight)} г',
                 content: Text(
@@ -470,58 +446,58 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                   style: AppTypography.num.copyWith(color: p.ink),
                 ),
               ),
-              const SizedBox(height: Space.x2),
+              Divider(color: p.divider, height: Space.x5),
               // Новый расчёт: потери по каждому ингредиенту (группа × способ).
               if (r.usesLossTable)
-                _buildLossLinesCard(p, r)
+                _buildLossLinesSection(p, r)
               else
-              _buildStepCard(
-                palette: p,
-                title: '2. Потери при т.о. — применяем сохранность',
-                content: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (final row in [
-                      (
-                        'Белки',
-                        r.rawTotalProtein,
-                        r.retentionProtein,
-                        r.cookedProtein
-                      ),
-                      (
-                        'Жиры',
-                        r.rawTotalFat,
-                        r.retentionFat,
-                        r.cookedFat
-                      ),
-                      (
-                        'Углеводы',
-                        r.rawTotalCarbs,
-                        r.retentionCarbs,
-                        r.cookedCarbs
-                      ),
-                    ])
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          '${row.$1}: ${m(row.$2)} × ${CalculationEngine.formatPercent(row.$3)}% = ${m(row.$4)} г',
-                          style: AppTypography.num.copyWith(color: p.ink),
+                _buildStepSection(
+                  palette: p,
+                  title: '2. Потери при готовке — применяем сохранность',
+                  content: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final row in [
+                        (
+                          'Белки',
+                          r.rawTotalProtein,
+                          r.retentionProtein,
+                          r.cookedProtein
                         ),
-                      ),
-                  ],
+                        (
+                          'Жиры',
+                          r.rawTotalFat,
+                          r.retentionFat,
+                          r.cookedFat
+                        ),
+                        (
+                          'Углеводы',
+                          r.rawTotalCarbs,
+                          r.retentionCarbs,
+                          r.cookedCarbs
+                        ),
+                      ])
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            '${row.$1}: ${m(row.$2)} × ${CalculationEngine.formatPercent(row.$3)}% = ${m(row.$4)} г',
+                            style: AppTypography.num.copyWith(color: p.ink),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: Space.x2),
-              _buildStepCard(
+              Divider(color: p.divider, height: Space.x5),
+              _buildStepSection(
                 palette: p,
-                title: '3. Энергетическая ценность после т.о.',
+                title: '3. Энергетическая ценность после готовки',
                 content: Text(
                   '${m(r.cookedProtein)} × 4 + ${m(r.cookedFat)} × 9 + ${m(r.cookedCarbs)} × 4 = ${k(r.cookedKcal)} ккал',
                   style: AppTypography.num.copyWith(color: p.ink),
                 ),
               ),
-              const SizedBox(height: Space.x2),
-              _buildStepCard(
+              Divider(color: p.divider, height: Space.x5),
+              _buildStepSection(
                 palette: p,
                 title: r.usesLossTable && !r.hasYield
                     ? '4. Вес готового блюда не указан'
@@ -538,7 +514,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                     if (r.yieldGrams > 0) ...[
                       const SizedBox(height: 6),
                       Text(
-                        'На 100 г: каждый итог после т.о. × 100 / ${g(r.yieldGrams)}',
+                        'На 100 г: каждый итог после готовки × 100 / ${g(r.yieldGrams)}',
                         style: AppTypography.bodySm
                             .copyWith(color: p.inkSecondary),
                       ),
@@ -557,6 +533,17 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                   ],
                 ),
               ),
+              if (r.yieldGrams > 0) ...[
+                Divider(color: p.divider, height: Space.x5),
+                _buildStepSection(
+                  palette: p,
+                  title: '5. Расчёт порции',
+                  content: _PortionCalculator(
+                    result: r,
+                    keyPrefix: 'inspector-',
+                  ),
+                ),
+              ],
               const SizedBox(height: Space.x4),
               Text(
                 'Сырой состав и готовое блюдо — разные стадии, а не противоречащие значения. '
@@ -581,12 +568,12 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
   }
 
   /// Шаг 2 нового расчёта: потери по каждому ингредиенту — группа, способ,
-  /// проценты из таблицы и «сырьё → после т.о.» для Б/Ж/У (как в движке).
-  Widget _buildLossLinesCard(Palette p, CalculationResult r) {
+  /// проценты из таблицы и «сырьё → после готовки» для Б/Ж/У.
+  Widget _buildLossLinesSection(Palette p, CalculationResult r) {
     String pct(double v) => CalculationEngine.formatGrams(v);
-    return _buildStepCard(
+    return _buildStepSection(
       palette: p,
-      title: '2. Потери при т.о. — по таблице для группы продукта',
+      title: '2. Потери при готовке — по таблице для группы продукта',
       content: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -616,7 +603,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
             ),
           const SizedBox(height: 6),
           Text(
-            'Итого после т.о.: ${macros(r.cookedProtein, r.cookedFat, r.cookedCarbs)}',
+            'Итого после готовки: ${macros(r.cookedProtein, r.cookedFat, r.cookedCarbs)}',
             key: const ValueKey('inspector-loss-total'),
             style: AppTypography.num
                 .copyWith(color: p.ink, fontWeight: FontWeight.w700),
@@ -651,29 +638,21 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
     );
   }
 
-  Widget _buildStepCard({
+  Widget _buildStepSection({
     required Palette palette,
     required String title,
     required Widget content,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(Space.x3),
-      decoration: BoxDecoration(
-        color: palette.sunken,
-        borderRadius: Radii.fieldAll,
-        border: Border.all(color: palette.borderStatic),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: AppTypography.label.copyWith(color: palette.ink),
-          ),
-          const SizedBox(height: Space.x1),
-          content,
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: AppTypography.label.copyWith(color: palette.ink),
+        ),
+        const SizedBox(height: Space.x1),
+        content,
+      ],
     );
   }
 }
@@ -684,7 +663,7 @@ class _StageRow extends StatelessWidget {
   final int number;
   final String title;
   final String subtitle;
-  final List<(String, String, Color)> cells;
+  final List<(NutrientType, String)> cells;
   final String? trailing;
   final Color? trailingTint;
   final bool muted;
@@ -710,25 +689,24 @@ class _StageRow extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 20,
-            height: 20,
+            width: 22,
+            height: 22,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: muted ? p.sunken : p.accent,
-              borderRadius: BorderRadius.circular(4),
+              color: muted ? p.sunken : p.accentSoft,
+              borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
               '$number',
               style: AppTypography.caption.copyWith(
-                color: muted ? p.inkSecondary : p.onAccent,
+                color: muted ? p.inkSecondary : p.accent,
                 fontWeight: FontWeight.w700,
               ),
             ),
           ),
           const SizedBox(width: Space.x2),
           // Заголовок ступени и её значения — одной колонкой внутри Expanded:
-          // никаких неограниченных Column внутри Row (это и давало overflow
-          // на 320 dp при масштабе 2.0×).
+          // никаких неограниченных Column внутри Row.
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -749,24 +727,11 @@ class _StageRow extends StatelessWidget {
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       for (final c in cells)
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(width: 2, height: 11, color: c.$3),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${c.$1} ',
-                              style: AppTypography.caption
-                                  .copyWith(color: p.inkMuted),
-                            ),
-                            Text(
-                              c.$2,
-                              style: AppTypography.numSm.copyWith(
-                                color: muted ? p.inkSecondary : p.ink,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
+                        InlineMacroCell(
+                          type: c.$1,
+                          value: c.$2,
+                          compact: true,
+                          muted: muted,
                         ),
                       if (trailing != null)
                         Text(
@@ -795,52 +760,113 @@ class _StageRow extends StatelessWidget {
   }
 }
 
-/// Одно числовое значение с 2-dp маркером и подписью.
-class _ValueCell extends StatelessWidget {
-  final Color tint;
-  final String title;
-  final String value;
-  final String unit;
-  final Palette palette;
-  final bool compact;
+class _PortionCalculator extends StatefulWidget {
+  final CalculationResult result;
+  final String keyPrefix;
 
-  const _ValueCell({
-    required this.tint,
-    required this.title,
-    required this.value,
-    required this.unit,
-    required this.palette,
-    this.compact = false,
+  const _PortionCalculator({
+    required this.result,
+    this.keyPrefix = '',
   });
 
   @override
+  State<_PortionCalculator> createState() => _PortionCalculatorState();
+}
+
+class _PortionCalculatorState extends State<_PortionCalculator> {
+  static const List<int> _portionPresets = [100, 150, 200, 250, 300];
+
+  double _portionGrams = 200;
+  String? _portionError;
+  late final TextEditingController _portionCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _portionCtrl = TextEditingController(text: '200');
+  }
+
+  @override
+  void dispose() {
+    _portionCtrl.dispose();
+    super.dispose();
+  }
+
+  void _selectPortionPreset(int grams) {
+    setState(() {
+      _portionGrams = grams.toDouble();
+      _portionError = null;
+      final text = grams.toString();
+      _portionCtrl.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final p = Palette.of(context);
+    final r = widget.result;
+    final prefix = widget.keyPrefix;
+    final portion = r.portion(_portionGrams);
+    final g = CalculationEngine.formatGrams;
+    final m = CalculationEngine.formatMacro;
+    final k = CalculationEngine.formatKcal;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          width: 2,
-          height: compact ? 26 : 30,
-          color: tint,
-          margin: const EdgeInsets.only(right: Space.x2),
-        ),
-        Flexible(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(title,
-                  style: AppTypography.caption
-                      .copyWith(color: palette.inkMuted)),
-              Text(
-                '$value $unit',
-                key: ValueKey('macro-$title'),
-                style: (compact ? AppTypography.numSm : AppTypography.num)
-                    .copyWith(color: palette.ink),
+        Wrap(
+          spacing: Space.x2,
+          runSpacing: Space.x1,
+          children: [
+            for (final grams in _portionPresets)
+              ChoiceChip(
+                key: ValueKey('${prefix}portion-preset-$grams'),
+                label: Text('$grams г'),
+                selected:
+                    (_portionGrams - grams).abs() < 0.01 &&
+                        _portionError == null,
+                showCheckmark: false,
+                materialTapTargetSize: MaterialTapTargetSize.padded,
+                onSelected: (_) => _selectPortionPreset(grams),
               ),
-            ],
+          ],
+        ),
+        const SizedBox(height: Space.x2),
+        TextFormField(
+          key: ValueKey('${prefix}portion-grams'),
+          controller: _portionCtrl,
+          keyboardType:
+              const TextInputType.numberWithOptions(decimal: true),
+          style: AppTypography.num,
+          decoration: InputDecoration(
+            isDense: true,
+            labelText: 'Масса порции, г',
+            errorText: _portionError,
+            contentPadding: const EdgeInsets.symmetric(
+                horizontal: Space.x3, vertical: Space.x2),
           ),
+          onChanged: (text) {
+            final v = CalculationEngine.parseInputDouble(text);
+            setState(() {
+              if (v == null || v < .1 || v > 9999999) {
+                _portionError = 'Введите массу от 0,1 до 9999999 г';
+              } else {
+                _portionGrams = v;
+                _portionError = null;
+              }
+            });
+          },
+        ),
+        const SizedBox(height: Space.x2),
+        Text(
+          'Порция ${g(_portionGrams)} г: '
+          'Б: ${m(portion.protein)} · Ж: ${m(portion.fat)} · У: ${m(portion.carbs)} г '
+          '· ${k(portion.kcal)} ккал',
+          key: ValueKey('${prefix}portion-result'),
+          style: AppTypography.numSm.copyWith(color: p.ink),
         ),
       ],
     );

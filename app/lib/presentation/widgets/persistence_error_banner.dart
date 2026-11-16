@@ -49,7 +49,6 @@ class _PersistenceErrorBannerState extends State<PersistenceErrorBanner> {
         decoration: BoxDecoration(
           color: p.dangerSoft,
           borderRadius: Radii.cardAll,
-          border: Border.all(color: p.danger.withOpacity(0.35)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

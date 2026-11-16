@@ -114,7 +114,7 @@ void main() {
       final h = editorHarness(BadDish.subGramYield());
       await tester.pumpWidget(h.wrap(const RecipeEditorScreen()));
       await tester.pump();
-      expect(find.text('После т.о. · — Б — Ж — У — ккал'), findsOneWidget);
+      expect(find.text('После готовки · — Б — Ж — У — ккал'), findsOneWidget);
       expect(find.textContaining('0,00 ккал'), findsNothing);
     });
 
@@ -145,7 +145,7 @@ void main() {
       final h = Harness(dish: n, saved: saved);
       await tester.pumpWidget(h.wrap(const HomeScreen()));
       await tester.pump();
-      expect(find.text('1 инг. · выход — г · — ккал'), findsOneWidget);
+      expect(find.text('1 ингредиент · выход — г · — ккал'), findsOneWidget);
       expect(find.byType(CalcErrorBanner), findsNothing);
       expect(find.textContaining('Проверьте'), findsNothing);
     });
@@ -162,7 +162,7 @@ void main() {
       await tester.pumpWidget(h.wrap(const HomeScreen()));
       await tester.pump();
       expect(find.text('Нулевая сохранность'), findsOneWidget);
-      expect(find.text('1 инг. · выход — г · — ккал'), findsOneWidget);
+      expect(find.text('1 ингредиент · выход — г · — ккал'), findsOneWidget);
       expect(find.byType(CalcErrorBanner), findsNothing);
     });
   });
@@ -250,7 +250,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(CalcErrorBanner), findsOneWidget,
           reason: 'the banner is pinned outside the scrolling list');
-      expect(find.text('После т.о. · — Б — Ж — У — ккал'), findsOneWidget);
+      expect(find.text('После готовки · — Б — Ж — У — ккал'), findsOneWidget);
       expect(find.byType(ErrorWidget), findsNothing);
     });
   });

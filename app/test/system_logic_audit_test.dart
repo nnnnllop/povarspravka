@@ -409,8 +409,8 @@ void main() {
                 onConfirm: (g, _) => saved = g))));
     await tester.tap(find.textContaining('1 шт. (1 категория'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const ValueKey('measure-count')), '2');
-    await tester.tap(find.text('Использовать'));
+    await tester.ensureVisible(find.byKey(const ValueKey('measure-inc')));
+    await tester.tap(find.byKey(const ValueKey('measure-inc')));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Добавить в блюдо'));
     await tester.tap(find.text('Добавить в блюдо'));

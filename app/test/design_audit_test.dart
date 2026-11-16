@@ -138,6 +138,7 @@ void main() {
         // 1.4.11 — границы полей и кнопок должны читаться как объект.
         expectAtLeast(AppColors.border, bg, 3.0, 'border (интерактивная)');
       }
+      expectAtLeast(AppColors.fat, AppColors.surfaceSunken, 4.5, 'fat на surfaceSunken');
       expectAtLeast(AppColors.accentOn, AppColors.accent, 4.5, 'текст на accent');
       expectAtLeast(AppColors.ink, AppColors.accentSoft, 4.5, 'ink на accentSoft');
     });
@@ -153,6 +154,12 @@ void main() {
         expectAtLeast(AppColors.kcalDark, bg, 4.5, 'kcalDark');
         expectAtLeast(AppColors.borderDark, bg, 3.0, 'borderDark');
       }
+      expectAtLeast(
+        AppColors.fatDark,
+        AppColors.surfaceSunkenDark,
+        4.5,
+        'fatDark на surfaceSunkenDark',
+      );
     });
 
     test('бренд, «Скурихин» и жиры — три разных цвета, а не один', () {

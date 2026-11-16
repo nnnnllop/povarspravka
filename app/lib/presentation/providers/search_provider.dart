@@ -1,18 +1,125 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/calculation/calculation_validation.dart';
 import '../../core/calculation/models/product.dart';
+import '../../data/repositories/custom_products_repository.dart';
 import '../../data/repositories/product_repository.dart';
+import 'dish_provider.dart';
 
 final productRepositoryProvider = Provider<ProductRepository>((ref) {
   return ProductRepository();
 });
 
+final customProductsRepositoryProvider = Provider<CustomProductsRepository>((ref) {
+  return CustomProductsRepository();
+});
+
+final customProductsProvider =
+    StateNotifierProvider<CustomProductsNotifier, List<Product>>((ref) {
+  final repo = ref.watch(customProductsRepositoryProvider);
+  return CustomProductsNotifier(repo);
+});
+
+class CustomProductsNotifier extends StateNotifier<List<Product>> {
+  final CustomProductsRepository _repo;
+  late final Future<void> _ready;
+  Future<void> _writeQueue = Future<void>.value();
+
+  CustomProductsNotifier(this._repo) : super(const []) {
+    _ready = _load();
+  }
+
+  Future<void> _load() async {
+    final loaded = await _repo.loadAll();
+    if (!mounted || state.isNotEmpty) return;
+    state = loaded;
+  }
+
+  Future<void> flush() async {
+    await _ready;
+    await _writeQueue;
+  }
+
+  Future<Product> addProduct({
+    required String name,
+    required double protein,
+    required double fat,
+    required double carbs,
+    required double kcal,
+    double wastePct = 0.0,
+    bool isDish = false,
+  }) async {
+    await _ready;
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError('Введите название продукта');
+    }
+    final nextId = CustomProductsRepository.nextId(state);
+    final product = Product(
+      id: nextId,
+      code: 'USER-${nextId.abs()}',
+      name: trimmed,
+      nameNorm: CustomProductsRepository.normalizeText(trimmed),
+      groupId: 0,
+      source: 'custom',
+      wastePct: wastePct,
+      protein: protein,
+      fat: fat,
+      carbs: carbs,
+      kcal: kcal,
+      isDish: isDish,
+    );
+    CalculationValidation.product(product);
+    final updated = [product, ...state];
+    state = updated;
+    await _enqueueSave(updated);
+    return product;
+  }
+
+  Future<Product> updateProduct(Product updatedProduct) async {
+    await _ready;
+    final trimmed = updatedProduct.name.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError('Введите название продукта');
+    }
+    final normalized = updatedProduct.copyWith(
+      name: trimmed,
+      nameNorm: CustomProductsRepository.normalizeText(trimmed),
+      source: 'custom',
+    );
+    CalculationValidation.product(normalized);
+    final updated = [
+      for (final item in state)
+        if (item.id == normalized.id) normalized else item,
+    ];
+    state = updated;
+    await _enqueueSave(updated);
+    return normalized;
+  }
+
+  Future<void> deleteProduct(int id) async {
+    await _ready;
+    final updated = state.where((p) => p.id != id).toList();
+    state = updated;
+    await _enqueueSave(updated);
+  }
+
+  Future<void> _enqueueSave(List<Product> snapshot) {
+    final next = _writeQueue.then((_) => _repo.saveAll(snapshot));
+    _writeQueue = next.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    return next;
+  }
+}
+
 final foodGroupsProvider = FutureProvider<List<FoodGroup>>((ref) async {
   final repo = ref.watch(productRepositoryProvider);
-  final allGroups = await repo.getFoodGroups();
   final selectedSource = ref.watch(
     searchProvider.select((s) => s.selectedSource),
   );
+  if (selectedSource == 'custom') {
+    return const <FoodGroup>[];
+  }
+  final allGroups = await repo.getFoodGroups();
 
   if (selectedSource == 'skurikhin') {
     return allGroups.where((g) => g.id >= 1 && g.id <= 12).toList();
@@ -84,16 +191,25 @@ class SearchState {
 final searchProvider =
     StateNotifierProvider<SearchNotifier, SearchState>((ref) {
   final repo = ref.watch(productRepositoryProvider);
-  return SearchNotifier(repo);
+  final notifier = SearchNotifier(
+    repo,
+    () => ref.read(customProductsProvider),
+  );
+  ref.listen<List<Product>>(customProductsProvider, (_, __) {
+    notifier.refresh();
+  });
+  return notifier;
 });
 
 class SearchNotifier extends StateNotifier<SearchState> {
   final ProductRepository _repo;
+  final List<Product> Function()? _getCustomProducts;
   Timer? _debounceTimer;
   Completer<void>? _pendingSearch;
   int _requestId = 0;
 
-  SearchNotifier(this._repo) : super(const SearchState()) {
+  SearchNotifier(this._repo, [this._getCustomProducts])
+      : super(const SearchState()) {
     search('', immediate: true);
   }
 
@@ -106,6 +222,9 @@ class SearchNotifier extends StateNotifier<SearchState> {
     _pendingSearch = null;
     super.dispose();
   }
+
+  /// Повторно запускает текущий поиск (например, после добавления/правки «своего» продукта).
+  Future<void> refresh() => search(state.query, immediate: true);
 
   Future<void> search(String query, {bool immediate = false}) async {
     _debounceTimer?.cancel();
@@ -131,18 +250,47 @@ class SearchNotifier extends StateNotifier<SearchState> {
     }
   }
 
+  List<Product> _filterCustomProducts(String query) {
+    final all = _getCustomProducts?.call() ?? const <Product>[];
+    if (all.isEmpty) return const <Product>[];
+    if (state.selectedGroupId != null) return const <Product>[];
+    final source = state.selectedSource;
+    if (source != null && source != 'custom') return const <Product>[];
+    final normQuery = CustomProductsRepository.normalizeText(query);
+    final tokens = normQuery.isEmpty
+        ? const <String>[]
+        : normQuery.split(' ').where((t) => t.isNotEmpty).toList();
+    return all.where((p) {
+      if (state.selectedIsDish != null && p.isDishOnly != state.selectedIsDish) {
+        return false;
+      }
+      if (tokens.isEmpty) return true;
+      final normName = CustomProductsRepository.normalizeText(p.name);
+      return tokens.every(normName.contains);
+    }).toList();
+  }
+
   Future<void> _executeSearch(String query, int reqId) async {
     try {
-      final results = await _repo.searchProducts(
-        query: query,
-        groupId: state.selectedGroupId,
-        source: state.selectedSource,
-        isDish: state.selectedIsDish,
-        limit: 60,
-      );
+      final customMatches = _filterCustomProducts(query);
+      final List<Product> dbResults;
+      if (state.selectedSource == 'custom') {
+        dbResults = const <Product>[];
+      } else {
+        dbResults = await _repo.searchProducts(
+          query: query,
+          groupId: state.selectedGroupId,
+          source: state.selectedSource,
+          isDish: state.selectedIsDish,
+          limit: 60,
+        );
+      }
       if (!mounted || reqId != _requestId) return;
+      final combined = customMatches.isEmpty
+          ? dbResults
+          : <Product>[...customMatches, ...dbResults];
       state =
-          state.copyWith(results: results, isLoading: false, clearError: true);
+          state.copyWith(results: combined, isLoading: false, clearError: true);
     } catch (e) {
       if (!mounted || reqId != _requestId) return;
       state = state.copyWith(results: const [], isLoading: false, error: e);
@@ -150,7 +298,10 @@ class SearchNotifier extends StateNotifier<SearchState> {
   }
 
   void setGroupFilter(int? groupId) {
-    if (state.selectedGroupId == groupId) {
+    if (groupId == null) {
+      if (state.selectedGroupId == null) return;
+      state = state.copyWith(clearGroupId: true);
+    } else if (state.selectedGroupId == groupId) {
       state = state.copyWith(clearGroupId: true);
     } else {
       state = state.copyWith(selectedGroupId: groupId);
@@ -169,17 +320,26 @@ class SearchNotifier extends StateNotifier<SearchState> {
   }
 
   void setSourceFilter(String? source) {
-    final nextSource = state.selectedSource == source ? null : source;
+    final normalized = (source == null || source == 'all') ? null : source;
+    final nextSource = normalized == null
+        ? null
+        : (state.selectedSource == normalized ? null : normalized);
     bool shouldClearGroup = false;
     final currentGroup = state.selectedGroupId;
     if (currentGroup != null) {
-      if (nextSource == 'skurikhin' &&
+      if (nextSource == 'custom') {
+        shouldClearGroup = true;
+      } else if (nextSource == 'skurikhin' &&
           (currentGroup < 1 || currentGroup > 12)) {
         shouldClearGroup = true;
       } else if ((nextSource == 'bls' || nextSource == 'usda') &&
           (currentGroup < 101 || currentGroup > 120)) {
         shouldClearGroup = true;
       }
+    }
+
+    if (nextSource == state.selectedSource && !shouldClearGroup) {
+      return;
     }
 
     state = state.copyWith(
@@ -189,4 +349,113 @@ class SearchNotifier extends StateNotifier<SearchState> {
     );
     search(state.query, immediate: true);
   }
+
+  /// Сбрасывает поисковый запрос и временные фильтры при выходе из выбора.
+  void resetFilters({
+    bool clearQuery = true,
+    bool clearSource = true,
+    bool clearGroup = true,
+    bool clearIsDish = false,
+  }) {
+    if (!mounted) return;
+    final hasAny =
+        (clearQuery && state.query.isNotEmpty) ||
+        (clearSource && state.selectedSource != null) ||
+        (clearGroup && state.selectedGroupId != null) ||
+        (clearIsDish && state.selectedIsDish != null);
+    if (!hasAny) return;
+    _debounceTimer?.cancel();
+    _pendingSearch = null;
+    _requestId++;
+    final nextQuery = clearQuery ? '' : state.query;
+    state = state.copyWith(
+      query: nextQuery,
+      clearSource: clearSource,
+      clearGroupId: clearGroup,
+      clearIsDish: clearIsDish,
+    );
+    search(nextQuery, immediate: true);
+  }
 }
+
+/// Продукты, выбранные пользователем в текущей сессии (в памяти, без записи на диск).
+final sessionRecentProductsProvider =
+    StateProvider<List<Product>>((ref) => const []);
+
+void recordRecentProduct(WidgetRef ref, Product product) {
+  final current = ref.read(sessionRecentProductsProvider);
+  final next = <Product>[
+    product,
+    for (final p in current)
+      if (p.id != product.id) p,
+  ];
+  ref.read(sessionRecentProductsProvider.notifier).state =
+      next.length > 8 ? next.sublist(0, 8) : next;
+}
+
+/// Чистый вычислитель списка «Недавние и частые» с учётом активных фильтров.
+List<Product> buildRecentProducts({
+  required List<Product> sessionRecent,
+  required List<Product> activeIngredients,
+  required Iterable<List<Product>> savedDishIngredients,
+  bool? isDishFilter,
+  String? selectedSource,
+  int limit = 6,
+}) {
+  bool matchesFilter(Product p) {
+    if (isDishFilter != null && p.isDishOnly != isDishFilter) return false;
+    if (selectedSource != null &&
+        selectedSource.isNotEmpty &&
+        p.source != selectedSource) {
+      return false;
+    }
+    return true;
+  }
+
+  final byId = <int, Product>{};
+  final scores = <int, int>{};
+
+  // Свежий выбор в текущей сессии получает высокий приоритет.
+  for (var i = 0; i < sessionRecent.length; i++) {
+    final p = sessionRecent[i];
+    if (!matchesFilter(p)) continue;
+    byId[p.id] = p;
+    scores[p.id] = (scores[p.id] ?? 0) + 100 - i;
+  }
+
+  // Продукты из активного черновика.
+  for (final p in activeIngredients) {
+    if (!matchesFilter(p)) continue;
+    byId.putIfAbsent(p.id, () => p);
+    scores[p.id] = (scores[p.id] ?? 0) + 10;
+  }
+
+  // Часто встречающиеся продукты из сохранённых блюд.
+  for (final list in savedDishIngredients) {
+    for (final p in list) {
+      if (!matchesFilter(p)) continue;
+      byId.putIfAbsent(p.id, () => p);
+      scores[p.id] = (scores[p.id] ?? 0) + 2;
+    }
+  }
+
+  final sorted = byId.values.toList()
+    ..sort((a, b) => (scores[b.id] ?? 0).compareTo(scores[a.id] ?? 0));
+  return sorted.length > limit ? sorted.sublist(0, limit) : sorted;
+}
+
+/// Быстрые продукты для раздела «Недавние и частые» при пустом поиске.
+final recentProductsProvider = Provider<List<Product>>((ref) {
+  final session = ref.watch(sessionRecentProductsProvider);
+  final activeDish = ref.watch(dishProvider);
+  final saved = ref.watch(savedDishesProvider);
+  final search = ref.watch(searchProvider);
+  return buildRecentProducts(
+    sessionRecent: session,
+    activeIngredients: activeDish.ingredients.map((i) => i.product).toList(),
+    savedDishIngredients:
+        saved.map((d) => d.ingredients.map((i) => i.product).toList()),
+    isDishFilter: search.selectedIsDish,
+    selectedSource: search.selectedSource,
+  );
+});

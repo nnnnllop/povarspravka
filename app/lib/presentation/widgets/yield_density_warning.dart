@@ -24,7 +24,6 @@ class YieldDensityWarning extends StatelessWidget {
       decoration: BoxDecoration(
         color: p.warningSoft,
         borderRadius: Radii.fieldAll,
-        border: Border.all(color: p.warning.withOpacity(0.4)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

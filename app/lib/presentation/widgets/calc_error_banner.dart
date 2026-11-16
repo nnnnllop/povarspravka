@@ -24,14 +24,13 @@ class CalcErrorBanner extends StatelessWidget {
       padding:
           const EdgeInsets.symmetric(horizontal: Space.x4, vertical: Space.x3),
       decoration: BoxDecoration(
-        color: p.surface,
+        color: p.dangerSoft,
         borderRadius: Radii.cardAll,
-        border: Border.all(color: p.kcal.withOpacity(0.55)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.report_gmailerrorred_rounded, size: 20, color: p.kcal),
+          Icon(Icons.report_gmailerrorred_rounded, size: 20, color: p.danger),
           const SizedBox(width: Space.x3),
           Expanded(
             child: Column(

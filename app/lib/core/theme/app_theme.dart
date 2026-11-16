@@ -19,6 +19,35 @@ class AppTheme {
         p: const Palette(true),
       );
 
+  /// Единый стиль [SegmentedButton] для всей дизайн-системы (тема + локальные
+  /// compact-варианты): фон неактивного сегмента [Palette.sunken], активный —
+  /// [Palette.accent], граница >= 3:1 ([Palette.border]).
+  static ButtonStyle segmentedStyle(Palette p, {bool compact = false}) {
+    return ButtonStyle(
+      minimumSize: const WidgetStatePropertyAll(Size(0, kMinTapTarget)),
+      tapTargetSize: MaterialTapTargetSize.padded,
+      padding: WidgetStatePropertyAll(
+        EdgeInsets.symmetric(
+          horizontal: compact ? Space.x2 : Space.x3,
+          vertical: Space.x2,
+        ),
+      ),
+      textStyle: const WidgetStatePropertyAll(AppTypography.label),
+      backgroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) return p.accent;
+        return p.sunken;
+      }),
+      foregroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) return p.onAccent;
+        return p.ink;
+      }),
+      side: WidgetStatePropertyAll(BorderSide(color: p.border)),
+      shape: const WidgetStatePropertyAll(
+        RoundedRectangleBorder(borderRadius: Radii.fieldAll),
+      ),
+    );
+  }
+
   static ThemeData _build({
     required Brightness brightness,
     required Palette p,
@@ -89,15 +118,15 @@ class AppTheme {
         actionsIconTheme: IconThemeData(color: p.ink, size: 24),
         titleTextStyle: AppTypography.title.copyWith(color: p.ink),
       ),
-      // Декоративный контур карточки — осознанно мягкий (1.30:1).
+      // Тональное разделение поверхностей без жёсткой сетки из 1px рамок:
+      // на тёплом canvas (#F4F3EF) белые карточки читаются сами собой.
       cardTheme: CardTheme(
         color: p.surface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(
+        shape: const RoundedRectangleBorder(
           borderRadius: Radii.cardAll,
-          side: BorderSide(color: p.borderStatic, width: 1),
         ),
       ),
       dividerTheme: DividerThemeData(
@@ -107,48 +136,47 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: p.surface,
+        fillColor: p.sunken,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: Space.x3,
           vertical: Space.x3,
         ),
         hintStyle: AppTypography.bodySm.copyWith(color: p.inkMuted),
         labelStyle: AppTypography.bodySm.copyWith(color: p.inkSecondary),
-        // Граница поля — интерактивный элемент: 3:1 (WCAG 1.4.11).
-        border: OutlineInputBorder(
+        border: const OutlineInputBorder(
           borderRadius: Radii.fieldAll,
-          borderSide: BorderSide(color: p.border, width: 1),
+          borderSide: BorderSide.none,
         ),
-        enabledBorder: OutlineInputBorder(
+        enabledBorder: const OutlineInputBorder(
           borderRadius: Radii.fieldAll,
-          borderSide: BorderSide(color: p.border, width: 1),
+          borderSide: BorderSide.none,
         ),
-        disabledBorder: OutlineInputBorder(
+        disabledBorder: const OutlineInputBorder(
           borderRadius: Radii.fieldAll,
-          borderSide: BorderSide(color: p.borderStatic, width: 1),
+          borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: Radii.fieldAll,
-          borderSide: BorderSide(color: p.accent, width: 2),
+          borderSide: BorderSide(color: p.accent, width: 1.75),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: Radii.fieldAll,
-          borderSide: BorderSide(color: p.danger, width: 1),
+          borderSide: BorderSide(color: p.danger, width: 1.75),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: Radii.fieldAll,
-          borderSide: BorderSide(color: p.danger, width: 2),
+          borderSide: BorderSide(color: p.danger, width: 1.75),
         ),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: p.surface,
+        backgroundColor: p.sunken,
         selectedColor: p.accentSoft,
         disabledColor: p.sunken,
-        side: BorderSide(color: p.border, width: 1),
+        side: BorderSide.none,
         shape: RoundedRectangleBorder(borderRadius: Radii.chipAll),
         labelStyle: AppTypography.label.copyWith(color: p.ink),
         padding: const EdgeInsets.symmetric(
-          horizontal: Space.x2,
+          horizontal: Space.x3,
           vertical: Space.x1,
         ),
         pressElevation: 0,
@@ -223,26 +251,7 @@ class AppTheme {
         ),
       ),
       segmentedButtonTheme: SegmentedButtonThemeData(
-        style: ButtonStyle(
-          minimumSize: const WidgetStatePropertyAll(Size(0, kMinTapTarget)),
-          tapTargetSize: MaterialTapTargetSize.padded,
-          padding: const WidgetStatePropertyAll(
-            EdgeInsets.symmetric(horizontal: Space.x3, vertical: Space.x2),
-          ),
-          textStyle: WidgetStatePropertyAll(AppTypography.label),
-          backgroundColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) return p.accent;
-            return p.surface;
-          }),
-          foregroundColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) return p.onAccent;
-            return p.ink;
-          }),
-          side: WidgetStatePropertyAll(BorderSide(color: p.border)),
-          shape: const WidgetStatePropertyAll(
-            RoundedRectangleBorder(borderRadius: Radii.fieldAll),
-          ),
-        ),
+        style: segmentedStyle(p),
       ),
       listTileTheme: ListTileThemeData(
         iconColor: p.inkSecondary,
@@ -271,7 +280,8 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         modalBackgroundColor: p.surface,
         showDragHandle: true,
-        dragHandleColor: p.border,
+        dragHandleColor: p.borderStatic,
+        dragHandleSize: const Size(36, 4),
         shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
       ),
       dialogTheme: DialogTheme(
@@ -297,19 +307,6 @@ class AppTheme {
           (states) => states.contains(WidgetState.selected) ? p.accent : p.sunken,
         ),
         trackOutlineColor: WidgetStatePropertyAll(p.border),
-      ),
-      floatingActionButtonTheme: FloatingActionButtonThemeData(
-        backgroundColor: p.accent,
-        foregroundColor: p.onAccent,
-        elevation: 2,
-        focusElevation: 2,
-        hoverElevation: 2,
-        highlightElevation: 4,
-        extendedTextStyle: AppTypography.label,
-        extendedSizeConstraints: const BoxConstraints(
-          minHeight: 52,
-          minWidth: kMinTapTarget,
-        ),
       ),
       progressIndicatorTheme: ProgressIndicatorThemeData(color: p.accent),
       sliderTheme: SliderThemeData(

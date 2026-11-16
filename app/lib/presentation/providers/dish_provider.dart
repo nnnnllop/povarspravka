@@ -361,7 +361,10 @@ class DishNotifier extends StateNotifier<Dish> {
   }
 
   void _persist() {
-    _editedBeforeLoad = true;
+    final editedBeforeInit = !_initCompleted;
+    if (editedBeforeInit) {
+      _editedBeforeLoad = true;
+    }
     final snapshot = state;
     _saveQueue = _saveQueue.then((_) async {
       await _ready;
@@ -376,7 +379,9 @@ class DishNotifier extends StateNotifier<Dish> {
       }
       final hadError = lastPersistenceError != null;
       lastPersistenceError = null;
-      if (_editedBeforeLoad && _savedDishesNotifier != null) {
+      if (editedBeforeInit &&
+          _savedDishesNotifier != null &&
+          identical(state, snapshot)) {
         _lastCleanSnapshot = _snapshot(snapshot);
       }
       if (hadError && mounted) {
@@ -638,12 +643,8 @@ class DishNotifier extends StateNotifier<Dish> {
         _pendingLibraryRetry = false;
       }
       _lastCleanSnapshot = _snapshot(snapshot);
-      final hadError = lastPersistenceError != null;
       lastPersistenceError = null;
-      if (_editedBeforeLoad && _savedDishesNotifier != null) {
-        _lastCleanSnapshot = _snapshot(snapshot);
-      }
-      if (hadError && mounted) {
+      if (mounted) {
         state = state.copyWith();
       }
     }).catchError((Object error, StackTrace stack) {
@@ -764,6 +765,27 @@ class DishNotifier extends StateNotifier<Dish> {
     );
     markClean();
     _persist();
+  }
+
+  /// Откатывает несохранённые правки (аудит P0-1): возвращает сохранённую
+  /// или ранее загруженную версию, либо создаёт чистый черновик, если
+  /// блюдо ещё не сохранялось.
+  void discardChanges() {
+    final clean = _lastCleanSnapshot;
+    final savedNotifier = _savedDishesNotifier;
+    final existsInLibrary = savedNotifier != null &&
+        clean != null &&
+        savedNotifier.state.any((d) => d.id == clean.id);
+    final hasCleanContent = clean != null &&
+        (clean.ingredients.isNotEmpty || clean.title.trim().isNotEmpty);
+    if (clean != null && (existsInLibrary || hasCleanContent)) {
+      _pendingLibraryRetry = false;
+      state = _snapshot(clean);
+      markClean();
+      _persist();
+      return;
+    }
+    createNewDish();
   }
 
   void clearAll() {

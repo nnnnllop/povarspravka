@@ -29,11 +29,11 @@ class Space {
 
 /// Радиусы (аудит §3.4).
 class Radii {
-  static const double chip = 6;
-  static const double field = 10;
-  static const double card = 14;
-  static const double sheet = 20;
-  static const double dialog = 16;
+  static const double chip = 8;
+  static const double field = 12;
+  static const double card = 16;
+  static const double sheet = 22;
+  static const double dialog = 18;
 
   static const BorderRadius chipAll = BorderRadius.all(Radius.circular(chip));
   static const BorderRadius fieldAll = BorderRadius.all(Radius.circular(field));
