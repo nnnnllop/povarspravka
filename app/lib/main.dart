@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
+import 'presentation/providers/settings_provider.dart';
 import 'presentation/screens/home_screen.dart';
 import 'presentation/widgets/calc_error_banner.dart';
 
@@ -18,17 +19,19 @@ void main() {
   );
 }
 
-class PovarSpravkaApp extends StatelessWidget {
+class PovarSpravkaApp extends ConsumerWidget {
   const PovarSpravkaApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final themeMode =
+        ref.watch(appSettingsProvider.select((s) => s.themeMode));
     return MaterialApp(
       title: 'Поварская справка',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
-      themeMode: ThemeMode.system,
+      themeMode: themeMode,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,

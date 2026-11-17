@@ -5,6 +5,8 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
+import '../calculation/calculation_engine.dart';
+import '../calculation/models/calculation_result.dart';
 import '../calculation/models/dish.dart';
 import 'docx_blank_generator.dart';
 import 'pdf_blank_generator.dart';
@@ -121,5 +123,48 @@ class ExportService {
         } on FileSystemException {/* next prune retries */}
       }
     }
+  }
+
+  /// Читаемая текстовая сводка КБЖУ и состава для буфера обмена и мессенджеров.
+  static String formatPlainTextSummary(Dish dish, CalculationResult calc) {
+    final title = dish.title.trim().isEmpty ? 'Расчёт КБЖУ' : dish.title.trim();
+    final m = CalculationEngine.formatMacro;
+    final k = CalculationEngine.formatKcal;
+    final g = CalculationEngine.formatGrams;
+
+    final buf = StringBuffer()
+      ..writeln(title)
+      ..writeln('Обработка: ${calc.process.label}')
+      ..writeln(
+        'На всё блюдо: Б ${m(calc.cookedProtein)} г · '
+        'Ж ${m(calc.cookedFat)} г · '
+        'У ${m(calc.cookedCarbs)} г · '
+        '${k(calc.cookedKcal)} ккал',
+      );
+    if (calc.hasYield) {
+      buf.writeln(
+        'На 100 г (выход ${g(calc.yieldGrams)} г): '
+        'Б ${m(calc.per100gProtein)} г · '
+        'Ж ${m(calc.per100gFat)} г · '
+        'У ${m(calc.per100gCarbs)} г · '
+        '${k(calc.per100gKcal)} ккал',
+      );
+    } else if (calc.usesLossTable) {
+      buf.writeln('Выход готового блюда не указан');
+    }
+
+    if (dish.ingredients.isNotEmpty) {
+      buf.writeln('');
+      buf.writeln('Состав (${dish.ingredients.length}):');
+      for (var i = 0; i < dish.ingredients.length; i++) {
+        final ing = dish.ingredients[i];
+        final netStr = '${g(ing.netGramsRounded)} г нетто';
+        final weightText = ing.isGross && ing.product.wastePct > 0
+            ? '${g(ing.weightGrams)} г брутто ($netStr)'
+            : '${g(ing.netGramsRounded)} г';
+        buf.writeln('${i + 1}. ${ing.product.name} — $weightText');
+      }
+    }
+    return buf.toString().trimRight();
   }
 }

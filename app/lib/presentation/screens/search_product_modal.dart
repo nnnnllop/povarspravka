@@ -8,11 +8,13 @@ import '../../core/calculation/models/source_label.dart';
 import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
+import '../../data/repositories/custom_products_repository.dart';
+import '../../data/repositories/product_repository.dart' show FoodGroup;
 import '../providers/dish_provider.dart';
 import '../providers/search_provider.dart';
 import '../widgets/app_buttons.dart';
 import '../widgets/custom_numpad.dart';
-import '../../data/repositories/product_repository.dart' show FoodGroup;
+import '../widgets/custom_product_form_sheet.dart';
 
 enum SearchMode {
   pickForRecipe,
@@ -429,6 +431,18 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                 ),
               ),
             ),
+            if (counts.custom > 0)
+              _FilterPill(
+                key: const ValueKey('custom-source-pill'),
+                label: 'Свои · ${counts.custom}',
+                selected: selectedSource == 'custom',
+                palette: p,
+                onTap: () {
+                  AppHaptics.toggle();
+                  ref.read(searchProvider.notifier).setSourceFilter(
+                      selectedSource == 'custom' ? _allSourcesValue : 'custom');
+                },
+              ),
             if (groups.isNotEmpty)
               _FilterPill(
                 key: const ValueKey('group-filter-pill'),
@@ -941,55 +955,10 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
       showDragHandle: true,
       backgroundColor: p.surface,
       shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
-      builder: (sheetCtx) {
-        final maxH = MediaQuery.sizeOf(sheetCtx).height * 0.72;
-        return ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: maxH),
-          child: SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                      Space.x4, 0, Space.x4, Space.x2),
-                  child: Text(
-                    'Категория продуктов',
-                    style: AppTypography.title.copyWith(color: p.ink),
-                  ),
-                ),
-                Divider(height: 1, color: p.divider),
-                Flexible(
-                  child: ListView(
-                    shrinkWrap: true,
-                    children: [
-                      ListTile(
-                        title: const Text('Все категории'),
-                        trailing: selectedGroupId == null
-                            ? Icon(Icons.check_rounded, color: p.accent)
-                            : null,
-                        onTap: () => Navigator.pop(sheetCtx, -1),
-                      ),
-                      Divider(height: 1, color: p.divider),
-                      for (final g in groups) ...[
-                        ListTile(
-                          title: Text(g.name),
-                          trailing: selectedGroupId == g.id
-                              ? Icon(Icons.check_rounded, color: p.accent)
-                              : null,
-                          onTap: () => Navigator.pop(sheetCtx, g.id),
-                        ),
-                        Divider(height: 1, color: p.divider),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+      builder: (_) => _GroupPickerSheet(
+        groups: groups,
+        selectedGroupId: selectedGroupId,
+      ),
     );
     if (!mounted || chosen == null) return;
     AppHaptics.toggle();
@@ -1063,22 +1032,15 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
     Product? existing,
     String initialName = '',
   }) async {
-    FocusManager.instance.primaryFocus?.unfocus();
-    final p = Palette.of(context);
-    final saved = await showModalBottomSheet<Product>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      backgroundColor: p.surface,
-      shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
-      builder: (_) => _CustomProductFormSheet(
-        initial: existing,
-        initialName: initialName,
-      ),
+    final saved = await CustomProductFormSheet.show(
+      context,
+      initial: existing,
+      initialName: initialName,
     );
     if (!mounted || saved == null) return;
-    if (existing == null && widget.mode == SearchMode.pickForRecipe) {
+    if (existing != null) {
+      ref.read(dishProvider.notifier).replaceProductSnapshots(saved);
+    } else if (widget.mode == SearchMode.pickForRecipe) {
       await _openWeightPicker(saved);
     }
   }
@@ -1113,10 +1075,35 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
             : null,
         onDeleteCustom: isCustom
             ? () async {
-                Navigator.pop(sheetCtx);
+                final sp = Palette.of(sheetCtx);
+                final confirmed = await showDialog<bool>(
+                  context: sheetCtx,
+                  builder: (dCtx) => AlertDialog(
+                    title: const Text('Удалить свой продукт?'),
+                    content: Text(
+                      'Продукт «${product.name}» будет удалён из справочника. '
+                      'В уже сохранённых блюдах расчёт сохранится.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(dCtx, false),
+                        child: const Text('Отмена'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(dCtx, true),
+                        style: TextButton.styleFrom(foregroundColor: sp.danger),
+                        child: const Text('Удалить'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed != true) return;
+                if (sheetCtx.mounted) Navigator.pop(sheetCtx);
+                if (!mounted) return;
                 await ref
                     .read(customProductsProvider.notifier)
                     .deleteProduct(product.id);
+                removeRecentProduct(ref, product.id);
               }
             : null,
       ),
@@ -1645,359 +1632,127 @@ class ProductInfoCardSheet extends ConsumerWidget {
   }
 }
 
-class _CustomProductFormSheet extends ConsumerStatefulWidget {
-  final Product? initial;
-  final String initialName;
+class _GroupPickerSheet extends StatefulWidget {
+  final List<FoodGroup> groups;
+  final int? selectedGroupId;
 
-  const _CustomProductFormSheet({
-    this.initial,
-    this.initialName = '',
+  const _GroupPickerSheet({
+    required this.groups,
+    required this.selectedGroupId,
   });
 
   @override
-  ConsumerState<_CustomProductFormSheet> createState() =>
-      _CustomProductFormSheetState();
+  State<_GroupPickerSheet> createState() => _GroupPickerSheetState();
 }
 
-class _CustomProductFormSheetState
-    extends ConsumerState<_CustomProductFormSheet> {
-  late final TextEditingController _nameCtrl;
-  late final TextEditingController _pCtrl;
-  late final TextEditingController _fCtrl;
-  late final TextEditingController _cCtrl;
-  late final TextEditingController _kcalCtrl;
-  late final TextEditingController _wasteCtrl;
-  late bool _isDish;
-  bool _kcalManual = false;
-  bool _saving = false;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    final init = widget.initial;
-    _nameCtrl = TextEditingController(
-      text: init?.name ?? widget.initialName,
-    );
-    _pCtrl = TextEditingController(
-      text: init != null ? CalculationEngine.formatMacro(init.protein) : '',
-    );
-    _fCtrl = TextEditingController(
-      text: init != null ? CalculationEngine.formatMacro(init.fat) : '',
-    );
-    _cCtrl = TextEditingController(
-      text: init != null ? CalculationEngine.formatMacro(init.carbs) : '',
-    );
-    _kcalCtrl = TextEditingController(
-      text: init != null ? CalculationEngine.formatKcal(init.kcal) : '0',
-    );
-    _wasteCtrl = TextEditingController(
-      text: init != null
-          ? CalculationEngine.formatWastePercent(init.wastePct)
-          : '0',
-    );
-    _isDish = init?.isDishOnly ?? false;
-    _kcalManual = init != null;
-  }
+class _GroupPickerSheetState extends State<_GroupPickerSheet> {
+  final TextEditingController _ctrl = TextEditingController();
+  String _query = '';
 
   @override
   void dispose() {
-    _nameCtrl.dispose();
-    _pCtrl.dispose();
-    _fCtrl.dispose();
-    _cCtrl.dispose();
-    _kcalCtrl.dispose();
-    _wasteCtrl.dispose();
+    _ctrl.dispose();
     super.dispose();
-  }
-
-  void _recalcKcalIfAuto() {
-    if (_kcalManual) return;
-    final prot = CalculationEngine.parseInputDouble(_pCtrl.text) ?? 0.0;
-    final fat = CalculationEngine.parseInputDouble(_fCtrl.text) ?? 0.0;
-    final carbs = CalculationEngine.parseInputDouble(_cCtrl.text) ?? 0.0;
-    final kcal = prot * 4.0 + fat * 9.0 + carbs * 4.0;
-    _kcalCtrl.text = CalculationEngine.formatKcal(kcal);
-  }
-
-  Future<void> _submit() async {
-    if (_saving) return;
-    final name = _nameCtrl.text.trim();
-    if (name.isEmpty) {
-      setState(() => _error = 'Введите название продукта');
-      return;
-    }
-    final prot = _pCtrl.text.trim().isEmpty
-        ? 0.0
-        : CalculationEngine.parseInputDouble(_pCtrl.text);
-    final fat = _fCtrl.text.trim().isEmpty
-        ? 0.0
-        : CalculationEngine.parseInputDouble(_fCtrl.text);
-    final carbs = _cCtrl.text.trim().isEmpty
-        ? 0.0
-        : CalculationEngine.parseInputDouble(_cCtrl.text);
-    final kcal = CalculationEngine.parseInputDouble(_kcalCtrl.text);
-    final waste = _wasteCtrl.text.trim().isEmpty
-        ? 0.0
-        : CalculationEngine.parseInputDouble(_wasteCtrl.text);
-
-    if (prot == null || fat == null || carbs == null || kcal == null) {
-      setState(() => _error = 'Проверьте числа Б, Ж, У и ккал');
-      return;
-    }
-    if (prot < 0 || fat < 0 || carbs < 0 || kcal < 0) {
-      setState(() => _error = 'Значения не могут быть отрицательными');
-      return;
-    }
-    if (prot + fat + carbs > 100.0) {
-      setState(() => _error = 'Сумма Б + Ж + У на 100 г не должна превышать 100 г');
-      return;
-    }
-    if (waste == null || waste < 0 || waste >= 100) {
-      setState(() => _error = 'Отходы должны быть от 0 до 99 %');
-      return;
-    }
-
-    setState(() {
-      _saving = true;
-      _error = null;
-    });
-    try {
-      final notifier = ref.read(customProductsProvider.notifier);
-      final Product result;
-      if (widget.initial == null) {
-        result = await notifier.addProduct(
-          name: name,
-          protein: prot,
-          fat: fat,
-          carbs: carbs,
-          kcal: kcal,
-          wastePct: waste,
-          isDish: _isDish,
-        );
-      } else {
-        result = await notifier.updateProduct(
-          widget.initial!.copyWith(
-            name: name,
-            protein: prot,
-            fat: fat,
-            carbs: carbs,
-            kcal: kcal,
-            wastePct: waste,
-            isDish: _isDish,
-          ),
-        );
-      }
-      if (!mounted) return;
-      AppHaptics.commit();
-      Navigator.pop(context, result);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _saving = false;
-        _error = friendlyErrorMessage(e, prefix: 'Не удалось сохранить продукт');
-      });
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
-    final size = MediaQuery.sizeOf(context);
-    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
-    final stackMacros = size.width < 360 || textScale > 1.35;
-
-    Widget numField({
-      required Key fieldKey,
-      required TextEditingController ctrl,
-      required String label,
-      void Function(String)? onChanged,
-    }) {
-      return TextField(
-        key: fieldKey,
-        controller: ctrl,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        style: AppTypography.num.copyWith(color: p.ink),
-        decoration: InputDecoration(
-          isDense: true,
-          labelText: label,
-        ),
-        onChanged: onChanged,
-      );
-    }
-
-    final macroFields = [
-      numField(
-        fieldKey: const ValueKey('custom-protein'),
-        ctrl: _pCtrl,
-        label: 'Белки, г',
-        onChanged: (_) => setState(_recalcKcalIfAuto),
-      ),
-      numField(
-        fieldKey: const ValueKey('custom-fat'),
-        ctrl: _fCtrl,
-        label: 'Жиры, г',
-        onChanged: (_) => setState(_recalcKcalIfAuto),
-      ),
-      numField(
-        fieldKey: const ValueKey('custom-carbs'),
-        ctrl: _cCtrl,
-        label: 'Углеводы, г',
-        onChanged: (_) => setState(_recalcKcalIfAuto),
-      ),
-    ];
+    final maxH = MediaQuery.sizeOf(context).height * 0.78;
+    final showSearch = widget.groups.length >= 8;
+    final norm = CustomProductsRepository.normalizeText(_query);
+    final filtered = norm.isEmpty
+        ? widget.groups
+        : widget.groups
+            .where((g) => CustomProductsRepository.normalizeText(g.name)
+                .contains(norm))
+            .toList();
 
     return ConstrainedBox(
-      constraints: BoxConstraints(maxHeight: size.height * 0.9),
+      constraints: BoxConstraints(maxHeight: maxH),
       child: Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+        padding:
+            EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
         child: SafeArea(
           top: false,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x4),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  widget.initial == null
-                      ? 'Свой продукт (на 100 г)'
-                      : 'Редактировать продукт',
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                    Space.x4, 0, Space.x4, Space.x2),
+                child: Text(
+                  'Категория продуктов',
                   style: AppTypography.title.copyWith(color: p.ink),
                 ),
-                const SizedBox(height: Space.x1),
-                Text(
-                  'Удобно для продуктов с этикетки или авторских заготовок.',
-                  style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
-                ),
-                const SizedBox(height: Space.x3),
-                TextField(
-                  key: const ValueKey('custom-name'),
-                  controller: _nameCtrl,
-                  textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(
-                    labelText: 'Название продукта',
-                    hintText: 'Например, соус терияки',
+              ),
+              if (showSearch)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                      Space.x4, 0, Space.x4, Space.x2),
+                  child: TextField(
+                    key: const ValueKey('group-filter-search'),
+                    controller: _ctrl,
+                    onChanged: (v) => setState(() => _query = v),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      hintText: 'Поиск категории…',
+                      prefixIcon: Icon(Icons.search_rounded,
+                          size: 20, color: p.inkMuted),
+                      suffixIcon: _query.isNotEmpty
+                          ? IconButton(
+                              tooltip: 'Очистить',
+                              icon: Icon(Icons.close_rounded,
+                                  size: 18, color: p.inkMuted),
+                              onPressed: () {
+                                _ctrl.clear();
+                                setState(() => _query = '');
+                              },
+                            )
+                          : null,
+                    ),
                   ),
                 ),
-                const SizedBox(height: Space.x3),
-                if (stackMacros)
-                  Column(
-                    children: [
-                      macroFields[0],
-                      const SizedBox(height: Space.x2),
-                      macroFields[1],
-                      const SizedBox(height: Space.x2),
-                      macroFields[2],
-                    ],
-                  )
-                else
-                  Row(
-                    children: [
-                      Expanded(child: macroFields[0]),
-                      const SizedBox(width: Space.x2),
-                      Expanded(child: macroFields[1]),
-                      const SizedBox(width: Space.x2),
-                      Expanded(child: macroFields[2]),
-                    ],
-                  ),
-                const SizedBox(height: Space.x2),
-                if (stackMacros) ...[
-                  numField(
-                    fieldKey: const ValueKey('custom-kcal'),
-                    ctrl: _kcalCtrl,
-                    label: _kcalManual ? 'Ккал / 100 г' : 'Ккал (авто)',
-                    onChanged: (_) => setState(() => _kcalManual = true),
-                  ),
-                  const SizedBox(height: Space.x2),
-                  numField(
-                    fieldKey: const ValueKey('custom-waste'),
-                    ctrl: _wasteCtrl,
-                    label: 'Отходы, %',
-                  ),
-                ] else
-                  Row(
-                    children: [
-                      Expanded(
-                        child: numField(
-                          fieldKey: const ValueKey('custom-kcal'),
-                          ctrl: _kcalCtrl,
-                          label: _kcalManual ? 'Ккал / 100 г' : 'Ккал (авто)',
-                          onChanged: (_) => setState(() => _kcalManual = true),
+              Divider(height: 1, color: p.divider),
+              Flexible(
+                child: filtered.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.all(Space.x4),
+                        child: Text(
+                          'Категория не найдена',
+                          textAlign: TextAlign.center,
+                          style: AppTypography.bodySm
+                              .copyWith(color: p.inkSecondary),
                         ),
+                      )
+                    : ListView(
+                        shrinkWrap: true,
+                        children: [
+                          if (norm.isEmpty) ...[
+                            ListTile(
+                              title: const Text('Все категории'),
+                              trailing: widget.selectedGroupId == null
+                                  ? Icon(Icons.check_rounded, color: p.accent)
+                                  : null,
+                              onTap: () => Navigator.pop(context, -1),
+                            ),
+                            Divider(height: 1, color: p.divider),
+                          ],
+                          for (final g in filtered) ...[
+                            ListTile(
+                              title: Text(g.name),
+                              trailing: widget.selectedGroupId == g.id
+                                  ? Icon(Icons.check_rounded, color: p.accent)
+                                  : null,
+                              onTap: () => Navigator.pop(context, g.id),
+                            ),
+                            Divider(height: 1, color: p.divider),
+                          ],
+                        ],
                       ),
-                      const SizedBox(width: Space.x2),
-                      Expanded(
-                        child: numField(
-                          fieldKey: const ValueKey('custom-waste'),
-                          ctrl: _wasteCtrl,
-                          label: 'Отходы, %',
-                        ),
-                      ),
-                    ],
-                  ),
-                const SizedBox(height: Space.x2),
-                SwitchListTile.adaptive(
-                  contentPadding: EdgeInsets.zero,
-                  materialTapTargetSize: MaterialTapTargetSize.padded,
-                  title: Text(
-                    'Готовое блюдо',
-                    style: AppTypography.bodySm.copyWith(color: p.ink),
-                  ),
-                  value: _isDish,
-                  onChanged: (v) => setState(() => _isDish = v),
-                ),
-                if (_error != null) ...[
-                  const SizedBox(height: Space.x2),
-                  Container(
-                    padding: const EdgeInsets.all(Space.x3),
-                    decoration: BoxDecoration(
-                      color: p.dangerSoft,
-                      borderRadius: Radii.fieldAll,
-                    ),
-                    child: Text(
-                      _error!,
-                      style: AppTypography.caption.copyWith(color: p.danger),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: Space.x3),
-                if (stackMacros) ...[
-                  FilledButton(
-                    key: const ValueKey('custom-save-btn'),
-                    onPressed: _saving ? null : _submit,
-                    child: const Text('Сохранить продукт',
-                        textAlign: TextAlign.center),
-                  ),
-                  const SizedBox(height: Space.x1),
-                  TextButton(
-                    onPressed: _saving ? null : () => Navigator.pop(context),
-                    child: const Text('Отмена'),
-                  ),
-                ] else
-                  IntrinsicHeight(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        TextButton(
-                          onPressed:
-                              _saving ? null : () => Navigator.pop(context),
-                          child: const Text('Отмена'),
-                        ),
-                        const SizedBox(width: Space.x2),
-                        Expanded(
-                          child: FilledButton(
-                            key: const ValueKey('custom-save-btn'),
-                            onPressed: _saving ? null : _submit,
-                            child: const Text('Сохранить продукт',
-                                textAlign: TextAlign.center),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

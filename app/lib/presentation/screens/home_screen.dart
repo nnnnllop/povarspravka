@@ -9,8 +9,11 @@ import '../../core/calculation/models/dish.dart';
 import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
+import '../../data/repositories/backup_service.dart';
 import '../../data/repositories/custom_products_repository.dart';
 import '../providers/dish_provider.dart';
+import '../providers/search_provider.dart';
+import '../providers/settings_provider.dart';
 import '../widgets/app_buttons.dart';
 import '../widgets/loss_clarity_hints.dart';
 import '../widgets/persistence_error_banner.dart';
@@ -283,111 +286,354 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// На первом экране они были справочной стеной, которая отодвигала
   /// сохранённые блюда вниз (аудит P1-7).
   void _showHowItWorks(BuildContext context) {
-    final p = Palette.of(context);
     final container = ProviderScope.containerOf(context, listen: false);
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
-      backgroundColor: p.surface,
       shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
       builder: (ctx) => UncontrolledProviderScope(
         container: container,
-        child: SizedBox(
-          height: MediaQuery.sizeOf(ctx).height * 0.85,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(
-                Space.x5, 0, Space.x5, Space.x6),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text('Как считается',
-                    style: AppTypography.title.copyWith(color: p.ink)),
-                const SizedBox(height: Space.x1),
-                Text(
-                  'Справочник Скурихина (2002) · Немецкий справочник BLS 4.0. '
-                  'Всё считается на устройстве, без интернета.',
-                  style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
+        child: Consumer(
+          builder: (sheetCtx, sheetRef, _) {
+            final p = Palette.of(sheetCtx);
+            final settings = sheetRef.watch(appSettingsProvider);
+            final savedDishes = sheetRef.watch(savedDishesProvider);
+            final customProducts = sheetRef.watch(customProductsProvider);
+            final savedCount = savedDishes.length;
+            final customCount = customProducts.length;
+            final hasBackupData = savedCount > 0 || customCount > 0;
+
+            return SizedBox(
+              height: MediaQuery.sizeOf(sheetCtx).height * 0.85,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(
+                  Space.x5,
+                  0,
+                  Space.x5,
+                  Space.x6,
                 ),
-                const SizedBox(height: Space.x4),
-                Divider(color: p.divider, height: Space.x5),
-                _InfoSection(
-                  palette: p,
-                  icon: Icons.functions_rounded,
-                  title: 'Формула энергетической ценности',
-                  body: 'Коэффициенты Этуотера:\n'
-                      '• 1 г белков = 4,0 ккал\n'
-                      '• 1 г жиров = 9,0 ккал\n'
-                      '• 1 г углеводов = 4,0 ккал\n\n'
-                      'ЭЦ = Б × 4 + Ж × 9 + У × 4. Расчёт идёт по нутриентам '
-                      'после тепловой обработки; вклад алкоголя, пищевых волокон и '
-                      'органических кислот формулой не учитывается.',
-                ),
-                Divider(color: p.divider, height: Space.x5),
-                _InfoSection(
-                  palette: p,
-                  icon: Icons.thermostat_rounded,
-                  title: 'Потери при тепловой обработке',
-                  body: 'Б, Ж и У каждого продукта уменьшаются на процент потерь '
-                      'для его группы и способа обработки (варка, тушение, жарка, '
-                      'запекание, на пару, бульон); без тепловой обработки потерь '
-                      'нет. Энергия считается от готовых Б/Ж/У. Вес готового блюда '
-                      'вводит повар; без него итог дан на всё блюдо. Расчёты, '
-                      'сохранённые прежней версией (сохранность 94 / 88 / 91 %), '
-                      'открываются с прежними числами.\n\n'
-                      'Ключевые допущения модели:\n'
-                      '${LossClarityHints.overviewBullets}\n\n'
-                      '$kNotGostNotice',
-                ),
-                Divider(color: p.divider, height: Space.x5),
-                _InfoSection(
-                  palette: p,
-                  icon: Icons.splitscreen_rounded,
-                  title: 'Два режима бланка',
-                  body: '1. «Бланк с крестом (учебный)» — диагональный крест в '
-                      'колонке ккал сырья, калорийность только после готовки.\n'
-                      '2. «Подробный расчёт» — калории рассчитаны для каждого продукта.',
-                ),
-                Divider(color: p.divider, height: Space.x5),
-                _InfoSection(
-                  palette: p,
-                  icon: Icons.file_download_outlined,
-                  title: 'Форматы экспорта',
-                  body: 'PDF (векторный, идентичен типовому бланку), Word (.docx) '
-                      'и Excel (.xlsx) с живыми формулами — файлы сохраняются на '
-                      'телефоне и печатаются оттуда.',
-                ),
-                Divider(color: p.divider, height: Space.x5),
-                Theme(
-                  data: Theme.of(ctx).copyWith(dividerColor: Colors.transparent),
-                  child: ExpansionTile(
-                    key: const ValueKey('tech-info-expansion'),
-                    tilePadding: EdgeInsets.zero,
-                    childrenPadding: const EdgeInsets.only(bottom: Space.x2),
-                    leading: Icon(
-                      Icons.folder_open_rounded,
-                      size: 18,
-                      color: p.inkSecondary,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: Space.x2,
+                      runSpacing: Space.x1,
+                      children: [
+                        Text(
+                          'Как считается',
+                          style: AppTypography.title.copyWith(color: p.ink),
+                        ),
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: p.sunken,
+                            borderRadius: Radii.chipAll,
+                            border: Border.all(color: p.borderStatic),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: Space.x2,
+                              vertical: Space.x1,
+                            ),
+                            child: Text(
+                              'Версия ${BackupService.appVersionLabel}',
+                              style: AppTypography.numSm
+                                  .copyWith(color: p.inkSecondary),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    title: Text(
-                      'Технические сведения',
-                      style: AppTypography.label.copyWith(color: p.ink),
+                    const SizedBox(height: Space.x1),
+                    Text(
+                      'Справочник Скурихина (2002) · Немецкий справочник BLS 4.0. '
+                      'Всё считается на устройстве, без интернета.',
+                      style:
+                          AppTypography.bodySm.copyWith(color: p.inkSecondary),
                     ),
-                    initiallyExpanded: false,
-                    children: [
-                      _StorageLocationBlock(palette: p),
-                    ],
-                  ),
+                    const SizedBox(height: Space.x4),
+                    Divider(color: p.divider, height: Space.x5),
+                    _InfoSection(
+                      palette: p,
+                      icon: Icons.functions_rounded,
+                      title: 'Формула энергетической ценности',
+                      body: 'Коэффициенты Этуотера:\n'
+                          '• 1 г белков = 4,0 ккал\n'
+                          '• 1 г жиров = 9,0 ккал\n'
+                          '• 1 г углеводов = 4,0 ккал\n\n'
+                          'ЭЦ = Б × 4 + Ж × 9 + У × 4. Расчёт идёт по нутриентам '
+                          'после тепловой обработки; вклад алкоголя, пищевых волокон и '
+                          'органических кислот формулой не учитывается.',
+                    ),
+                    Divider(color: p.divider, height: Space.x5),
+                    _InfoSection(
+                      palette: p,
+                      icon: Icons.thermostat_rounded,
+                      title: 'Потери при тепловой обработке',
+                      body: 'Б, Ж и У каждого продукта уменьшаются на процент потерь '
+                          'для его группы и способа обработки (варка, тушение, жарка, '
+                          'запекание, на пару, бульон); без тепловой обработки потерь '
+                          'нет. Энергия считается от готовых Б/Ж/У. Вес готового блюда '
+                          'вводит повар; без него итог дан на всё блюдо. Расчёты, '
+                          'сохранённые прежней версией (сохранность 94 / 88 / 91 %), '
+                          'открываются с прежними числами.\n\n'
+                          'Ключевые допущения модели:\n'
+                          '${LossClarityHints.overviewBullets}\n\n'
+                          '$kNotGostNotice',
+                    ),
+                    Divider(color: p.divider, height: Space.x5),
+                    _InfoSection(
+                      palette: p,
+                      icon: Icons.splitscreen_rounded,
+                      title: 'Два режима бланка',
+                      body: '1. «Бланк с крестом (учебный)» — диагональный крест в '
+                          'колонке ккал сырья, калорийность только после готовки.\n'
+                          '2. «Подробный расчёт» — калории рассчитаны для каждого продукта.',
+                    ),
+                    Divider(color: p.divider, height: Space.x5),
+                    _InfoSection(
+                      palette: p,
+                      icon: Icons.file_download_outlined,
+                      title: 'Форматы экспорта',
+                      body: 'PDF (векторный, идентичен типовому бланку), Word (.docx) '
+                          'и Excel (.xlsx) с живыми формулами — файлы сохраняются на '
+                          'телефоне и печатаются оттуда.',
+                    ),
+                    Divider(color: p.divider, height: Space.x5),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.palette_outlined,
+                          size: 18,
+                          color: p.accent,
+                        ),
+                        const SizedBox(width: Space.x2),
+                        Expanded(
+                          child: Text(
+                            'Оформление и отклик',
+                            style:
+                                AppTypography.headline.copyWith(color: p.ink),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: Space.x2),
+                    SegmentedButton<ThemeMode>(
+                      key: const ValueKey('theme-mode-segmented'),
+                      showSelectedIcon: false,
+                      style: AppSegmentedStyle.of(p, compact: true),
+                      segments: const [
+                        ButtonSegment<ThemeMode>(
+                          value: ThemeMode.system,
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Авто'),
+                          ),
+                        ),
+                        ButtonSegment<ThemeMode>(
+                          value: ThemeMode.light,
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Светлая'),
+                          ),
+                        ),
+                        ButtonSegment<ThemeMode>(
+                          value: ThemeMode.dark,
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('Тёмная'),
+                          ),
+                        ),
+                      ],
+                      selected: {settings.themeMode},
+                      onSelectionChanged: (sel) {
+                        if (sel.isEmpty) return;
+                        AppHaptics.toggle();
+                        sheetRef
+                            .read(appSettingsProvider.notifier)
+                            .setThemeMode(sel.first);
+                      },
+                    ),
+                    const SizedBox(height: Space.x2),
+                    SwitchListTile.adaptive(
+                      key: const ValueKey('haptics-switch'),
+                      contentPadding: EdgeInsets.zero,
+                      value: settings.hapticsEnabled,
+                      title: Text(
+                        'Тактильный отклик',
+                        style: AppTypography.body.copyWith(color: p.ink),
+                      ),
+                      subtitle: Text(
+                        'Лёгкая вибрация при выборе продуктов и нажатии кнопок',
+                        style: AppTypography.bodySm
+                            .copyWith(color: p.inkSecondary),
+                      ),
+                      onChanged: (enabled) async {
+                        await sheetRef
+                            .read(appSettingsProvider.notifier)
+                            .setHapticsEnabled(enabled);
+                        if (enabled) AppHaptics.toggle();
+                      },
+                    ),
+                    Divider(color: p.divider, height: Space.x5),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.backup_outlined,
+                          size: 18,
+                          color: p.accent,
+                        ),
+                        const SizedBox(width: Space.x2),
+                        Expanded(
+                          child: Text(
+                            'Резервная копия данных',
+                            style:
+                                AppTypography.headline.copyWith(color: p.ink),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: Space.x1),
+                    Text(
+                      'Блюд в библиотеке: $savedCount · Своих продуктов: $customCount',
+                      key: const ValueKey('backup-counts-text'),
+                      style:
+                          AppTypography.bodySm.copyWith(color: p.inkSecondary),
+                    ),
+                    const SizedBox(height: Space.x3),
+                    Wrap(
+                      spacing: Space.x2,
+                      runSpacing: Space.x2,
+                      children: [
+                        OutlinedButton.icon(
+                          key: const ValueKey('backup-share-btn'),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(0, kMinTapTarget),
+                            tapTargetSize: MaterialTapTargetSize.padded,
+                          ),
+                          onPressed: !hasBackupData
+                              ? null
+                              : () async {
+                                  try {
+                                    await BackupService.shareBackupFile(
+                                      savedDishes: savedDishes,
+                                      customProducts: customProducts,
+                                    );
+                                  } catch (e) {
+                                    if (!sheetCtx.mounted) return;
+                                    ScaffoldMessenger.maybeOf(sheetCtx)
+                                        ?.showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          friendlyErrorMessage(
+                                            e,
+                                            prefix:
+                                                'Не удалось выгрузить копию',
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                },
+                          icon: const Icon(Icons.ios_share_rounded, size: 18),
+                          label: const Text('Поделиться файлом'),
+                        ),
+                        OutlinedButton.icon(
+                          key: const ValueKey('backup-copy-btn'),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(0, kMinTapTarget),
+                            tapTargetSize: MaterialTapTargetSize.padded,
+                          ),
+                          onPressed: !hasBackupData
+                              ? null
+                              : () async {
+                                  final json = BackupService.encodeBackup(
+                                    savedDishes: savedDishes,
+                                    customProducts: customProducts,
+                                  );
+                                  await Clipboard.setData(
+                                    ClipboardData(text: json),
+                                  );
+                                  AppHaptics.commit();
+                                  if (!sheetCtx.mounted) return;
+                                  ScaffoldMessenger.maybeOf(sheetCtx)
+                                      ?.showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'JSON резервной копии скопирован',
+                                      ),
+                                    ),
+                                  );
+                                },
+                          icon: const Icon(Icons.copy_all_rounded, size: 18),
+                          label: const Text('Скопировать JSON'),
+                        ),
+                        FilledButton.tonalIcon(
+                          key: const ValueKey('backup-restore-btn'),
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size(0, kMinTapTarget),
+                            tapTargetSize: MaterialTapTargetSize.padded,
+                          ),
+                          onPressed: () {
+                            Navigator.pop(sheetCtx);
+                            if (!context.mounted) return;
+                            showModalBottomSheet<void>(
+                              context: context,
+                              isScrollControlled: true,
+                              useSafeArea: true,
+                              showDragHandle: true,
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: Radii.sheetTop,
+                              ),
+                              builder: (restoreCtx) =>
+                                  UncontrolledProviderScope(
+                                container: container,
+                                child: const _RestoreBackupSheet(),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.restore_rounded, size: 18),
+                          label: const Text('Восстановить из копии'),
+                        ),
+                      ],
+                    ),
+                    Divider(color: p.divider, height: Space.x5),
+                    Theme(
+                      data: Theme.of(sheetCtx)
+                          .copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        key: const ValueKey('tech-info-expansion'),
+                        tilePadding: EdgeInsets.zero,
+                        childrenPadding:
+                            const EdgeInsets.only(bottom: Space.x2),
+                        leading: Icon(
+                          Icons.folder_open_rounded,
+                          size: 18,
+                          color: p.inkSecondary,
+                        ),
+                        title: Text(
+                          'Технические сведения',
+                          style: AppTypography.label.copyWith(color: p.ink),
+                        ),
+                        initiallyExpanded: false,
+                        children: [
+                          _StorageLocationBlock(palette: p),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: Space.x4),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(sheetCtx),
+                      child: const Text('Понятно'),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: Space.x4),
-                FilledButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Понятно'),
-                ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -510,6 +756,261 @@ class _NoticeBanner extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Шторка восстановления сохранённых рецептов и своих продуктов из JSON-копии.
+class _RestoreBackupSheet extends ConsumerStatefulWidget {
+  const _RestoreBackupSheet();
+
+  @override
+  ConsumerState<_RestoreBackupSheet> createState() =>
+      _RestoreBackupSheetState();
+}
+
+class _RestoreBackupSheetState extends ConsumerState<_RestoreBackupSheet> {
+  final TextEditingController _jsonCtrl = TextEditingController();
+  ParsedBackup? _parsed;
+  String? _parseError;
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _jsonCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onRawChanged(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) {
+      setState(() {
+        _parsed = null;
+        _parseError = null;
+      });
+      return;
+    }
+    try {
+      final parsed = BackupService.parseBackup(trimmed);
+      setState(() {
+        _parsed = parsed;
+        _parseError = null;
+      });
+    } on FormatException catch (e) {
+      setState(() {
+        _parsed = null;
+        _parseError = e.message;
+      });
+    } catch (_) {
+      setState(() {
+        _parsed = null;
+        _parseError = 'Не удалось разобрать JSON резервной копии';
+      });
+    }
+  }
+
+  Future<void> _pasteFromClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text ?? '';
+    if (!mounted) return;
+    if (text.trim().isEmpty) {
+      setState(() {
+        _parseError = 'Буфер обмена пуст';
+      });
+      return;
+    }
+    _jsonCtrl.text = text;
+    _onRawChanged(text);
+  }
+
+  Future<void> _applyRestore({required bool replaceExisting}) async {
+    final parsed = _parsed;
+    if (parsed == null || _busy) return;
+    if (replaceExisting) {
+      final p = Palette.of(context);
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Заменить библиотеку?'),
+          content: const Text(
+            'Текущие сохранённые блюда и свои продукты будут заменены '
+            'данными из резервной копии.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: TextButton.styleFrom(foregroundColor: p.danger),
+              child: const Text('Заменить'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
+
+    setState(() => _busy = true);
+    try {
+      final dishesAdded =
+          await ref.read(savedDishesProvider.notifier).importDishes(
+                parsed.savedDishes,
+                replaceExisting: replaceExisting,
+              );
+      final productsAdded =
+          await ref.read(customProductsProvider.notifier).importProducts(
+                parsed.customProducts,
+                replaceExisting: replaceExisting,
+              );
+      AppHaptics.commit();
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      Navigator.pop(context);
+      messenger
+        ?..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              replaceExisting
+                  ? 'Библиотека заменена: блюд $dishesAdded, своих продуктов $productsAdded'
+                  : 'Добавлено: блюд +$dishesAdded, своих продуктов +$productsAdded',
+            ),
+          ),
+        );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _parseError = friendlyErrorMessage(
+          e,
+          prefix: 'Не удалось восстановить данные',
+        );
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final parsed = _parsed;
+    final hasItems = parsed != null &&
+        (parsed.savedDishes.isNotEmpty || parsed.customProducts.isNotEmpty);
+
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(
+        Space.x5,
+        0,
+        Space.x5,
+        Space.x6 + bottomInset,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Восстановление из копии',
+            style: AppTypography.title.copyWith(color: p.ink),
+          ),
+          const SizedBox(height: Space.x1),
+          Text(
+            'Вставьте JSON из файла резервной копии или буфера обмена.',
+            style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
+          ),
+          const SizedBox(height: Space.x3),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              key: const ValueKey('backup-paste-btn'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, kMinTapTarget),
+                tapTargetSize: MaterialTapTargetSize.padded,
+              ),
+              onPressed: _busy ? null : _pasteFromClipboard,
+              icon: const Icon(Icons.content_paste_rounded, size: 18),
+              label: const Text('Вставить из буфера'),
+            ),
+          ),
+          const SizedBox(height: Space.x3),
+          TextField(
+            key: const ValueKey('backup-json-field'),
+            controller: _jsonCtrl,
+            minLines: 4,
+            maxLines: 7,
+            onChanged: _onRawChanged,
+            style: AppTypography.numSm.copyWith(color: p.ink),
+            decoration: InputDecoration(
+              labelText: 'JSON резервной копии',
+              hintText: '{"format": "povarspravka-backup", ...}',
+              errorText: _parseError,
+            ),
+          ),
+          if (parsed != null) ...[
+            const SizedBox(height: Space.x3),
+            DecoratedBox(
+              key: const ValueKey('backup-preview-card'),
+              decoration: BoxDecoration(
+                color: p.sunken,
+                borderRadius: Radii.cardAll,
+                border: Border.all(color: p.border),
+              ),
+              child: Padding(
+                padding: Space.card,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      hasItems
+                          ? 'Готово к восстановлению'
+                          : 'Копия не содержит блюд и продуктов',
+                      style: AppTypography.label.copyWith(color: p.ink),
+                    ),
+                    const SizedBox(height: Space.x1),
+                    Text(
+                      'Блюд: ${parsed.savedDishes.length} · '
+                      'Своих продуктов: ${parsed.customProducts.length}',
+                      style:
+                          AppTypography.bodySm.copyWith(color: p.inkSecondary),
+                    ),
+                    if (parsed.exportedAt != null) ...[
+                      const SizedBox(height: Space.x1),
+                      Text(
+                        'Создана: ${parsed.exportedAt!.toLocal().toString().substring(0, 16)}',
+                        style:
+                            AppTypography.caption.copyWith(color: p.inkMuted),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: Space.x4),
+          FilledButton(
+            key: const ValueKey('backup-merge-btn'),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(0, kMinTapTarget),
+            ),
+            onPressed: (!hasItems || _busy)
+                ? null
+                : () => _applyRestore(replaceExisting: false),
+            child: const Text('Добавить к текущим'),
+          ),
+          const SizedBox(height: Space.x2),
+          OutlinedButton(
+            key: const ValueKey('backup-replace-btn'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(0, kMinTapTarget),
+              foregroundColor: p.danger,
+            ),
+            onPressed: (!hasItems || _busy)
+                ? null
+                : () => _applyRestore(replaceExisting: true),
+            child: const Text('Заменить библиотеку'),
+          ),
+        ],
       ),
     );
   }

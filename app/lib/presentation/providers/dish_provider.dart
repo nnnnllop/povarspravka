@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/calculation/calculation_engine.dart';
+import '../../core/calculation/calculation_math.dart';
 import '../../core/calculation/calculation_validation.dart';
 import '../../core/calculation/models/blank_mode.dart';
 import '../../core/calculation/models/calculation_result.dart';
@@ -228,6 +229,53 @@ class SavedDishesNotifier extends StateNotifier<List<Dish>> {
         await _storage.saveAll(activeDraft: _latestDraft, savedDishes: updated);
         state = updated;
         return duplicated;
+      }, trackRetry: true);
+
+  /// Импортирует блюда из резервной копии: в режиме слияния добавляет
+  /// отсутствующие записи по `id` и обновляет ID только при конфликте
+  /// разных блюд с одинаковым ключом.
+  Future<int> importDishes(
+    List<Dish> imported, {
+    required bool replaceExisting,
+  }) =>
+      _tracked(() async {
+        final snapshots = [for (final d in imported) _snapshot(d)];
+        final List<Dish> next;
+        int addedCount;
+        if (replaceExisting) {
+          next = snapshots;
+          addedCount = snapshots.length;
+        } else {
+          final existingById = <String, Dish>{
+            for (final d in state) d.id: d,
+          };
+          final existingIds = existingById.keys.toSet();
+          final merged = <Dish>[...state];
+          addedCount = 0;
+          for (final item in snapshots) {
+            final current = existingById[item.id];
+            if (current == null) {
+              merged.insert(0, item);
+              existingIds.add(item.id);
+              existingById[item.id] = item;
+              addedCount++;
+            } else if (jsonEncode(current.toJson()) !=
+                jsonEncode(item.toJson())) {
+              var newId = _newId();
+              while (existingIds.contains(newId)) {
+                newId = _newId();
+              }
+              final copy = item.copyWith(id: newId);
+              merged.insert(0, copy);
+              existingIds.add(newId);
+              addedCount++;
+            }
+          }
+          next = merged;
+        }
+        await _storage.saveAll(activeDraft: _latestDraft, savedDishes: next);
+        state = next;
+        return addedCount;
       }, trackRetry: true);
 }
 
@@ -570,6 +618,83 @@ class DishNotifier extends StateNotifier<Dish> {
 
     state = state.copyWith(
       ingredients: updatedList,
+      updatedAt: DateTime.now(),
+    );
+    _persist();
+  }
+
+  /// Обновляет снимок пользовательского продукта в ингредиентах активного блюда
+  /// после редактирования карточки своего продукта.
+  void replaceProductSnapshots(Product updatedProduct) {
+    var changed = false;
+    final nextList = <Ingredient>[];
+    for (final ing in state.ingredients) {
+      if (ing.product.id == updatedProduct.id) {
+        changed = true;
+        nextList.add(ing.copyWith(product: updatedProduct));
+      } else {
+        nextList.add(ing);
+      }
+    }
+    if (!changed) return;
+    state = state.copyWith(
+      ingredients: nextList,
+      updatedAt: DateTime.now(),
+    );
+    _persist();
+  }
+
+  /// Пропорционально масштабирует веса всех ингредиентов (и при желании
+  /// выход готового блюда) с проверкой допустимых диапазонов.
+  bool scaleIngredients(double factor, {bool scaleCustomYield = true}) {
+    if (!factor.isFinite || factor <= 0 || state.ingredients.isEmpty) {
+      return false;
+    }
+    final scaled = <Ingredient>[];
+    for (final ing in state.ingredients) {
+      final nextWeight = CalculationMath.round1(ing.weightGrams * factor);
+      if (!CalculationValidation.inRange(nextWeight, 0.1, 9999999)) {
+        return false;
+      }
+      scaled.add(ing.copyWith(weightGrams: nextWeight));
+    }
+    var clearYield = false;
+    double? nextYield = state.customYieldGrams;
+    if (scaleCustomYield && nextYield != null) {
+      final candidate = CalculationMath.round1(nextYield * factor);
+      if (!CalculationValidation.inRange(
+        candidate,
+        CalculationValidation.minCustomYieldGrams,
+        CalculationValidation.maxCustomYieldGrams,
+      )) {
+        return false;
+      }
+      nextYield = candidate;
+    } else if (nextYield == null) {
+      clearYield = true;
+    }
+
+    state = state.copyWith(
+      ingredients: scaled,
+      customYieldGrams: clearYield ? null : nextYield,
+      clearCustomYield: clearYield,
+      updatedAt: DateTime.now(),
+    );
+    _persist();
+    return true;
+  }
+
+  /// Восстанавливает состав и выход до масштабирования, если блюдо то же самое.
+  void restoreIngredientsSnapshot({
+    required String dishId,
+    required List<Ingredient> ingredients,
+    required double? customYieldGrams,
+  }) {
+    if (dishId != state.id) return;
+    state = state.copyWith(
+      ingredients: ingredients,
+      customYieldGrams: customYieldGrams,
+      clearCustomYield: customYieldGrams == null,
       updatedAt: DateTime.now(),
     );
     _persist();

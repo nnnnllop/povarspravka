@@ -18,9 +18,11 @@ import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
 import '../providers/dish_provider.dart';
+import '../providers/search_provider.dart';
 import '../widgets/app_buttons.dart';
 import '../widgets/calc_error_banner.dart';
 import '../widgets/custom_numpad.dart';
+import '../widgets/custom_product_form_sheet.dart';
 import '../widgets/ingredient_card.dart';
 import '../widgets/loss_clarity_hints.dart';
 import '../widgets/macro_summary_bar.dart';
@@ -174,9 +176,23 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                     ),
                     const SizedBox(height: Space.x1),
                     if (dish.ingredients.isNotEmpty)
-                      Text(
-                        'Нажмите на продукт, чтобы изменить вес',
-                        style: AppTypography.caption.copyWith(color: p.inkMuted),
+                      Builder(
+                        builder: (context) {
+                          final rawNet =
+                              _safeGrams(() => dish.totalRawNetGrams);
+                          final effYield =
+                              _safeGrams(() => dish.effectiveYieldGrams);
+                          final caption = rawNet > 0
+                              ? 'Сырьё нетто ${CalculationEngine.formatGrams(rawNet)} г'
+                                  '${dish.hasCustomYield && effYield > 0 ? ' · выход ${CalculationEngine.formatGrams(effYield)} г' : ''}'
+                                  ' · нажмите на продукт для правки'
+                              : 'Нажмите на продукт для правки';
+                          return Text(
+                            caption,
+                            style:
+                                AppTypography.caption.copyWith(color: p.inkMuted),
+                          );
+                        },
                       ),
                     const SizedBox(height: Space.x3),
                     if (dish.ingredients.isEmpty) _buildEmptyState(context),
@@ -408,11 +424,25 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
       PopupMenuButton<String>(
         tooltip: 'Другие действия',
         onSelected: (value) {
-          if (value == 'clear') {
+          if (value == 'scale') {
+            _openScaleDialog(dish);
+          } else if (value == 'semi') {
+            _saveAsSemiFinished(dish);
+          } else if (value == 'clear') {
             _showClearConfirmation(context);
           }
         },
         itemBuilder: (_) => [
+          PopupMenuItem(
+            value: 'scale',
+            enabled: dish.ingredients.isNotEmpty,
+            child: const Text('Масштабировать веса'),
+          ),
+          PopupMenuItem(
+            value: 'semi',
+            enabled: dish.ingredients.isNotEmpty,
+            child: const Text('Сохранить как полуфабрикат'),
+          ),
           PopupMenuItem(
             value: 'clear',
             enabled: hasContent,
@@ -1006,6 +1036,101 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
     );
   }
 
+  Future<void> _saveAsSemiFinished(Dish dish) async {
+    final calc = ref.read(calculationResultProvider);
+    if (calc == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Сначала исправьте ошибки в параметрах блюда'),
+        ),
+      );
+      return;
+    }
+    if (!calc.hasYield) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Укажите вес готового блюда для пересчёта на 100 г',
+          ),
+        ),
+      );
+      return;
+    }
+    final created = await CustomProductFormSheet.show(
+      context,
+      initialName: dish.title.trim().isNotEmpty
+          ? dish.title.trim()
+          : 'Полуфабрикат',
+      initialProtein: calc.per100gProtein,
+      initialFat: calc.per100gFat,
+      initialCarbs: calc.per100gCarbs,
+      initialKcal: calc.per100gKcal,
+      initialWastePct: 0.0,
+      initialIsDish: true,
+      sheetTitle: 'Сохранить как полуфабрикат',
+      sheetSubtitle:
+          'Пищевая ценность на 100 г готового блюда сохранится в «Свои продукты».',
+    );
+    if (!mounted || created == null) return;
+    recordRecentProduct(ref, created);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('Сохранено в «Свои продукты»: ${created.name}'),
+        ),
+      );
+  }
+
+  Future<void> _openScaleDialog(Dish dish) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final p = Palette.of(context);
+    final res = await showModalBottomSheet<({double factor, bool scaleYield})>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      backgroundColor: p.surface,
+      shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
+      builder: (_) => _ScaleRecipeSheet(dish: dish),
+    );
+    if (!mounted || res == null) return;
+    final previous = ref.read(dishProvider);
+    final ok = ref.read(dishProvider.notifier).scaleIngredients(
+          res.factor,
+          scaleCustomYield: res.scaleYield,
+        );
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Не удалось масштабировать: веса выходят за допустимые границы',
+          ),
+        ),
+      );
+      return;
+    }
+    AppHaptics.commit();
+    final factorLabel = CalculationEngine.formatGrams(res.factor);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('Вес ингредиентов изменён в $factorLabel×'),
+          action: SnackBarAction(
+            label: 'Отменить',
+            onPressed: () {
+              ref.read(dishProvider.notifier).restoreIngredientsSnapshot(
+                    dishId: previous.id,
+                    ingredients: previous.ingredients,
+                    customYieldGrams: previous.customYieldGrams,
+                  );
+            },
+          ),
+        ),
+      );
+  }
+
   void _showClearConfirmation(BuildContext context) {
     final p = Palette.of(context);
     showDialog(
@@ -1471,6 +1596,213 @@ class _RecipeSettingsDialogState extends ConsumerState<_RecipeSettingsDialog> {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ScaleRecipeSheet extends StatefulWidget {
+  final Dish dish;
+
+  const _ScaleRecipeSheet({required this.dish});
+
+  @override
+  State<_ScaleRecipeSheet> createState() => _ScaleRecipeSheetState();
+}
+
+class _ScaleRecipeSheetState extends State<_ScaleRecipeSheet> {
+  static const List<double> _presets = [0.5, 1.5, 2.0, 3.0, 5.0];
+
+  late final TextEditingController _ctrl;
+  double _factor = 2.0;
+  bool _scaleYield = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: '2');
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _selectPreset(double factor) {
+    final text = CalculationEngine.formatGrams(factor);
+    setState(() {
+      _factor = factor;
+      _error = null;
+      _ctrl.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final size = MediaQuery.sizeOf(context);
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final stackFooter =
+        (size.width < 360 && textScale > 1.35) || size.width < 300;
+    final parsed = CalculationEngine.parseInputDouble(_ctrl.text);
+    final valid = parsed != null &&
+        parsed.isFinite &&
+        parsed > 0 &&
+        parsed <= 1000 &&
+        _error == null;
+    final rawNet = _RecipeEditorScreenState._safeGrams(
+      () => widget.dish.totalRawNetGrams,
+    );
+    final hasCustomYield = widget.dish.customYieldGrams != null;
+    final currentYield = widget.dish.customYieldGrams ?? 0.0;
+
+    final cancelBtn = TextButton(
+      onPressed: () => Navigator.pop(context),
+      child: const Text('Отмена'),
+    );
+    final applyBtn = FilledButton(
+      key: const ValueKey('scale-apply-btn'),
+      onPressed: valid
+          ? () => Navigator.pop(
+                context,
+                (factor: parsed, scaleYield: _scaleYield),
+              )
+          : null,
+      child: const Text('Применить масштаб', textAlign: TextAlign.center),
+    );
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: size.height * 0.9),
+      child: Padding(
+        padding:
+            EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding:
+                const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Масштабировать рецепт',
+                  style: AppTypography.title.copyWith(color: p.ink),
+                ),
+                const SizedBox(height: Space.x1),
+                Text(
+                  'Пропорционально изменит вес всех ингредиентов.',
+                  style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
+                ),
+                const SizedBox(height: Space.x3),
+                Wrap(
+                  spacing: Space.x2,
+                  runSpacing: Space.x1,
+                  children: [
+                    for (final preset in _presets)
+                      ChoiceChip(
+                        key: ValueKey('scale-preset-$preset'),
+                        label: Text('×${CalculationEngine.formatGrams(preset)}'),
+                        selected:
+                            (_factor - preset).abs() < 0.001 && _error == null,
+                        showCheckmark: false,
+                        materialTapTargetSize: MaterialTapTargetSize.padded,
+                        onSelected: (_) => _selectPreset(preset),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: Space.x3),
+                TextField(
+                  key: const ValueKey('scale-factor-field'),
+                  controller: _ctrl,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  style: AppTypography.num.copyWith(color: p.ink),
+                  decoration: InputDecoration(
+                    labelText: 'Множитель',
+                    hintText: 'Например, 2 или 0,5',
+                    errorText: _error,
+                  ),
+                  onChanged: (text) {
+                    final v = CalculationEngine.parseInputDouble(text);
+                    setState(() {
+                      if (v == null || !v.isFinite || v <= 0 || v > 1000) {
+                        _error = 'Введите множитель от 0,01 до 1000';
+                      } else {
+                        _factor = v;
+                        _error = null;
+                      }
+                    });
+                  },
+                ),
+                if (hasCustomYield) ...[
+                  const SizedBox(height: Space.x2),
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    materialTapTargetSize: MaterialTapTargetSize.padded,
+                    title: Text(
+                      'Масштабировать и вес готового блюда',
+                      style: AppTypography.bodySm.copyWith(color: p.ink),
+                    ),
+                    value: _scaleYield,
+                    onChanged: (v) => setState(() => _scaleYield = v),
+                  ),
+                ],
+                if (valid && rawNet > 0) ...[
+                  const SizedBox(height: Space.x2),
+                  Container(
+                    padding: const EdgeInsets.all(Space.x3),
+                    decoration: BoxDecoration(
+                      color: p.sunken,
+                      borderRadius: Radii.fieldAll,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Сырьё нетто: ${CalculationEngine.formatGrams(rawNet)} г → '
+                          '${CalculationEngine.formatGrams(CalculationMath.round1(rawNet * parsed))} г',
+                          style: AppTypography.numSm.copyWith(color: p.ink),
+                        ),
+                        if (hasCustomYield && _scaleYield)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              'Выход блюда: ${CalculationEngine.formatGrams(currentYield)} г → '
+                              '${CalculationEngine.formatGrams(CalculationMath.round1(currentYield * parsed))} г',
+                              style: AppTypography.numSm
+                                  .copyWith(color: p.inkSecondary),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: Space.x3),
+                if (stackFooter) ...[
+                  applyBtn,
+                  const SizedBox(height: Space.x1),
+                  cancelBtn,
+                ] else
+                  IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        cancelBtn,
+                        const SizedBox(width: Space.x2),
+                        Expanded(child: applyBtn),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

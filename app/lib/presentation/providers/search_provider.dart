@@ -104,6 +104,64 @@ class CustomProductsNotifier extends StateNotifier<List<Product>> {
     await _enqueueSave(updated);
   }
 
+  /// Импортирует свои продукты из резервной копии (слияние или замена).
+  Future<int> importProducts(
+    List<Product> imported, {
+    required bool replaceExisting,
+  }) async {
+    await _ready;
+    final List<Product> next;
+    int addedCount;
+    if (replaceExisting) {
+      next = <Product>[];
+      final usedIds = <int>{};
+      for (final p in imported) {
+        if (!CalculationValidation.isValidProduct(p)) continue;
+        final id = (p.id < 0 && !usedIds.contains(p.id))
+            ? p.id
+            : CustomProductsRepository.nextId(next);
+        usedIds.add(id);
+        next.add(p.copyWith(
+          id: id,
+          code: 'USER-${id.abs()}',
+          nameNorm: CustomProductsRepository.normalizeText(p.name),
+          source: 'custom',
+        ));
+      }
+      addedCount = next.length;
+    } else {
+      next = List<Product>.from(state);
+      final existingById = <int, Product>{for (final p in next) p.id: p};
+      String sig(Product p) =>
+          '${CustomProductsRepository.normalizeText(p.name)}|'
+          '${p.protein}|${p.fat}|${p.carbs}|${p.kcal}|${p.wastePct}|${p.isDishOnly}';
+      final existingSigs = {for (final p in next) sig(p)};
+      addedCount = 0;
+      for (final p in imported) {
+        if (!CalculationValidation.isValidProduct(p)) continue;
+        final signature = sig(p);
+        if (existingSigs.contains(signature)) continue;
+        final candidateId =
+            (p.id < 0 && !existingById.containsKey(p.id))
+                ? p.id
+                : CustomProductsRepository.nextId(next);
+        final item = p.copyWith(
+          id: candidateId,
+          code: 'USER-${candidateId.abs()}',
+          nameNorm: CustomProductsRepository.normalizeText(p.name),
+          source: 'custom',
+        );
+        next.add(item);
+        existingById[candidateId] = item;
+        existingSigs.add(signature);
+        addedCount++;
+      }
+    }
+    state = next;
+    await _enqueueSave(next);
+    return addedCount;
+  }
+
   Future<void> _enqueueSave(List<Product> snapshot) {
     final next = _writeQueue.then((_) => _repo.saveAll(snapshot));
     _writeQueue = next.then<void>((_) {}, onError: (Object _, StackTrace __) {});
@@ -393,15 +451,47 @@ void recordRecentProduct(WidgetRef ref, Product product) {
       next.length > 8 ? next.sublist(0, 8) : next;
 }
 
-/// Чистый вычислитель списка «Недавние и частые» с учётом активных фильтров.
+void removeRecentProduct(WidgetRef ref, int productId) {
+  final current = ref.read(sessionRecentProductsProvider);
+  if (!current.any((p) => p.id == productId)) return;
+  ref.read(sessionRecentProductsProvider.notifier).state = [
+    for (final p in current)
+      if (p.id != productId) p,
+  ];
+}
+
+void syncRecentProduct(WidgetRef ref, Product updated) {
+  final current = ref.read(sessionRecentProductsProvider);
+  if (!current.any((p) => p.id == updated.id)) return;
+  ref.read(sessionRecentProductsProvider.notifier).state = [
+    for (final p in current)
+      if (p.id == updated.id) updated else p,
+  ];
+}
+
+/// Чистый вычислитель списка «Недавние и частые» с учётом активных фильтров
+/// и актуального состояния пользовательских («своих») продуктов.
 List<Product> buildRecentProducts({
   required List<Product> sessionRecent,
   required List<Product> activeIngredients,
   required Iterable<List<Product>> savedDishIngredients,
+  List<Product>? customProducts,
   bool? isDishFilter,
   String? selectedSource,
   int limit = 6,
 }) {
+  final Map<int, Product>? customById = customProducts == null
+      ? null
+      : <int, Product>{for (final p in customProducts) p.id: p};
+
+  Product? resolveLive(Product p) {
+    if (customById != null && p.source.trim().toLowerCase() == 'custom') {
+      // Удалённый пользовательский продукт больше не должен всплывать в недавних.
+      return customById[p.id];
+    }
+    return p;
+  }
+
   bool matchesFilter(Product p) {
     if (isDishFilter != null && p.isDishOnly != isDishFilter) return false;
     if (selectedSource != null &&
@@ -417,23 +507,25 @@ List<Product> buildRecentProducts({
 
   // Свежий выбор в текущей сессии получает высокий приоритет.
   for (var i = 0; i < sessionRecent.length; i++) {
-    final p = sessionRecent[i];
-    if (!matchesFilter(p)) continue;
+    final p = resolveLive(sessionRecent[i]);
+    if (p == null || !matchesFilter(p)) continue;
     byId[p.id] = p;
     scores[p.id] = (scores[p.id] ?? 0) + 100 - i;
   }
 
   // Продукты из активного черновика.
-  for (final p in activeIngredients) {
-    if (!matchesFilter(p)) continue;
+  for (final raw in activeIngredients) {
+    final p = resolveLive(raw);
+    if (p == null || !matchesFilter(p)) continue;
     byId.putIfAbsent(p.id, () => p);
     scores[p.id] = (scores[p.id] ?? 0) + 10;
   }
 
   // Часто встречающиеся продукты из сохранённых блюд.
   for (final list in savedDishIngredients) {
-    for (final p in list) {
-      if (!matchesFilter(p)) continue;
+    for (final raw in list) {
+      final p = resolveLive(raw);
+      if (p == null || !matchesFilter(p)) continue;
       byId.putIfAbsent(p.id, () => p);
       scores[p.id] = (scores[p.id] ?? 0) + 2;
     }
@@ -450,11 +542,13 @@ final recentProductsProvider = Provider<List<Product>>((ref) {
   final activeDish = ref.watch(dishProvider);
   final saved = ref.watch(savedDishesProvider);
   final search = ref.watch(searchProvider);
+  final custom = ref.watch(customProductsProvider);
   return buildRecentProducts(
     sessionRecent: session,
     activeIngredients: activeDish.ingredients.map((i) => i.product).toList(),
     savedDishIngredients:
         saved.map((d) => d.ingredients.map((i) => i.product).toList()),
+    customProducts: custom,
     isDishFilter: search.selectedIsDish,
     selectedSource: search.selectedSource,
   );

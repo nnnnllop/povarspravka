@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/calculation/calculation_engine.dart';
 import '../../core/calculation/loss_table.dart';
@@ -148,13 +149,9 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
           final docOuterWidth =
               _baseDocWidth * docScale + 40.0 + Space.x4 * 2;
 
-          final modeBanner = Container(
+          final modeBannerContent = Padding(
             padding: const EdgeInsets.symmetric(
                 horizontal: Space.x4, vertical: Space.x2),
-            decoration: BoxDecoration(
-              color: p.surface,
-              border: Border(bottom: BorderSide(color: p.divider)),
-            ),
             child: stackModeBanner
                 ? Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -182,6 +179,12 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
                           ],
                         ),
                       ),
+                      if (!inlineModeBanner)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2, left: Space.x2),
+                          child: Icon(Icons.tune_rounded,
+                              size: 18, color: p.accent),
+                        ),
                     ],
                   )
                 : Row(
@@ -203,7 +206,36 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
                               .copyWith(color: p.inkSecondary),
                         ),
                       ),
+                      if (!inlineModeBanner) ...[
+                        const SizedBox(width: Space.x2),
+                        Icon(Icons.tune_rounded, size: 18, color: p.accent),
+                      ],
                     ],
+                  ),
+          );
+
+          final modeBanner = DecoratedBox(
+            decoration: BoxDecoration(
+              color: p.surface,
+              border: Border(bottom: BorderSide(color: p.divider)),
+            ),
+            child: inlineModeBanner
+                ? modeBannerContent
+                : Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      key: const ValueKey('blank-mode-banner'),
+                      onTap: () => _showBlankOptionsSheet(),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          minHeight: kMinTapTarget,
+                        ),
+                        child: Center(
+                          heightFactor: 1,
+                          child: modeBannerContent,
+                        ),
+                      ),
+                    ),
                   ),
           );
 
@@ -362,56 +394,175 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
   /// Один сгруппированный лист экспорта вместо двух наборов кнопок.
   Future<void> _showExportSheet(Dish dish) async {
     final p = Palette.of(context);
-    final choice = await showModalBottomSheet<ExportType>(
+    final calc = ref.read(calculationResultProvider);
+    final choice = await showModalBottomSheet<Object>(
       context: context,
+      isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
       backgroundColor: p.surface,
       shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Сохранить бланк',
-                style: AppTypography.title.copyWith(color: p.ink)),
-            const SizedBox(height: Space.x1),
-            Text(
-              'Файл сохраняется на телефоне, дальше — «Поделиться» или печать.',
-              style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
-            ),
-            const SizedBox(height: Space.x3),
-            _ExportTile(
-              palette: p,
-              icon: Icons.picture_as_pdf_rounded,
-              title: 'PDF',
-              subtitle: 'Векторный, идентичен типовому бланку',
-              onTap: () => Navigator.pop(ctx, ExportType.pdf),
-            ),
-            Divider(color: p.divider, height: 1),
-            _ExportTile(
-              palette: p,
-              icon: Icons.description_rounded,
-              title: 'Word (.docx)',
-              subtitle: 'Редактируемый документ',
-              onTap: () => Navigator.pop(ctx, ExportType.docx),
-            ),
-            Divider(color: p.divider, height: 1),
-            _ExportTile(
-              palette: p,
-              icon: Icons.table_chart_rounded,
-              title: 'Excel (.xlsx)',
-              subtitle: 'С живыми формулами',
-              onTap: () => Navigator.pop(ctx, ExportType.xlsx),
-            ),
-          ],
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Экспорт и вид бланка',
+                  style: AppTypography.title.copyWith(color: p.ink)),
+              const SizedBox(height: Space.x1),
+              Text(
+                'Файл сохраняется на телефоне, дальше — «Поделиться» или печать.',
+                style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
+              ),
+              const SizedBox(height: Space.x3),
+              _ExportTile(
+                palette: p,
+                icon: Icons.picture_as_pdf_rounded,
+                title: 'PDF',
+                subtitle: 'Векторный, идентичен типовому бланку',
+                onTap: () => Navigator.pop(ctx, ExportType.pdf),
+              ),
+              Divider(color: p.divider, height: 1),
+              _ExportTile(
+                palette: p,
+                icon: Icons.description_rounded,
+                title: 'Word (.docx)',
+                subtitle: 'Редактируемый документ',
+                onTap: () => Navigator.pop(ctx, ExportType.docx),
+              ),
+              Divider(color: p.divider, height: 1),
+              _ExportTile(
+                palette: p,
+                icon: Icons.table_chart_rounded,
+                title: 'Excel (.xlsx)',
+                subtitle: 'С живыми формулами',
+                onTap: () => Navigator.pop(ctx, ExportType.xlsx),
+              ),
+              if (calc != null) ...[
+                Divider(color: p.divider, height: 1),
+                _ExportTile(
+                  palette: p,
+                  icon: Icons.content_copy_rounded,
+                  title: 'Скопировать КБЖУ текстом',
+                  subtitle: 'Краткая сводка состава и цифр для мессенджеров',
+                  onTap: () => Navigator.pop(ctx, 'copy-text'),
+                ),
+              ],
+              Divider(color: p.divider, height: 1),
+              _ExportTile(
+                palette: p,
+                icon: Icons.tune_rounded,
+                title: 'Настроить вид бланка',
+                subtitle: 'Режим с крестом, строка «В 100 г», заголовок',
+                onTap: () => Navigator.pop(ctx, 'blank-options'),
+              ),
+            ],
+          ),
         ),
       ),
     );
-    if (choice != null) {
+    if (!mounted || choice == null) return;
+    if (choice is ExportType) {
       await _run(() => ExportService.shareFile(dish, choice));
+    } else if (choice == 'copy-text' && calc != null) {
+      await Clipboard.setData(
+        ClipboardData(text: ExportService.formatPlainTextSummary(dish, calc)),
+      );
+      if (!mounted) return;
+      AppHaptics.commit();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Сводка КБЖУ скопирована')),
+      );
+    } else if (choice == 'blank-options') {
+      _showBlankOptionsSheet();
     }
+  }
+
+  void _showBlankOptionsSheet() {
+    final p = Palette.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      backgroundColor: p.surface,
+      shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
+      builder: (sheetCtx) => Consumer(
+        builder: (ctx, ref, _) {
+          final dish = ref.watch(dishProvider);
+          final notifier = ref.read(dishProvider.notifier);
+          return SafeArea(
+            top: false,
+            child: SingleChildScrollView(
+              padding:
+                  const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x4),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Настройки бланка',
+                    style: AppTypography.title.copyWith(color: p.ink),
+                  ),
+                  const SizedBox(height: Space.x3),
+                  SegmentedButton<BlankMode>(
+                    showSelectedIcon: false,
+                    style: AppSegmentedStyle.of(p, compact: true),
+                    segments: [
+                      for (final mode in BlankMode.values)
+                        ButtonSegment<BlankMode>(
+                          value: mode,
+                          label: Text(
+                            mode.shortName,
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    selected: {dish.blankMode},
+                    onSelectionChanged: (sel) {
+                      AppHaptics.toggle();
+                      notifier.setBlankMode(sel.single);
+                    },
+                  ),
+                  const SizedBox(height: Space.x2),
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    materialTapTargetSize: MaterialTapTargetSize.padded,
+                    title: Text(
+                      'Печатать название в заголовке бланка',
+                      style: AppTypography.bodySm.copyWith(color: p.ink),
+                    ),
+                    value: dish.showTitleInExport,
+                    onChanged: (v) {
+                      AppHaptics.toggle();
+                      notifier.toggleShowTitle(v);
+                    },
+                  ),
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    materialTapTargetSize: MaterialTapTargetSize.padded,
+                    title: Text(
+                      'Строка «В 100 г блюда» в бланке',
+                      style: AppTypography.bodySm.copyWith(color: p.ink),
+                    ),
+                    value: dish.showPer100gRowInExport,
+                    onChanged: (v) {
+                      AppHaptics.toggle();
+                      notifier.toggleShowPer100gRow(v);
+                    },
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 }
 
