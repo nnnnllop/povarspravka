@@ -19,6 +19,7 @@ import '../widgets/custom_product_form_sheet.dart';
 enum SearchMode {
   pickForRecipe,
   browseCatalog,
+  replaceIngredient,
 }
 
 /// Метка готового блюда в списке и карточке продукта.
@@ -51,12 +52,14 @@ class SearchProductModal extends ConsumerStatefulWidget {
   final SearchMode mode;
   final VoidCallback? onAddedFromCatalog;
   final bool autofocusSearch;
+  final String? replacingName;
 
   const SearchProductModal({
     super.key,
     this.mode = SearchMode.pickForRecipe,
     this.onAddedFromCatalog,
     this.autofocusSearch = false,
+    this.replacingName,
   });
 
   static Future<void> show(
@@ -76,6 +79,23 @@ class SearchProductModal extends ConsumerStatefulWidget {
     );
   }
 
+  /// Открывает поиск в режиме одиночного выбора для замены продукта в строке.
+  static Future<Product?> pickReplacement(
+    BuildContext context, {
+    String? replacingName,
+  }) {
+    return Navigator.of(context).push<Product>(
+      MaterialPageRoute<Product>(
+        fullscreenDialog: true,
+        builder: (_) => SearchProductModal(
+          mode: SearchMode.replaceIngredient,
+          replacingName: replacingName,
+          autofocusSearch: false,
+        ),
+      ),
+    );
+  }
+
   @override
   ConsumerState<SearchProductModal> createState() => _SearchProductModalState();
 }
@@ -86,8 +106,12 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
   final TextEditingController _searchCtrl = TextEditingController();
   late final SearchNotifier _searchNotifier;
   bool _didResetOnExit = false;
+  bool _onlyFavorites = false;
   String? _lastAddedSummary;
   int? _invalidProductId;
+
+  bool get _isReplaceMode => widget.mode == SearchMode.replaceIngredient;
+  bool get _resetsFiltersOnExit => widget.mode != SearchMode.browseCatalog;
 
   @override
   void initState() {
@@ -95,7 +119,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
     _searchNotifier = ref.read(searchProvider.notifier);
     _searchCtrl.text = ref.read(searchProvider).query;
     final defaultIsDish =
-        widget.mode == SearchMode.pickForRecipe ? false : null;
+        widget.mode == SearchMode.browseCatalog ? null : false;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _searchNotifier.setIsDishFilter(defaultIsDish);
@@ -104,7 +128,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
 
   @override
   void dispose() {
-    if (!_didResetOnExit && widget.mode == SearchMode.pickForRecipe) {
+    if (!_didResetOnExit && _resetsFiltersOnExit) {
       _didResetOnExit = true;
       Future.microtask(() {
         _searchNotifier.resetFilters(
@@ -120,7 +144,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
   }
 
   void _resetOnPickExit() {
-    if (_didResetOnExit || widget.mode != SearchMode.pickForRecipe) return;
+    if (_didResetOnExit || !_resetsFiltersOnExit) return;
     _didResetOnExit = true;
     _searchNotifier.resetFilters(
       clearQuery: true,
@@ -130,11 +154,11 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
     );
   }
 
-  void _closeModal() {
+  void _closeModal([Product? replacement]) {
     FocusManager.instance.primaryFocus?.unfocus();
     _resetOnPickExit();
     if (Navigator.canPop(context)) {
-      Navigator.pop(context);
+      Navigator.pop(context, replacement);
     }
   }
 
@@ -142,6 +166,12 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
   Widget build(BuildContext context) {
     final searchState = ref.watch(searchProvider);
     final recentProducts = ref.watch(recentProductsProvider);
+    final filteredFavorites = ref.watch(filteredFavoritesProvider);
+    final allFavorites = ref.watch(favoriteProductsProvider);
+    final favoriteIds = {for (final item in allFavorites) item.id};
+    if (_onlyFavorites && allFavorites.isEmpty) {
+      _onlyFavorites = false;
+    }
     final dish = ref.watch(dishProvider);
     final p = Palette.of(context);
     final isCatalog = widget.mode == SearchMode.browseCatalog;
@@ -157,6 +187,8 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
       context,
       p: p,
       searchState: searchState,
+      favoriteProducts: filteredFavorites,
+      favoriteIds: favoriteIds,
       recentProducts: recentProducts,
       ingredientsByProductId: ingredientsByProductId,
       isCatalog: isCatalog,
@@ -181,6 +213,29 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                 child: Column(
                   children: [
                     _buildTopSearchBar(context, p, isCatalog),
+                    if (_isReplaceMode &&
+                        widget.replacingName != null &&
+                        widget.replacingName!.trim().isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                            Space.x4, 0, Space.x4, Space.x1),
+                        child: Row(
+                          children: [
+                            Icon(Icons.swap_horiz_rounded,
+                                size: 15, color: p.accent),
+                            const SizedBox(width: Space.x1),
+                            Expanded(
+                              child: Text(
+                                'Замена продукта «${widget.replacingName!.trim()}» — вес и обработка сохранятся',
+                                style: AppTypography.caption
+                                    .copyWith(color: p.accent),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     if (!shortLandscape) _buildFilterStrip(context, p, isCatalog),
                     Divider(height: 1, color: p.divider),
                     if (shortLandscape)
@@ -196,7 +251,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                       )
                     else
                       Expanded(child: listContent),
-                    if (!isCatalog)
+                    if (widget.mode == SearchMode.pickForRecipe)
                       _buildFooterDock(context, p, dish.ingredients.length),
                   ],
                 ),
@@ -234,9 +289,11 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
               },
               decoration: InputDecoration(
                 isDense: true,
-                hintText: isCatalog
-                    ? 'Поиск в справочнике…'
-                    : 'Картофель, масло, курица…',
+                hintText: _isReplaceMode
+                    ? 'Выберите новый продукт…'
+                    : (isCatalog
+                        ? 'Поиск в справочнике…'
+                        : 'Картофель, масло, курица…'),
                 prefixIcon:
                     Icon(Icons.search_rounded, size: 20, color: p.inkMuted),
                 suffixIcon: _searchCtrl.text.isNotEmpty
@@ -293,6 +350,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
     final selectedIsDish = searchState.selectedIsDish;
     final selectedSource = searchState.selectedSource;
     final selectedGroupId = searchState.selectedGroupId;
+    final favoritesCount = ref.watch(favoriteProductsProvider).length;
 
     FoodGroup? selectedGroup;
     if (selectedGroupId != null) {
@@ -431,6 +489,17 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                 ),
               ),
             ),
+            if (favoritesCount > 0)
+              _FilterPill(
+                key: const ValueKey('favorites-filter-pill'),
+                label: '★ Избранное · $favoritesCount',
+                selected: _onlyFavorites,
+                palette: p,
+                onTap: () {
+                  AppHaptics.toggle();
+                  setState(() => _onlyFavorites = !_onlyFavorites);
+                },
+              ),
             if (counts.custom > 0)
               _FilterPill(
                 key: const ValueKey('custom-source-pill'),
@@ -462,23 +531,95 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
     BuildContext context, {
     required Palette p,
     required SearchState searchState,
+    required List<Product> favoriteProducts,
+    required Set<int> favoriteIds,
     required List<Product> recentProducts,
     required Map<int, List<Ingredient>> ingredientsByProductId,
     required bool isCatalog,
     required bool sliver,
   }) {
-    final showRecent = searchState.query.trim().isEmpty &&
-        searchState.selectedGroupId == null &&
-        recentProducts.isNotEmpty;
+    if (_onlyFavorites) {
+      if (favoriteProducts.isEmpty) {
+        final emptyFav = Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(Space.x5),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.star_outline_rounded, size: 42, color: p.inkMuted),
+                const SizedBox(height: Space.x2),
+                Text(
+                  'В избранном нет подходящих продуктов',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.headline.copyWith(color: p.ink),
+                ),
+                const SizedBox(height: Space.x2),
+                TextButton(
+                  onPressed: () => setState(() => _onlyFavorites = false),
+                  child: const Text('Показать весь справочник'),
+                ),
+              ],
+            ),
+          ),
+        );
+        return sliver
+            ? SliverFillRemaining(hasScrollBody: false, child: emptyFav)
+            : emptyFav;
+      }
+      final favEntries = <_SearchListEntry>[
+        const _SearchSectionHeader('Избранное'),
+        for (final prod in favoriteProducts) _SearchProductEntry(prod),
+      ];
+      if (sliver) {
+        return SliverPadding(
+          padding: const EdgeInsets.only(bottom: Space.x4),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, idx) => _buildEntry(
+                context,
+                p,
+                favEntries[idx],
+                favoriteIds: favoriteIds,
+                ingredientsByProductId: ingredientsByProductId,
+                isCatalog: isCatalog,
+                showTypeBadge: searchState.selectedIsDish == null,
+              ),
+              childCount: favEntries.length,
+            ),
+          ),
+        );
+      }
+      return ListView.builder(
+        padding: const EdgeInsets.only(bottom: Space.x4),
+        itemCount: favEntries.length,
+        itemBuilder: (context, idx) => _buildEntry(
+          context,
+          p,
+          favEntries[idx],
+          favoriteIds: favoriteIds,
+          ingredientsByProductId: ingredientsByProductId,
+          isCatalog: isCatalog,
+          showTypeBadge: searchState.selectedIsDish == null,
+        ),
+      );
+    }
 
-    if (searchState.isLoading && searchState.results.isEmpty && !showRecent) {
+    final isUnfilteredBrowse = searchState.query.trim().isEmpty &&
+        searchState.selectedGroupId == null;
+    final showFavorites = isUnfilteredBrowse && favoriteProducts.isNotEmpty;
+    final showRecent = isUnfilteredBrowse && recentProducts.isNotEmpty;
+
+    if (searchState.isLoading &&
+        searchState.results.isEmpty &&
+        !showFavorites &&
+        !showRecent) {
       const loader = Center(child: CircularProgressIndicator.adaptive());
       return sliver
           ? const SliverFillRemaining(hasScrollBody: false, child: loader)
           : loader;
     }
 
-    if (searchState.results.isEmpty && !showRecent) {
+    if (searchState.results.isEmpty && !showFavorites && !showRecent) {
       final empty = _buildEmptyState(context, p, searchState);
       return sliver
           ? SliverFillRemaining(
@@ -493,15 +634,28 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
 
     final entries = <_SearchListEntry>[];
 
-    if (showRecent) {
-      entries.add(const _SearchSectionHeader('Недавние и частые'));
-      final recentIds = <int>{};
-      for (final product in recentProducts) {
-        recentIds.add(product.id);
-        entries.add(_SearchProductEntry(product));
+    if (showFavorites || showRecent) {
+      final pinnedIds = <int>{};
+      if (showFavorites) {
+        entries.add(const _SearchSectionHeader('Избранное'));
+        for (final product in favoriteProducts) {
+          if (pinnedIds.add(product.id)) {
+            entries.add(_SearchProductEntry(product));
+          }
+        }
       }
-      final remaining =
-          searchState.results.where((item) => !recentIds.contains(item.id)).toList();
+      final unpinnedRecent =
+          recentProducts.where((item) => !pinnedIds.contains(item.id)).toList();
+      if (unpinnedRecent.isNotEmpty) {
+        entries.add(const _SearchSectionHeader('Недавние и частые'));
+        for (final product in unpinnedRecent) {
+          pinnedIds.add(product.id);
+          entries.add(_SearchProductEntry(product));
+        }
+      }
+      final remaining = searchState.results
+          .where((item) => !pinnedIds.contains(item.id))
+          .toList();
       if (remaining.isNotEmpty) {
         entries.add(_SearchSectionHeader(
             searchState.selectedIsDish == true ? 'Готовые блюда' : 'Весь справочник'));
@@ -524,6 +678,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
               context,
               p,
               entries[idx],
+              favoriteIds: favoriteIds,
               ingredientsByProductId: ingredientsByProductId,
               isCatalog: isCatalog,
               showTypeBadge: searchState.selectedIsDish == null,
@@ -541,6 +696,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
         context,
         p,
         entries[idx],
+        favoriteIds: favoriteIds,
         ingredientsByProductId: ingredientsByProductId,
         isCatalog: isCatalog,
         showTypeBadge: searchState.selectedIsDish == null,
@@ -605,6 +761,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
     BuildContext context,
     Palette p,
     _SearchListEntry entry, {
+    required Set<int> favoriteIds,
     required Map<int, List<Ingredient>> ingredientsByProductId,
     required bool isCatalog,
     required bool showTypeBadge,
@@ -624,8 +781,10 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
 
     final product = (entry as _SearchProductEntry).product;
     final valid = _isValid(product);
-    final existingList =
-        isCatalog ? const <Ingredient>[] : (ingredientsByProductId[product.id] ?? const <Ingredient>[]);
+    final isFavorite = favoriteIds.contains(product.id);
+    final existingList = (isCatalog || _isReplaceMode)
+        ? const <Ingredient>[]
+        : (ingredientsByProductId[product.id] ?? const <Ingredient>[]);
     final alreadyInDish = existingList.isNotEmpty;
     final singleExisting = existingList.length == 1 ? existingList.single : null;
 
@@ -666,6 +825,9 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
               if (!valid && !isCatalog) {
                 AppHaptics.error();
                 setState(() => _invalidProductId = product.id);
+              } else if (_isReplaceMode) {
+                AppHaptics.commit();
+                _closeModal(product);
               } else if (isCatalog) {
                 AppHaptics.key();
                 _openProductInfoCard(product);
@@ -696,6 +858,12 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                             runSpacing: 4,
                             crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
+                              if (isFavorite)
+                                Icon(
+                                  Icons.star_rounded,
+                                  size: 14,
+                                  color: p.accent,
+                                ),
                               Text(
                                 product.name,
                                 style: AppTypography.body.copyWith(
@@ -1040,6 +1208,12 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
     if (!mounted || saved == null) return;
     if (existing != null) {
       ref.read(dishProvider.notifier).replaceProductSnapshots(saved);
+      await ref
+          .read(favoriteProductsProvider.notifier)
+          .syncCustomProduct(saved);
+    } else if (_isReplaceMode) {
+      AppHaptics.commit();
+      _closeModal(saved);
     } else if (widget.mode == SearchMode.pickForRecipe) {
       await _openWeightPicker(saved);
     }
@@ -1060,12 +1234,19 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
       ),
       builder: (sheetCtx) => ProductInfoCardSheet(
         product: product,
+        actionLabel: _isReplaceMode ? 'Выбрать для замены' : null,
         onAddToRecipe: () {
           Navigator.pop(sheetCtx);
-          _openWeightPicker(
-            product,
-            existing: widget.mode == SearchMode.pickForRecipe ? existing : null,
-          );
+          if (_isReplaceMode) {
+            AppHaptics.commit();
+            _closeModal(product);
+          } else {
+            _openWeightPicker(
+              product,
+              existing:
+                  widget.mode == SearchMode.pickForRecipe ? existing : null,
+            );
+          }
         },
         onEditCustom: isCustom
             ? () {
@@ -1103,6 +1284,9 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                 await ref
                     .read(customProductsProvider.notifier)
                     .deleteProduct(product.id);
+                await ref
+                    .read(favoriteProductsProvider.notifier)
+                    .removeById(product.id);
                 removeRecentProduct(ref, product.id);
               }
             : null,
@@ -1250,6 +1434,7 @@ class ProductInfoCardSheet extends ConsumerWidget {
   final VoidCallback onAddToRecipe;
   final VoidCallback? onEditCustom;
   final VoidCallback? onDeleteCustom;
+  final String? actionLabel;
 
   const ProductInfoCardSheet({
     super.key,
@@ -1257,12 +1442,18 @@ class ProductInfoCardSheet extends ConsumerWidget {
     required this.onAddToRecipe,
     this.onEditCustom,
     this.onDeleteCustom,
+    this.actionLabel,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final p = Palette.of(context);
     final nutrientsAsync = ref.watch(productNutrientsProvider(product.id));
+    final isFavorite = ref.watch(
+      favoriteProductsProvider.select(
+        (items) => items.any((item) => item.id == product.id),
+      ),
+    );
 
     bool isValid = true;
     try {
@@ -1317,6 +1508,26 @@ class ProductInfoCardSheet extends ConsumerWidget {
               ],
             ),
           ),
+          if (isValid)
+            IconButton(
+              key: const ValueKey('toggle-favorite-btn'),
+              icon: Icon(
+                isFavorite ? Icons.star_rounded : Icons.star_outline_rounded,
+                color: isFavorite ? p.accent : p.inkSecondary,
+              ),
+              tooltip:
+                  isFavorite ? 'Убрать из избранного' : 'Добавить в избранное',
+              constraints: const BoxConstraints(
+                minWidth: kMinTapTarget,
+                minHeight: kMinTapTarget,
+              ),
+              onPressed: () async {
+                AppHaptics.toggle();
+                await ref
+                    .read(favoriteProductsProvider.notifier)
+                    .toggleFavorite(product);
+              },
+            ),
           if (onEditCustom != null)
             IconButton(
               icon: Icon(Icons.edit_outlined, color: p.inkSecondary),
@@ -1496,7 +1707,7 @@ class ProductInfoCardSheet extends ConsumerWidget {
             icon: const Icon(Icons.add_circle_outline_rounded, size: 20),
             label: Text(
               isValid
-                  ? 'Добавить в расчет'
+                  ? (actionLabel ?? 'Добавить в расчет')
                   : 'Недоступно для расчёта (ошибка БЖУ в источнике)',
               textAlign: TextAlign.center,
             ),

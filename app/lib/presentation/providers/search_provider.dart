@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/calculation/calculation_validation.dart';
 import '../../core/calculation/models/product.dart';
 import '../../data/repositories/custom_products_repository.dart';
+import '../../data/repositories/favorite_products_repository.dart';
 import '../../data/repositories/product_repository.dart';
 import 'dish_provider.dart';
 
@@ -552,4 +553,158 @@ final recentProductsProvider = Provider<List<Product>>((ref) {
     isDishFilter: search.selectedIsDish,
     selectedSource: search.selectedSource,
   );
+});
+
+final favoriteProductsRepositoryProvider = Provider<FavoriteProductsRepository>(
+  (ref) => FavoriteProductsRepository(),
+);
+
+final favoriteProductsProvider =
+    StateNotifierProvider<FavoriteProductsNotifier, List<Product>>((ref) {
+  final repo = ref.watch(favoriteProductsRepositoryProvider);
+  return FavoriteProductsNotifier(repo);
+});
+
+class FavoriteProductsNotifier extends StateNotifier<List<Product>> {
+  final FavoriteProductsRepository _repo;
+  late final Future<void> _ready;
+  Future<void> _writeQueue = Future<void>.value();
+  bool _dirtyBeforeLoad = false;
+
+  FavoriteProductsNotifier(this._repo) : super(const []) {
+    _ready = _load();
+  }
+
+  Future<void> _load() async {
+    final loaded = await _repo.loadAll();
+    if (!mounted || _dirtyBeforeLoad) return;
+    state = loaded;
+  }
+
+  Future<void> flush() async {
+    await _ready;
+    await _writeQueue;
+  }
+
+  bool isFavorite(int productId) => state.any((p) => p.id == productId);
+
+  Future<bool> toggleFavorite(Product product) async {
+    await _ready;
+    _dirtyBeforeLoad = true;
+    final exists = state.any((p) => p.id == product.id);
+    if (exists) {
+      final updated = state.where((p) => p.id != product.id).toList();
+      state = updated;
+      await _enqueueSave(updated);
+      return false;
+    }
+    if (!CalculationValidation.isValidProduct(product)) {
+      return false;
+    }
+    final updated = [product, ...state];
+    state = updated;
+    await _enqueueSave(updated);
+    return true;
+  }
+
+  Future<void> syncCustomProduct(Product updatedProduct) async {
+    await _ready;
+    if (!state.any((p) => p.id == updatedProduct.id)) return;
+    _dirtyBeforeLoad = true;
+    final updated = [
+      for (final p in state)
+        if (p.id == updatedProduct.id) updatedProduct else p,
+    ];
+    state = updated;
+    await _enqueueSave(updated);
+  }
+
+  Future<void> removeById(int productId) async {
+    await _ready;
+    if (!state.any((p) => p.id == productId)) return;
+    _dirtyBeforeLoad = true;
+    final updated = state.where((p) => p.id != productId).toList();
+    state = updated;
+    await _enqueueSave(updated);
+  }
+
+  Future<int> importFavorites(
+    List<Product> imported, {
+    required bool replaceExisting,
+  }) async {
+    await _ready;
+    _dirtyBeforeLoad = true;
+    final List<Product> next;
+    int addedCount;
+    if (replaceExisting) {
+      final seen = <int>{};
+      next = <Product>[];
+      for (final item in imported) {
+        if (seen.add(item.id) && CalculationValidation.isValidProduct(item)) {
+          next.add(item);
+        }
+      }
+      addedCount = next.length;
+    } else {
+      next = List<Product>.from(state);
+      final existingIds = {for (final p in next) p.id};
+      addedCount = 0;
+      for (final item in imported) {
+        if (!CalculationValidation.isValidProduct(item)) continue;
+        if (existingIds.add(item.id)) {
+          next.add(item);
+          addedCount++;
+        }
+      }
+    }
+    state = next;
+    await _enqueueSave(next);
+    return addedCount;
+  }
+
+  Future<void> _enqueueSave(List<Product> snapshot) {
+    final next = _writeQueue.then((_) => _repo.saveAll(snapshot));
+    _writeQueue = next.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    return next;
+  }
+}
+
+/// Избранные продукты с учётом активных фильтров поиска и актуального
+/// состояния пользовательских («своих») продуктов.
+final filteredFavoritesProvider = Provider<List<Product>>((ref) {
+  final favorites = ref.watch(favoriteProductsProvider);
+  if (favorites.isEmpty) return const <Product>[];
+  final custom = ref.watch(customProductsProvider);
+  final search = ref.watch(searchProvider);
+  final customById = <int, Product>{for (final p in custom) p.id: p};
+  final normQuery = CustomProductsRepository.normalizeText(search.query);
+  final tokens = normQuery.isEmpty
+      ? const <String>[]
+      : normQuery.split(' ').where((t) => t.isNotEmpty).toList();
+
+  final result = <Product>[];
+  for (final raw in favorites) {
+    final Product? resolved =
+        raw.source.trim().toLowerCase() == 'custom' ? customById[raw.id] : raw;
+    if (resolved == null) continue;
+    if (search.selectedIsDish != null &&
+        resolved.isDishOnly != search.selectedIsDish) {
+      continue;
+    }
+    if (search.selectedSource != null &&
+        search.selectedSource!.isNotEmpty &&
+        resolved.source != search.selectedSource) {
+      continue;
+    }
+    if (search.selectedGroupId != null &&
+        resolved.groupId != search.selectedGroupId) {
+      continue;
+    }
+    if (tokens.isNotEmpty) {
+      final normName = CustomProductsRepository.normalizeText(resolved.name);
+      if (!tokens.every(normName.contains)) continue;
+    }
+    result.add(resolved);
+  }
+  return result;
 });

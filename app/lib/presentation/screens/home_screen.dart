@@ -17,6 +17,7 @@ import '../providers/settings_provider.dart';
 import '../widgets/app_buttons.dart';
 import '../widgets/loss_clarity_hints.dart';
 import '../widgets/persistence_error_banner.dart';
+import '../widgets/share_recipe_sheet.dart';
 import 'recipe_editor_screen.dart';
 import 'search_product_modal.dart';
 
@@ -29,10 +30,21 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
+enum _LibrarySort {
+  newest('Сначала новые'),
+  title('По названию (А–Я)'),
+  kcalPer100g('По ккал на 100 г');
+
+  final String label;
+  const _LibrarySort(this.label);
+}
+
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final TextEditingController _librarySearchCtrl = TextEditingController();
   bool _librarySearchOpen = false;
   String _libraryQuery = '';
+  String? _selectedCategory;
+  _LibrarySort _librarySort = _LibrarySort.newest;
 
   @override
   void dispose() {
@@ -55,19 +67,63 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final hasActiveDraft =
         activeDish.ingredients.isNotEmpty || activeDish.title.trim().isNotEmpty;
 
+    final usedCategoryIds = <String>{
+      for (final d in savedDishes)
+        if (d.category != null) d.category!,
+    };
+    final usedCategories = [
+      for (final item in DishCategories.all)
+        if (usedCategoryIds.contains(item.id)) item,
+    ];
+    final activeCategoryFilter =
+        (_selectedCategory != null && usedCategoryIds.contains(_selectedCategory))
+            ? _selectedCategory
+            : null;
+
     final showSearchToggle = savedDishes.length >= 2;
     final showSearchInput = _librarySearchOpen ||
         savedDishes.length >= 6 ||
         _libraryQuery.isNotEmpty;
     final normQuery = CustomProductsRepository.normalizeText(_libraryQuery);
-    final filteredDishes = normQuery.isEmpty
-        ? savedDishes
-        : savedDishes.where((d) {
-            final t = d.title.trim().isEmpty
-                ? 'блюдо без названия'
-                : CustomProductsRepository.normalizeText(d.title);
-            return t.contains(normQuery);
-          }).toList();
+    final filteredDishes = savedDishes.where((d) {
+      if (activeCategoryFilter != null && d.category != activeCategoryFilter) {
+        return false;
+      }
+      if (normQuery.isEmpty) return true;
+      final t = d.title.trim().isEmpty
+          ? 'блюдо без названия'
+          : CustomProductsRepository.normalizeText(d.title);
+      return t.contains(normQuery);
+    }).toList();
+
+    if (_librarySort == _LibrarySort.title) {
+      filteredDishes.sort((a, b) {
+        final at = a.title.trim().isEmpty
+            ? 'блюдо без названия'
+            : a.title.trim().toLowerCase();
+        final bt = b.title.trim().isEmpty
+            ? 'блюдо без названия'
+            : b.title.trim().toLowerCase();
+        return at.compareTo(bt);
+      });
+    } else if (_librarySort == _LibrarySort.kcalPer100g) {
+      final kcalById = <String, double>{
+        for (final d in filteredDishes)
+          d.id: (() {
+            final c = CalculationEngine.tryCalculate(d);
+            return (c != null && c.hasYield) ? c.per100gKcal : -1.0;
+          })(),
+      };
+      filteredDishes.sort((a, b) {
+        final cmp = (kcalById[b.id] ?? -1.0).compareTo(kcalById[a.id] ?? -1.0);
+        if (cmp != 0) return cmp;
+        return a.title.trim().toLowerCase().compareTo(
+              b.title.trim().toLowerCase(),
+            );
+      });
+    } else {
+      filteredDishes.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    }
 
     return Scaffold(
       backgroundColor: p.canvas,
@@ -158,7 +214,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 // ── Мои блюда ────────────────────────────────────────────────
                 _SectionHeader(
                   title: 'Мои блюда',
-                  trailing: savedDishes.isEmpty ? null : '${savedDishes.length}',
+                  trailing: savedDishes.isEmpty
+                      ? null
+                      : (filteredDishes.length == savedDishes.length
+                          ? '${savedDishes.length}'
+                          : '${filteredDishes.length} из ${savedDishes.length}'),
                   onSearchToggle: showSearchToggle && savedDishes.length < 6
                       ? () {
                           setState(() {
@@ -171,7 +231,85 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         }
                       : null,
                   searchActive: _librarySearchOpen,
+                  sortControl: savedDishes.length >= 2
+                      ? PopupMenuButton<_LibrarySort>(
+                          key: const ValueKey('home-library-sort-btn'),
+                          tooltip: 'Сортировка блюд',
+                          initialValue: _librarySort,
+                          onSelected: (sort) {
+                            AppHaptics.toggle();
+                            setState(() => _librarySort = sort);
+                          },
+                          icon: Icon(
+                            Icons.sort_rounded,
+                            size: 20,
+                            color: _librarySort != _LibrarySort.newest
+                                ? p.accent
+                                : p.inkSecondary,
+                          ),
+                          itemBuilder: (_) => [
+                            for (final option in _LibrarySort.values)
+                              PopupMenuItem<_LibrarySort>(
+                                value: option,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      option == _librarySort
+                                          ? Icons.check_rounded
+                                          : Icons.circle,
+                                      size: option == _librarySort ? 18 : 0,
+                                      color: p.accent,
+                                    ),
+                                    if (option == _librarySort)
+                                      const SizedBox(width: Space.x2),
+                                    Expanded(child: Text(option.label)),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        )
+                      : null,
                 ),
+                if (usedCategories.isNotEmpty) ...[
+                  const SizedBox(height: Space.x2),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        ChoiceChip(
+                          key: const ValueKey('home-cat-all'),
+                          label: const Text('Все'),
+                          selected: activeCategoryFilter == null,
+                          showCheckmark: false,
+                          materialTapTargetSize: MaterialTapTargetSize.padded,
+                          onSelected: (_) {
+                            AppHaptics.toggle();
+                            setState(() => _selectedCategory = null);
+                          },
+                        ),
+                        for (final cat in usedCategories) ...[
+                          const SizedBox(width: Space.x2),
+                          ChoiceChip(
+                            key: ValueKey('home-cat-${cat.id}'),
+                            label: Text(cat.label),
+                            selected: activeCategoryFilter == cat.id,
+                            showCheckmark: false,
+                            materialTapTargetSize: MaterialTapTargetSize.padded,
+                            onSelected: (_) {
+                              AppHaptics.toggle();
+                              setState(() {
+                                _selectedCategory =
+                                    activeCategoryFilter == cat.id
+                                        ? null
+                                        : cat.id;
+                              });
+                            },
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
                 if (showSearchInput && savedDishes.isNotEmpty) ...[
                   const SizedBox(height: Space.x2),
                   TextField(
@@ -211,7 +349,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       children: [
                         Expanded(
                           child: Text(
-                            'По запросу «${_libraryQuery.trim()}» блюд не найдено',
+                            _libraryQuery.trim().isNotEmpty
+                                ? 'По запросу «${_libraryQuery.trim()}» блюд не найдено'
+                                : 'В выбранной категории блюд не найдено',
                             style: AppTypography.bodySm
                                 .copyWith(color: p.inkSecondary),
                           ),
@@ -219,7 +359,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         TextButton(
                           onPressed: () {
                             _librarySearchCtrl.clear();
-                            setState(() => _libraryQuery = '');
+                            setState(() {
+                              _libraryQuery = '';
+                              _selectedCategory = null;
+                            });
                           },
                           child: const Text('Сбросить'),
                         ),
@@ -301,9 +444,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             final settings = sheetRef.watch(appSettingsProvider);
             final savedDishes = sheetRef.watch(savedDishesProvider);
             final customProducts = sheetRef.watch(customProductsProvider);
+            final favoriteProducts = sheetRef.watch(favoriteProductsProvider);
             final savedCount = savedDishes.length;
             final customCount = customProducts.length;
-            final hasBackupData = savedCount > 0 || customCount > 0;
+            final favoriteCount = favoriteProducts.length;
+            final hasBackupData =
+                savedCount > 0 || customCount > 0 || favoriteCount > 0;
 
             return SizedBox(
               height: MediaQuery.sizeOf(sheetCtx).height * 0.85,
@@ -498,7 +644,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                     const SizedBox(height: Space.x1),
                     Text(
-                      'Блюд в библиотеке: $savedCount · Своих продуктов: $customCount',
+                      favoriteCount > 0
+                          ? 'Блюд: $savedCount · Своих: $customCount · Избранных: $favoriteCount'
+                          : 'Блюд в библиотеке: $savedCount · Своих продуктов: $customCount',
                       key: const ValueKey('backup-counts-text'),
                       style:
                           AppTypography.bodySm.copyWith(color: p.inkSecondary),
@@ -521,6 +669,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     await BackupService.shareBackupFile(
                                       savedDishes: savedDishes,
                                       customProducts: customProducts,
+                                      favoriteProducts: favoriteProducts,
                                     );
                                   } catch (e) {
                                     if (!sheetCtx.mounted) return;
@@ -553,6 +702,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   final json = BackupService.encodeBackup(
                                     savedDishes: savedDishes,
                                     customProducts: customProducts,
+                                    favoriteProducts: favoriteProducts,
                                   );
                                   await Clipboard.setData(
                                     ClipboardData(text: json),
@@ -865,18 +1015,26 @@ class _RestoreBackupSheetState extends ConsumerState<_RestoreBackupSheet> {
                 parsed.customProducts,
                 replaceExisting: replaceExisting,
               );
+      final favoritesAdded = parsed.favoriteProducts.isNotEmpty
+          ? await ref.read(favoriteProductsProvider.notifier).importFavorites(
+                parsed.favoriteProducts,
+                replaceExisting: replaceExisting,
+              )
+          : 0;
       AppHaptics.commit();
       if (!mounted) return;
       final messenger = ScaffoldMessenger.maybeOf(context);
       Navigator.pop(context);
+      final favPart =
+          favoritesAdded > 0 ? ', избранных ${replaceExisting ? favoritesAdded : '+$favoritesAdded'}' : '';
       messenger
         ?..hideCurrentSnackBar()
         ..showSnackBar(
           SnackBar(
             content: Text(
               replaceExisting
-                  ? 'Библиотека заменена: блюд $dishesAdded, своих продуктов $productsAdded'
-                  : 'Добавлено: блюд +$dishesAdded, своих продуктов +$productsAdded',
+                  ? 'Библиотека заменена: блюд $dishesAdded, своих продуктов $productsAdded$favPart'
+                  : 'Добавлено: блюд +$dishesAdded, своих продуктов +$productsAdded$favPart',
             ),
           ),
         );
@@ -898,7 +1056,9 @@ class _RestoreBackupSheetState extends ConsumerState<_RestoreBackupSheet> {
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     final parsed = _parsed;
     final hasItems = parsed != null &&
-        (parsed.savedDishes.isNotEmpty || parsed.customProducts.isNotEmpty);
+        (parsed.savedDishes.isNotEmpty ||
+            parsed.customProducts.isNotEmpty ||
+            parsed.favoriteProducts.isNotEmpty);
 
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
@@ -969,8 +1129,12 @@ class _RestoreBackupSheetState extends ConsumerState<_RestoreBackupSheet> {
                     ),
                     const SizedBox(height: Space.x1),
                     Text(
-                      'Блюд: ${parsed.savedDishes.length} · '
-                      'Своих продуктов: ${parsed.customProducts.length}',
+                      parsed.favoriteProducts.isNotEmpty
+                          ? 'Блюд: ${parsed.savedDishes.length} · '
+                              'Своих продуктов: ${parsed.customProducts.length} · '
+                              'Избранных: ${parsed.favoriteProducts.length}'
+                          : 'Блюд: ${parsed.savedDishes.length} · '
+                              'Своих продуктов: ${parsed.customProducts.length}',
                       style:
                           AppTypography.bodySm.copyWith(color: p.inkSecondary),
                     ),
@@ -1253,12 +1417,14 @@ class _SectionHeader extends StatelessWidget {
   final String? trailing;
   final VoidCallback? onSearchToggle;
   final bool searchActive;
+  final Widget? sortControl;
 
   const _SectionHeader({
     required this.title,
     this.trailing,
     this.onSearchToggle,
     this.searchActive = false,
+    this.sortControl,
   });
 
   @override
@@ -1277,6 +1443,10 @@ class _SectionHeader extends StatelessWidget {
             trailing!,
             style: AppTypography.numSm.copyWith(color: p.inkMuted),
           ),
+        if (sortControl != null) ...[
+          const SizedBox(width: Space.x1),
+          sortControl!,
+        ],
         if (onSearchToggle != null) ...[
           const SizedBox(width: Space.x1),
           IconButton(
@@ -1358,6 +1528,7 @@ class _SavedDishCard extends ConsumerWidget {
     final calc = CalculationEngine.tryCalculate(dish);
     final title =
         dish.title.trim().isEmpty ? 'Блюдо без названия' : dish.title.trim();
+    final categoryLabel = DishCategories.labelOf(dish.category);
 
     return TactilePress(
       child: Container(
@@ -1391,12 +1562,35 @@ class _SavedDishCard extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          title,
-                          style: AppTypography.body.copyWith(
-                              color: p.ink, fontWeight: FontWeight.w700),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                        Wrap(
+                          spacing: Space.x2,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(
+                              title,
+                              style: AppTypography.body.copyWith(
+                                  color: p.ink, fontWeight: FontWeight.w700),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (categoryLabel != null)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 7, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: p.accentSoft,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  categoryLabel,
+                                  style: AppTypography.caption.copyWith(
+                                    color: p.accent,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                         const SizedBox(height: 2),
                         Text(
@@ -1416,6 +1610,39 @@ class _SavedDishCard extends ConsumerWidget {
                     icon: Icon(Icons.more_vert_rounded, color: p.inkMuted),
                     onSelected: (value) async {
                       final notifier = ref.read(savedDishesProvider.notifier);
+                      if (value == 'share') {
+                        await ShareRecipeSheet.show(
+                          context,
+                          dish: dish,
+                          customProducts: ref.read(customProductsProvider),
+                        );
+                        return;
+                      }
+                      if (value == 'category') {
+                        final chosen = await _pickDishCategory(context, dish);
+                        if (chosen == null || !context.mounted) return;
+                        final nextCat = chosen.isEmpty ? null : chosen;
+                        try {
+                          await notifier.setDishCategory(dish.id, nextCat);
+                          if (ref.read(dishProvider).id == dish.id) {
+                            ref.read(dishProvider.notifier).setCategory(nextCat);
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  friendlyErrorMessage(
+                                    e,
+                                    prefix: 'Не удалось обновить категорию',
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+                        }
+                        return;
+                      }
                       if (value == 'delete') {
                         final confirmed = await showDialog<bool>(
                           context: context,
@@ -1478,6 +1705,8 @@ class _SavedDishCard extends ConsumerWidget {
                       }
                     },
                     itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'share', child: Text('Поделиться рецептом')),
+                      PopupMenuItem(value: 'category', child: Text('Категория')),
                       PopupMenuItem(value: 'copy', child: Text('Дублировать')),
                       PopupMenuItem(value: 'delete', child: Text('Удалить')),
                     ],
@@ -1490,6 +1719,54 @@ class _SavedDishCard extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Быстрый выбор категории блюда из меню карточки на главном экране.
+/// Возвращает `''` для «Без категории», id категории или `null` при отмене.
+Future<String?> _pickDishCategory(BuildContext context, Dish dish) {
+  final p = Palette.of(context);
+  return showModalBottomSheet<String>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    showDragHandle: true,
+    backgroundColor: p.surface,
+    shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
+    builder: (ctx) => SafeArea(
+      top: false,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Категория блюда',
+              style: AppTypography.title.copyWith(color: p.ink),
+            ),
+            const SizedBox(height: Space.x2),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Без категории'),
+              trailing: dish.category == null
+                  ? Icon(Icons.check_rounded, color: p.accent)
+                  : null,
+              onTap: () => Navigator.pop(ctx, ''),
+            ),
+            for (final item in DishCategories.all)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(item.label),
+                trailing: dish.category == item.id
+                    ? Icon(Icons.check_rounded, color: p.accent)
+                    : null,
+                onTap: () => Navigator.pop(ctx, item.id),
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 /// Нижний док главного экрана: два главных действия всегда под рукой.

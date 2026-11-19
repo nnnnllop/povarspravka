@@ -4,9 +4,51 @@ import 'blank_mode.dart';
 import 'heat_process.dart';
 import 'ingredient.dart';
 
+/// Стандартные категории библиотеки «Мои блюда».
+class DishCategories {
+  const DishCategories._();
+
+  static const String first = 'first';
+  static const String main = 'main';
+  static const String side = 'side';
+  static const String salad = 'salad';
+  static const String sauce = 'sauce';
+  static const String bakery = 'bakery';
+  static const String drink = 'drink';
+
+  static const List<({String id, String label})> all = [
+    (id: first, label: 'Первые'),
+    (id: main, label: 'Горячее'),
+    (id: side, label: 'Гарниры'),
+    (id: salad, label: 'Салаты'),
+    (id: sauce, label: 'Соусы и ПФ'),
+    (id: bakery, label: 'Выпечка'),
+    (id: drink, label: 'Напитки'),
+  ];
+
+  static String? normalize(Object? raw) {
+    if (raw is! String) return null;
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return null;
+    for (final item in all) {
+      if (item.id == trimmed) return item.id;
+    }
+    return null;
+  }
+
+  static String? labelOf(String? id) {
+    if (id == null) return null;
+    for (final item in all) {
+      if (item.id == id) return item.label;
+    }
+    return null;
+  }
+}
+
 class Dish {
   final String id;
   final String title;
+  final String? category;
   final bool showTitleInExport;
   final bool showPer100gRowInExport;
   final List<Ingredient> ingredients;
@@ -38,6 +80,7 @@ class Dish {
   const Dish({
     required this.id,
     this.title = '',
+    this.category,
     this.showTitleInExport = false,
     this.showPer100gRowInExport = false,
     this.ingredients = const [],
@@ -61,6 +104,7 @@ class Dish {
     required String id,
     required HeatProcess process,
     String title = '',
+    String? category,
     List<Ingredient> ingredients = const [],
     double? customYieldGrams,
     BlankMode blankMode = BlankMode.photoCross,
@@ -73,6 +117,7 @@ class Dish {
     return Dish(
       id: id,
       title: title,
+      category: DishCategories.normalize(category),
       showTitleInExport: showTitleInExport,
       showPer100gRowInExport: showPer100gRowInExport,
       ingredients: ingredients,
@@ -117,6 +162,7 @@ class Dish {
   Map<String, dynamic> toJson() => {
         'id': id,
         'title': title,
+        if (category != null && category!.isNotEmpty) 'category': category,
         'showTitleInExport': showTitleInExport,
         'showPer100gRowInExport': showPer100gRowInExport,
         'ingredients': ingredients.map((e) => e.toJson()).toList(),
@@ -148,6 +194,7 @@ class Dish {
       id: json['id'] as String? ??
           DateTime.now().millisecondsSinceEpoch.toString(),
       title: json['title'] as String? ?? '',
+      category: DishCategories.normalize(json['category']),
       showTitleInExport: json['showTitleInExport'] as bool? ?? false,
       showPer100gRowInExport: json['showPer100gRowInExport'] as bool? ?? false,
       ingredients: rawIngredients
@@ -173,6 +220,8 @@ class Dish {
   Dish copyWith({
     String? id,
     String? title,
+    String? category,
+    bool clearCategory = false,
     bool? showTitleInExport,
     bool? showPer100gRowInExport,
     List<Ingredient>? ingredients,
@@ -189,6 +238,11 @@ class Dish {
     return Dish(
       id: id ?? this.id,
       title: title ?? this.title,
+      category: clearCategory
+          ? null
+          : (category != null
+              ? DishCategories.normalize(category)
+              : this.category),
       showTitleInExport: showTitleInExport ?? this.showTitleInExport,
       showPer100gRowInExport:
           showPer100gRowInExport ?? this.showPer100gRowInExport,

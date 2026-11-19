@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../core/calculation/calculation_engine.dart';
+import '../../core/calculation/calculation_math.dart';
 import '../../core/calculation/calculation_validation.dart';
 import '../../core/calculation/loss_table.dart';
 import '../../core/calculation/models/calculation_result.dart';
+import '../../core/calculation/models/ingredient.dart';
 import '../../core/calculation/yield_explanation.dart';
+import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
 import 'app_buttons.dart';
@@ -26,10 +29,15 @@ class MacroSummaryBar extends StatefulWidget {
   /// одна строка + «Инспектор расчёта».
   final bool compact;
 
+  /// Необязательный список ингредиентов для вклада в режиме legacy
+  /// (для нового расчёта используются строки [CalculationResult.lines]).
+  final List<Ingredient>? ingredients;
+
   const MacroSummaryBar({
     super.key,
     required this.result,
     this.compact = false,
+    this.ingredients,
   });
 
   @override
@@ -408,6 +416,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
     final r = widget.result;
     final e = YieldExplanation(r.rawTotalWeight, r.yieldGrams);
     final p = Palette.of(context);
+    final contributions = _buildContributionItems(r, widget.ingredients);
 
     showModalBottomSheet<void>(
       context: context,
@@ -541,6 +550,18 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                   content: _PortionCalculator(
                     result: r,
                     keyPrefix: 'inspector-',
+                  ),
+                ),
+              ],
+              if (contributions.isNotEmpty) ...[
+                Divider(color: p.divider, height: Space.x5),
+                _buildStepSection(
+                  palette: p,
+                  title: r.yieldGrams > 0
+                      ? '6. Вклад ингредиентов'
+                      : '5. Вклад ингредиентов',
+                  content: _IngredientContributionSection(
+                    items: contributions,
                   ),
                 ),
               ],
@@ -868,6 +889,251 @@ class _PortionCalculatorState extends State<_PortionCalculator> {
           key: ValueKey('${prefix}portion-result'),
           style: AppTypography.numSm.copyWith(color: p.ink),
         ),
+      ],
+    );
+  }
+}
+
+enum _ContributionMetric { kcal, protein, fat, carbs }
+
+class _ContributionItem {
+  final String name;
+  final double protein;
+  final double fat;
+  final double carbs;
+  final double kcal;
+
+  const _ContributionItem({
+    required this.name,
+    required this.protein,
+    required this.fat,
+    required this.carbs,
+    required this.kcal,
+  });
+
+  double valueFor(_ContributionMetric metric) => switch (metric) {
+        _ContributionMetric.kcal => kcal,
+        _ContributionMetric.protein => protein,
+        _ContributionMetric.fat => fat,
+        _ContributionMetric.carbs => carbs,
+      };
+}
+
+List<_ContributionItem> _buildContributionItems(
+  CalculationResult r,
+  List<Ingredient>? fallbackIngredients,
+) {
+  if (r.lines.isNotEmpty) {
+    return [
+      for (final line in r.lines)
+        _ContributionItem(
+          name: line.productName.trim().isEmpty
+              ? 'Ингредиент'
+              : line.productName.trim(),
+          protein: line.cookedProtein,
+          fat: line.cookedFat,
+          carbs: line.cookedCarbs,
+          kcal: line.cookedKcal,
+        ),
+    ];
+  }
+  final fallback = fallbackIngredients;
+  if (fallback == null || fallback.isEmpty) return const [];
+  final items = <_ContributionItem>[];
+  for (final ing in fallback) {
+    try {
+      final p = CalculationMath.round2(ing.proteinInDish * r.retentionProtein);
+      final f = CalculationMath.round2(ing.fatInDish * r.retentionFat);
+      final c = CalculationMath.round2(ing.carbsInDish * r.retentionCarbs);
+      final k = CalculationMath.energy(p, f, c);
+      items.add(
+        _ContributionItem(
+          name: ing.product.name.trim().isEmpty
+              ? 'Ингредиент'
+              : ing.product.name.trim(),
+          protein: p,
+          fat: f,
+          carbs: c,
+          kcal: k,
+        ),
+      );
+    } on ArgumentError {
+      // Пропускаем невалидную строку в аварийном снимке.
+    }
+  }
+  return items;
+}
+
+class _IngredientContributionSection extends StatefulWidget {
+  final List<_ContributionItem> items;
+
+  const _IngredientContributionSection({required this.items});
+
+  @override
+  State<_IngredientContributionSection> createState() =>
+      _IngredientContributionSectionState();
+}
+
+class _IngredientContributionSectionState
+    extends State<_IngredientContributionSection> {
+  static const int _initialLimit = 6;
+
+  _ContributionMetric _metric = _ContributionMetric.kcal;
+  bool _showAll = false;
+
+  Color _colorFor(Palette p, _ContributionMetric metric) => switch (metric) {
+        _ContributionMetric.kcal => p.kcal,
+        _ContributionMetric.protein => p.protein,
+        _ContributionMetric.fat => p.fat,
+        _ContributionMetric.carbs => p.carbs,
+      };
+
+  String _formatValue(double value, _ContributionMetric metric) =>
+      metric == _ContributionMetric.kcal
+          ? '${CalculationEngine.formatKcal(value)} ккал'
+          : '${CalculationEngine.formatMacro(value)} г';
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final sorted = List<_ContributionItem>.from(widget.items)
+      ..sort((a, b) => b.valueFor(_metric).compareTo(a.valueFor(_metric)));
+    final total = sorted.fold<double>(
+      0.0,
+      (sum, item) => sum + item.valueFor(_metric),
+    );
+    final visible = (!_showAll && sorted.length > _initialLimit)
+        ? sorted.sublist(0, _initialLimit)
+        : sorted;
+    final barColor = _colorFor(p, _metric);
+    final size = MediaQuery.sizeOf(context);
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final stackHeader = size.width < 360 || textScale > 1.35;
+
+    return Column(
+      key: const ValueKey('inspector-contribution-section'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: Space.x1),
+        SegmentedButton<_ContributionMetric>(
+          key: const ValueKey('inspector-contrib-metric'),
+          showSelectedIcon: false,
+          style: AppSegmentedStyle.of(p, compact: true),
+          segments: const [
+            ButtonSegment(
+              value: _ContributionMetric.kcal,
+              label: FittedBox(fit: BoxFit.scaleDown, child: Text('Ккал')),
+            ),
+            ButtonSegment(
+              value: _ContributionMetric.protein,
+              label: FittedBox(fit: BoxFit.scaleDown, child: Text('Б')),
+            ),
+            ButtonSegment(
+              value: _ContributionMetric.fat,
+              label: FittedBox(fit: BoxFit.scaleDown, child: Text('Ж')),
+            ),
+            ButtonSegment(
+              value: _ContributionMetric.carbs,
+              label: FittedBox(fit: BoxFit.scaleDown, child: Text('У')),
+            ),
+          ],
+          selected: {_metric},
+          onSelectionChanged: (sel) {
+            if (sel.isEmpty) return;
+            AppHaptics.toggle();
+            setState(() => _metric = sel.first);
+          },
+        ),
+        const SizedBox(height: Space.x3),
+        if (total <= 0)
+          Text(
+            'Вклад по выбранному показателю равен 0.',
+            style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
+          )
+        else ...[
+          for (var i = 0; i < visible.length; i++) ...[
+            Builder(
+              builder: (context) {
+                final item = visible[i];
+                final value = item.valueFor(_metric);
+                final share = (value / total).clamp(0.0, 1.0);
+                final pctText = '${(share * 100).round()} %';
+                final nameWidget = Text(
+                  item.name,
+                  style: AppTypography.bodySm.copyWith(
+                    color: p.ink,
+                    fontWeight: i == 0 ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                  maxLines: stackHeader ? 2 : 1,
+                  overflow: TextOverflow.ellipsis,
+                );
+                final metricWidget = Text(
+                  '${_formatValue(value, _metric)} · $pctText',
+                  style: AppTypography.numSm.copyWith(
+                    color: i == 0 ? barColor : p.inkSecondary,
+                    fontWeight: i == 0 ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                );
+                return Padding(
+                  padding: EdgeInsets.only(top: i == 0 ? 0 : Space.x2),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (stackHeader) ...[
+                        nameWidget,
+                        const SizedBox(height: 2),
+                        metricWidget,
+                      ] else
+                        Row(
+                          children: [
+                            Expanded(child: nameWidget),
+                            const SizedBox(width: Space.x2),
+                            Flexible(child: metricWidget),
+                          ],
+                        ),
+                      const SizedBox(height: 4),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: Container(
+                          height: 6,
+                          color: p.sunken,
+                          alignment: Alignment.centerLeft,
+                          child: FractionallySizedBox(
+                            widthFactor: share,
+                            child: Container(
+                              color: barColor.withOpacity(i == 0 ? 0.92 : 0.65),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ],
+          if (sorted.length > _initialLimit) ...[
+            const SizedBox(height: Space.x2),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                key: const ValueKey('inspector-contrib-toggle-all'),
+                onPressed: () => setState(() => _showAll = !_showAll),
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(0, kMinTapTarget),
+                  padding: const EdgeInsets.symmetric(horizontal: Space.x2),
+                ),
+                child: Text(
+                  _showAll
+                      ? 'Свернуть список'
+                      : 'Показать все (${sorted.length})',
+                ),
+              ),
+            ),
+          ],
+        ],
       ],
     );
   }

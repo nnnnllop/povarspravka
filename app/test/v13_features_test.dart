@@ -497,7 +497,10 @@ void main() {
       await tester.tap(find.byTooltip('Как считается'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Версия 1.3.0'), findsOneWidget);
+      expect(
+        find.text('Версия ${BackupService.appVersionLabel}'),
+        findsOneWidget,
+      );
       expect(find.text('Оформление и отклик'), findsOneWidget);
       expect(find.text('Резервная копия данных'), findsOneWidget);
 

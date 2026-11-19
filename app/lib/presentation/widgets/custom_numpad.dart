@@ -38,6 +38,9 @@ class CustomNumpadSheet extends StatefulWidget {
   /// Колбэк удаления ингредиента из блюда (доступен в режиме редактирования).
   final VoidCallback? onDelete;
 
+  /// Колбэк замены продукта в строке рецепта без потери веса (в режиме правки).
+  final VoidCallback? onReplaceProduct;
+
   const CustomNumpadSheet({
     super.key,
     required this.product,
@@ -47,6 +50,7 @@ class CustomNumpadSheet extends StatefulWidget {
     required this.onConfirm,
     this.onProductUpdated,
     this.onDelete,
+    this.onReplaceProduct,
   });
 
   @override
@@ -372,6 +376,15 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     }
   }
 
+  void _replaceProduct() {
+    AppHaptics.key();
+    final cb = widget.onReplaceProduct;
+    if (mounted && Navigator.canPop(context)) {
+      Navigator.pop(context);
+    }
+    cb?.call();
+  }
+
   void _confirm(double parsedGrams) {
     AppHaptics.commit();
     final effectiveProduct = _wastePct != widget.product.wastePct
@@ -576,6 +589,19 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
             ],
           ),
         ),
+        if (widget.isEditing && widget.onReplaceProduct != null) ...[
+          const SizedBox(width: Space.x1),
+          IconButton(
+            key: const ValueKey('numpad-replace-product'),
+            onPressed: _replaceProduct,
+            tooltip: 'Заменить продукт',
+            constraints: const BoxConstraints(
+              minWidth: kMinTapTarget,
+              minHeight: kMinTapTarget,
+            ),
+            icon: Icon(Icons.swap_horiz_rounded, size: 22, color: p.accent),
+          ),
+        ],
         if (widget.isEditing && widget.onDelete != null) ...[
           const SizedBox(width: Space.x1),
           IconButton(

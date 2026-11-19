@@ -27,6 +27,7 @@ import '../widgets/ingredient_card.dart';
 import '../widgets/loss_clarity_hints.dart';
 import '../widgets/macro_summary_bar.dart';
 import '../widgets/persistence_error_banner.dart';
+import '../widgets/share_recipe_sheet.dart';
 import '../widgets/yield_density_warning.dart';
 import 'blank_preview_screen.dart';
 import 'search_product_modal.dart';
@@ -261,6 +262,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
             key: ValueKey(dish.id),
             result: calc,
             compact: true,
+            ingredients: dish.ingredients,
           );
 
     final compactPad = landscapeInline
@@ -428,6 +430,12 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
             _openScaleDialog(dish);
           } else if (value == 'semi') {
             _saveAsSemiFinished(dish);
+          } else if (value == 'share-recipe') {
+            ShareRecipeSheet.show(
+              context,
+              dish: dish,
+              customProducts: ref.read(customProductsProvider),
+            );
           } else if (value == 'clear') {
             _showClearConfirmation(context);
           }
@@ -442,6 +450,11 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
             value: 'semi',
             enabled: dish.ingredients.isNotEmpty,
             child: const Text('Сохранить как полуфабрикат'),
+          ),
+          PopupMenuItem(
+            value: 'share-recipe',
+            enabled: hasContent,
+            child: const Text('Поделиться рецептом'),
           ),
           PopupMenuItem(
             value: 'clear',
@@ -699,7 +712,9 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                   const SizedBox(width: Space.x2),
                   Expanded(
                     child: Text(
-                      'Обработка: ${dish.process.label}',
+                      DishCategories.labelOf(dish.category) == null
+                          ? 'Обработка: ${dish.process.label}'
+                          : 'Обработка: ${dish.process.label} · ${DishCategories.labelOf(dish.category)}',
                       style: AppTypography.bodySm.copyWith(color: p.ink),
                     ),
                   ),
@@ -963,9 +978,44 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                 isGross: isGross,
               );
         },
+        onReplaceProduct: () => _replaceIngredientProduct(ing),
         onDelete: () => _removeIngredient(ing, index),
       ),
     );
+  }
+
+  Future<void> _replaceIngredientProduct(Ingredient ing) async {
+    final replacement = await SearchProductModal.pickReplacement(
+      context,
+      replacingName: ing.product.name,
+    );
+    if (!mounted || replacement == null) return;
+    final dishId = ref.read(dishProvider).id;
+    final prevProduct = ing.product;
+    final prevGroup = ing.groupOverride;
+    final ok = ref
+        .read(dishProvider.notifier)
+        .replaceIngredientProduct(ing.id, replacement);
+    if (!ok) return;
+    recordRecentProduct(ref, replacement);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('Заменено: ${prevProduct.name} → ${replacement.name}'),
+          action: SnackBarAction(
+            label: 'Отменить',
+            onPressed: () {
+              if (ref.read(dishProvider).id != dishId) return;
+              final notifier = ref.read(dishProvider.notifier);
+              notifier.replaceIngredientProduct(ing.id, prevProduct);
+              if (prevGroup != null) {
+                notifier.setIngredientGroup(ing.id, prevGroup);
+              }
+            },
+          ),
+        ),
+      );
   }
 
   /// Подтверждение выхода с несохранёнными правками (аудит P0-3).
@@ -1174,6 +1224,7 @@ class _RecipeSettingsDialogState extends ConsumerState<_RecipeSettingsDialog> {
   late final TextEditingController _fCtrl;
   late final TextEditingController _cCtrl;
   late HeatProcess _process;
+  String? _category;
   late bool _showPer100g;
   late bool _showTitleInExport;
   late BlankMode _blankMode;
@@ -1184,6 +1235,7 @@ class _RecipeSettingsDialogState extends ConsumerState<_RecipeSettingsDialog> {
     super.initState();
     final d = widget.initialDish;
     _process = d.process;
+    _category = d.category;
     _showPer100g = d.showPer100gRowInExport;
     _showTitleInExport = d.showTitleInExport;
     _blankMode = d.blankMode;
@@ -1220,6 +1272,7 @@ class _RecipeSettingsDialogState extends ConsumerState<_RecipeSettingsDialog> {
       if (_process != current.process) {
         notifier.setHeatProcess(_process);
       }
+      notifier.setCategory(_category);
       notifier.setBlankMode(_blankMode);
       notifier.toggleShowTitle(_showTitleInExport);
       notifier.toggleShowPer100gRow(_showPer100g);
@@ -1266,6 +1319,7 @@ class _RecipeSettingsDialogState extends ConsumerState<_RecipeSettingsDialog> {
       fat: fVal,
       carbs: cVal,
     );
+    notifier.setCategory(_category);
     notifier.setBlankMode(_blankMode);
     notifier.toggleShowTitle(_showTitleInExport);
     notifier.toggleShowPer100gRow(_showPer100g);
@@ -1331,6 +1385,32 @@ class _RecipeSettingsDialogState extends ConsumerState<_RecipeSettingsDialog> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Text(
+                        'Категория блюда',
+                        style: AppTypography.label.copyWith(color: p.ink),
+                      ),
+                      const SizedBox(height: Space.x2),
+                      DropdownButtonFormField<String?>(
+                        key: const ValueKey('dish-category-field'),
+                        isDense: denseDialog,
+                        itemHeight: null,
+                        value: _category,
+                        isExpanded: true,
+                        decoration: InputDecoration(isDense: denseDialog),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('Без категории', softWrap: true),
+                          ),
+                          for (final item in DishCategories.all)
+                            DropdownMenuItem<String?>(
+                              value: item.id,
+                              child: Text(item.label, softWrap: true),
+                            ),
+                        ],
+                        onChanged: (cat) => setState(() => _category = cat),
+                      ),
+                      const SizedBox(height: Space.x4),
                       Text(
                         'Способ тепловой обработки',
                         style: AppTypography.label.copyWith(color: p.ink),
@@ -1614,21 +1694,30 @@ class _ScaleRecipeSheet extends StatefulWidget {
 
 class _ScaleRecipeSheetState extends State<_ScaleRecipeSheet> {
   static const List<double> _presets = [0.5, 1.5, 2.0, 3.0, 5.0];
+  static const List<int> _targetPresets = [500, 1000, 2000, 5000];
 
   late final TextEditingController _ctrl;
+  late final TextEditingController _targetCtrl;
+  bool _byTargetWeight = false;
+  bool _targetYieldBasis = true;
   double _factor = 2.0;
   bool _scaleYield = true;
   String? _error;
+  String? _targetError;
 
   @override
   void initState() {
     super.initState();
     _ctrl = TextEditingController(text: '2');
+    _targetYieldBasis = widget.dish.customYieldGrams != null &&
+        widget.dish.customYieldGrams! >= CalculationValidation.minCustomYieldGrams;
+    _targetCtrl = TextEditingController(text: '1000');
   }
 
   @override
   void dispose() {
     _ctrl.dispose();
+    _targetCtrl.dispose();
     super.dispose();
   }
 
@@ -1644,6 +1733,17 @@ class _ScaleRecipeSheetState extends State<_ScaleRecipeSheet> {
     });
   }
 
+  void _selectTargetPreset(int grams) {
+    final text = grams.toString();
+    setState(() {
+      _targetError = null;
+      _targetCtrl.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
@@ -1651,17 +1751,49 @@ class _ScaleRecipeSheetState extends State<_ScaleRecipeSheet> {
     final textScale = MediaQuery.textScalerOf(context).scale(1.0);
     final stackFooter =
         (size.width < 360 && textScale > 1.35) || size.width < 300;
-    final parsed = CalculationEngine.parseInputDouble(_ctrl.text);
-    final valid = parsed != null &&
-        parsed.isFinite &&
-        parsed > 0 &&
-        parsed <= 1000 &&
-        _error == null;
     final rawNet = _RecipeEditorScreenState._safeGrams(
       () => widget.dish.totalRawNetGrams,
     );
-    final hasCustomYield = widget.dish.customYieldGrams != null;
+    final hasCustomYield = widget.dish.customYieldGrams != null &&
+        widget.dish.customYieldGrams! >=
+            CalculationValidation.minCustomYieldGrams;
     final currentYield = widget.dish.customYieldGrams ?? 0.0;
+    final useYieldBasis = hasCustomYield && _targetYieldBasis;
+    final targetBaseGrams = useYieldBasis ? currentYield : rawNet;
+
+    double? effectiveFactor;
+    String? computedTargetError;
+    if (_byTargetWeight) {
+      final targetVal = CalculationEngine.parseInputDouble(_targetCtrl.text);
+      if (targetBaseGrams <= 0) {
+        computedTargetError = 'Нет базовой массы для расчёта';
+      } else if (targetVal == null ||
+          !targetVal.isFinite ||
+          targetVal < 1 ||
+          targetVal > CalculationValidation.maxCustomYieldGrams) {
+        computedTargetError = 'Введите массу от 1 до 9 999 999 г';
+      } else {
+        final candidate = targetVal / targetBaseGrams;
+        if (!candidate.isFinite || candidate <= 0 || candidate > 1000) {
+          computedTargetError = 'Множитель выходит за пределы 0,01–1000×';
+        } else {
+          effectiveFactor = candidate;
+        }
+      }
+    } else {
+      final parsed = CalculationEngine.parseInputDouble(_ctrl.text);
+      if (parsed != null &&
+          parsed.isFinite &&
+          parsed > 0 &&
+          parsed <= 1000 &&
+          _error == null) {
+        effectiveFactor = parsed;
+      }
+    }
+
+    final valid = effectiveFactor != null;
+    final applyScaleYield =
+        (_byTargetWeight && useYieldBasis) ? true : _scaleYield;
 
     final cancelBtn = TextButton(
       onPressed: () => Navigator.pop(context),
@@ -1672,7 +1804,7 @@ class _ScaleRecipeSheetState extends State<_ScaleRecipeSheet> {
       onPressed: valid
           ? () => Navigator.pop(
                 context,
-                (factor: parsed, scaleYield: _scaleYield),
+                (factor: effectiveFactor!, scaleYield: applyScaleYield),
               )
           : null,
       child: const Text('Применить масштаб', textAlign: TextAlign.center),
@@ -1702,47 +1834,155 @@ class _ScaleRecipeSheetState extends State<_ScaleRecipeSheet> {
                   style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
                 ),
                 const SizedBox(height: Space.x3),
-                Wrap(
-                  spacing: Space.x2,
-                  runSpacing: Space.x1,
-                  children: [
-                    for (final preset in _presets)
-                      ChoiceChip(
-                        key: ValueKey('scale-preset-$preset'),
-                        label: Text('×${CalculationEngine.formatGrams(preset)}'),
-                        selected:
-                            (_factor - preset).abs() < 0.001 && _error == null,
-                        showCheckmark: false,
-                        materialTapTargetSize: MaterialTapTargetSize.padded,
-                        onSelected: (_) => _selectPreset(preset),
+                SegmentedButton<bool>(
+                  key: const ValueKey('scale-mode-segmented'),
+                  showSelectedIcon: false,
+                  style: AppSegmentedStyle.of(p, compact: true),
+                  segments: const [
+                    ButtonSegment<bool>(
+                      value: false,
+                      label: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text('Множитель'),
                       ),
+                    ),
+                    ButtonSegment<bool>(
+                      value: true,
+                      label: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text('Целевой вес'),
+                      ),
+                    ),
                   ],
-                ),
-                const SizedBox(height: Space.x3),
-                TextField(
-                  key: const ValueKey('scale-factor-field'),
-                  controller: _ctrl,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  style: AppTypography.num.copyWith(color: p.ink),
-                  decoration: InputDecoration(
-                    labelText: 'Множитель',
-                    hintText: 'Например, 2 или 0,5',
-                    errorText: _error,
-                  ),
-                  onChanged: (text) {
-                    final v = CalculationEngine.parseInputDouble(text);
-                    setState(() {
-                      if (v == null || !v.isFinite || v <= 0 || v > 1000) {
-                        _error = 'Введите множитель от 0,01 до 1000';
-                      } else {
-                        _factor = v;
-                        _error = null;
-                      }
-                    });
+                  selected: {_byTargetWeight},
+                  onSelectionChanged: (sel) {
+                    if (sel.isEmpty) return;
+                    AppHaptics.toggle();
+                    setState(() => _byTargetWeight = sel.first);
                   },
                 ),
-                if (hasCustomYield) ...[
+                const SizedBox(height: Space.x3),
+                if (!_byTargetWeight) ...[
+                  Wrap(
+                    spacing: Space.x2,
+                    runSpacing: Space.x1,
+                    children: [
+                      for (final preset in _presets)
+                        ChoiceChip(
+                          key: ValueKey('scale-preset-$preset'),
+                          label:
+                              Text('×${CalculationEngine.formatGrams(preset)}'),
+                          selected: (_factor - preset).abs() < 0.001 &&
+                              _error == null,
+                          showCheckmark: false,
+                          materialTapTargetSize: MaterialTapTargetSize.padded,
+                          onSelected: (_) => _selectPreset(preset),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: Space.x3),
+                  TextField(
+                    key: const ValueKey('scale-factor-field'),
+                    controller: _ctrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    style: AppTypography.num.copyWith(color: p.ink),
+                    decoration: InputDecoration(
+                      labelText: 'Множитель',
+                      hintText: 'Например, 2 или 0,5',
+                      errorText: _error,
+                    ),
+                    onChanged: (text) {
+                      final v = CalculationEngine.parseInputDouble(text);
+                      setState(() {
+                        if (v == null || !v.isFinite || v <= 0 || v > 1000) {
+                          _error = 'Введите множитель от 0,01 до 1000';
+                        } else {
+                          _factor = v;
+                          _error = null;
+                        }
+                      });
+                    },
+                  ),
+                ] else ...[
+                  if (hasCustomYield) ...[
+                    Wrap(
+                      spacing: Space.x2,
+                      runSpacing: Space.x1,
+                      children: [
+                        ChoiceChip(
+                          key: const ValueKey('scale-target-basis-yield'),
+                          label: Text(
+                            'Выход блюда (${CalculationEngine.formatGrams(currentYield)} г)',
+                          ),
+                          selected: _targetYieldBasis,
+                          showCheckmark: false,
+                          materialTapTargetSize: MaterialTapTargetSize.padded,
+                          onSelected: (_) =>
+                              setState(() => _targetYieldBasis = true),
+                        ),
+                        ChoiceChip(
+                          key: const ValueKey('scale-target-basis-raw'),
+                          label: Text(
+                            'Сырьё нетто (${CalculationEngine.formatGrams(rawNet)} г)',
+                          ),
+                          selected: !_targetYieldBasis,
+                          showCheckmark: false,
+                          materialTapTargetSize: MaterialTapTargetSize.padded,
+                          onSelected: (_) =>
+                              setState(() => _targetYieldBasis = false),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: Space.x2),
+                  ] else
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: Space.x2),
+                      child: Text(
+                        'Пересчёт по нетто сырья (${CalculationEngine.formatGrams(rawNet)} г), так как выход не указан.',
+                        style: AppTypography.caption
+                            .copyWith(color: p.inkSecondary),
+                      ),
+                    ),
+                  Wrap(
+                    spacing: Space.x2,
+                    runSpacing: Space.x1,
+                    children: [
+                      for (final preset in _targetPresets)
+                        ChoiceChip(
+                          key: ValueKey('scale-target-preset-$preset'),
+                          label: Text('$preset г'),
+                          selected:
+                              CalculationEngine.parseInputDouble(
+                                        _targetCtrl.text,
+                                      ) ==
+                                      preset.toDouble() &&
+                                  computedTargetError == null,
+                          showCheckmark: false,
+                          materialTapTargetSize: MaterialTapTargetSize.padded,
+                          onSelected: (_) => _selectTargetPreset(preset),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: Space.x3),
+                  TextField(
+                    key: const ValueKey('scale-target-field'),
+                    controller: _targetCtrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    style: AppTypography.num.copyWith(color: p.ink),
+                    decoration: InputDecoration(
+                      labelText: useYieldBasis
+                          ? 'Нужный выход блюда, г'
+                          : 'Нужное сырьё нетто, г',
+                      hintText: 'Например, 1000',
+                      suffixText: 'г',
+                      errorText: _targetError ?? computedTargetError,
+                    ),
+                    onChanged: (_) => setState(() => _targetError = null),
+                  ),
+                ],
+                if (hasCustomYield && !(_byTargetWeight && useYieldBasis)) ...[
                   const SizedBox(height: Space.x2),
                   SwitchListTile.adaptive(
                     contentPadding: EdgeInsets.zero,
@@ -1766,17 +2006,29 @@ class _ScaleRecipeSheetState extends State<_ScaleRecipeSheet> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (_byTargetWeight)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 2),
+                            child: Text(
+                              'Коэффициент: ×${CalculationEngine.formatMacro(effectiveFactor)}',
+                              key: const ValueKey('scale-computed-factor'),
+                              style: AppTypography.numSm.copyWith(
+                                color: p.accent,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
                         Text(
                           'Сырьё нетто: ${CalculationEngine.formatGrams(rawNet)} г → '
-                          '${CalculationEngine.formatGrams(CalculationMath.round1(rawNet * parsed))} г',
+                          '${CalculationEngine.formatGrams(CalculationMath.round1(rawNet * effectiveFactor))} г',
                           style: AppTypography.numSm.copyWith(color: p.ink),
                         ),
-                        if (hasCustomYield && _scaleYield)
+                        if (hasCustomYield && applyScaleYield)
                           Padding(
                             padding: const EdgeInsets.only(top: 2),
                             child: Text(
                               'Выход блюда: ${CalculationEngine.formatGrams(currentYield)} г → '
-                              '${CalculationEngine.formatGrams(CalculationMath.round1(currentYield * parsed))} г',
+                              '${CalculationEngine.formatGrams(CalculationMath.round1(currentYield * effectiveFactor))} г',
                               style: AppTypography.numSm
                                   .copyWith(color: p.inkSecondary),
                             ),

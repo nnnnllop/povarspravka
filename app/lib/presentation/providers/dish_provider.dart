@@ -231,6 +231,34 @@ class SavedDishesNotifier extends StateNotifier<List<Dish>> {
         return duplicated;
       }, trackRetry: true);
 
+  /// Обновляет категорию сохранённого блюда без изменения состава и расчёта.
+  Future<void> setDishCategory(String id, String? category) => _tracked(() async {
+        final normalized = DishCategories.normalize(category);
+        var changed = false;
+        final updated = <Dish>[];
+        for (final d in state) {
+          if (d.id == id) {
+            if (d.category != normalized) {
+              changed = true;
+              updated.add(
+                d.copyWith(
+                  category: normalized,
+                  clearCategory: normalized == null,
+                  updatedAt: DateTime.now(),
+                ),
+              );
+            } else {
+              updated.add(d);
+            }
+          } else {
+            updated.add(d);
+          }
+        }
+        if (!changed) return;
+        await _storage.saveAll(activeDraft: _latestDraft, savedDishes: updated);
+        state = updated;
+      }, trackRetry: true);
+
   /// Импортирует блюда из резервной копии: в режиме слияния добавляет
   /// отсутствующие записи по `id` и обновляет ID только при конфликте
   /// разных блюд с одинаковым ключом.
@@ -516,6 +544,17 @@ class DishNotifier extends StateNotifier<Dish> {
     _persist();
   }
 
+  void setCategory(String? category) {
+    final normalized = DishCategories.normalize(category);
+    if (state.category == normalized) return;
+    state = state.copyWith(
+      category: normalized,
+      clearCategory: normalized == null,
+      updatedAt: DateTime.now(),
+    );
+    _persist();
+  }
+
   /// Выбрать способ тепловой обработки блюда.
   ///
   /// Способ задаёт ТОЛЬКО потери Б/Ж/У по таблице (`LossTable`) для группы
@@ -621,6 +660,35 @@ class DishNotifier extends StateNotifier<Dish> {
       updatedAt: DateTime.now(),
     );
     _persist();
+  }
+
+  /// Заменяет продукт в строке ингредиента [ingredientId] с сохранением массы,
+  /// режима Брутто/Нетто и ручного способа обработки. Ручная группа потерь
+  /// сбрасывается, так как относилась к прежнему продукту.
+  bool replaceIngredientProduct(String ingredientId, Product newProduct) {
+    if (!CalculationValidation.isValidProduct(newProduct)) return false;
+    var found = false;
+    final nextList = <Ingredient>[];
+    for (final ing in state.ingredients) {
+      if (ing.id == ingredientId) {
+        found = true;
+        nextList.add(
+          ing.copyWith(
+            product: newProduct,
+            clearGroupOverride: true,
+          ),
+        );
+      } else {
+        nextList.add(ing);
+      }
+    }
+    if (!found) return false;
+    state = state.copyWith(
+      ingredients: nextList,
+      updatedAt: DateTime.now(),
+    );
+    _persist();
+    return true;
   }
 
   /// Обновляет снимок пользовательского продукта в ингредиентах активного блюда
