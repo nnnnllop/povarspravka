@@ -93,6 +93,7 @@ class IngredientCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: p.surface,
           borderRadius: Radii.cardAll,
+          border: Border.all(color: p.borderStatic),
         ),
         clipBehavior: Clip.antiAlias,
         child: Material(
@@ -102,9 +103,9 @@ class IngredientCard extends StatelessWidget {
             child: Padding(
               padding: EdgeInsets.fromLTRB(
                 Space.x3,
-                Space.x3,
+                Space.x2 + 2,
                 dragHandleIndex != null ? Space.x1 : Space.x3,
-                Space.x3,
+                Space.x2,
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,

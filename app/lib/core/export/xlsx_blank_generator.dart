@@ -30,10 +30,7 @@ class XlsxBlankGenerator {
 
   /// Генерация бинарного файла .xlsx с объединением ячеек, диагональным крестом и живыми формулами Excel
   static Uint8List generate(Dish dish) {
-    final calc = CalculationEngine.calculate(dish);
-    final isCrossMode = dish.blankMode == BlankMode.photoCross;
     final archive = Archive();
-    double totalW = 0, totalP = 0, totalF = 0, totalC = 0, totalKcal = 0;
 
     // 1. [Content_Types].xml
     const contentTypesXml =
@@ -70,18 +67,225 @@ class XlsxBlankGenerator {
   </sheets>
 </workbook>''';
     _addFile(archive, 'xl/workbook.xml', wbXml);
+    _addFile(archive, 'xl/styles.xml', _stylesXml);
+    _addFile(archive, 'xl/worksheets/sheet1.xml', _buildDishSheetXml(dish));
 
-    // 5. xl/styles.xml
-    // cellXfs:
-    // 0: обычная ячейка с рамкой по центру
-    // 1: жирная ячейка с рамкой по центру и переносом слов
-    // 2: заголовок бланка без рамки по центру (жирный 12pt)
-    // 3: числовая ячейка с рамкой (0.00)
-    // 4: ячейка с диагональным крестом (diagonalUp="1" diagonalDown="1")
-    // 5: текстовая ячейка с рамкой по левому краю
-    // 6: жирная текстовая ячейка с рамкой по левому краю
-    // 7: формула под таблицей без рамки
-    const stylesXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    final zipEncoder = ZipEncoder();
+    final bytes = zipEncoder.encode(archive);
+    return Uint8List.fromList(bytes ?? []);
+  }
+
+  /// Пакетный экспорт в одну книгу Excel: лист «Сводка» + отдельный лист на
+  /// каждое выбранное блюдо.
+  static Uint8List generateBatch(List<Dish> dishes) {
+    if (dishes.isEmpty) {
+      throw ArgumentError('Выберите хотя бы одно блюдо для экспорта');
+    }
+    final archive = Archive();
+    final usedNamesLower = <String>{'сводка'};
+    final sheetSpecs = <({String name, String xml})>[
+      (name: 'Сводка', xml: _buildSummarySheetXml(dishes)),
+    ];
+    for (final d in dishes) {
+      final title = d.title.trim().isEmpty ? 'Блюдо' : d.title.trim();
+      final sheetName = _uniqueSheetName(title, usedNamesLower);
+      sheetSpecs.add((
+        name: sheetName,
+        xml: _buildDishSheetXml(d.copyWith(showTitleInExport: true)),
+      ));
+    }
+
+    final overridesSb = StringBuffer();
+    final wbRelsSb = StringBuffer();
+    final sheetsSb = StringBuffer();
+    for (var i = 0; i < sheetSpecs.length; i++) {
+      final idx = i + 1;
+      overridesSb.writeln(
+        '  <Override PartName="/xl/worksheets/sheet$idx.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>',
+      );
+      wbRelsSb.writeln(
+        '  <Relationship Id="rId$idx" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" '
+        'Target="worksheets/sheet$idx.xml"/>',
+      );
+      sheetsSb.writeln(
+        '    <sheet name="${_escape(sheetSpecs[i].name)}" '
+        'sheetId="$idx" r:id="rId$idx"/>',
+      );
+      _addFile(archive, 'xl/worksheets/sheet$idx.xml', sheetSpecs[i].xml);
+    }
+
+    final stylesRid = sheetSpecs.length + 1;
+    final contentTypesXml =
+        '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.main+xml"/>
+$overridesSb  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>''';
+    _addFile(archive, '[Content_Types].xml', contentTypesXml);
+    const relsXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>''';
+    _addFile(archive, '_rels/.rels', relsXml);
+    _addFile(
+      archive,
+      'xl/_rels/workbook.xml.rels',
+      '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+$wbRelsSb  <Relationship Id="rId$stylesRid" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>''',
+    );
+    _addFile(
+      archive,
+      'xl/workbook.xml',
+      '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+$sheetsSb  </sheets>
+</workbook>''',
+    );
+    _addFile(archive, 'xl/styles.xml', _stylesXml);
+
+    final zipEncoder = ZipEncoder();
+    final bytes = zipEncoder.encode(archive);
+    return Uint8List.fromList(bytes ?? []);
+  }
+
+  static String _uniqueSheetName(String rawTitle, Set<String> usedLower) {
+    var cleaned = rawTitle
+        .replaceAll(RegExp(r'[\\/?*\[\]:]+'), ' ')
+        .replaceAll("'", '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (cleaned.isEmpty) cleaned = 'Блюдо';
+    if (cleaned.length > 31) cleaned = cleaned.substring(0, 31).trim();
+    if (cleaned.isEmpty) cleaned = 'Блюдо';
+
+    var candidate = cleaned;
+    var suffixNum = 2;
+    while (usedLower.contains(candidate.toLowerCase())) {
+      final suffix = ' ($suffixNum)';
+      final maxPrefix = 31 - suffix.length;
+      final prefix = cleaned.length > maxPrefix
+          ? cleaned.substring(0, maxPrefix).trim()
+          : cleaned;
+      candidate = '$prefix$suffix';
+      suffixNum++;
+    }
+    usedLower.add(candidate.toLowerCase());
+    return candidate;
+  }
+
+  static String _buildSummarySheetXml(List<Dish> dishes) {
+    final sb = StringBuffer();
+    sb.write('''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>
+  <cols>
+    <col min="1" max="1" width="5" customWidth="1"/>
+    <col min="2" max="2" width="34" customWidth="1"/>
+    <col min="3" max="3" width="12" customWidth="1"/>
+    <col min="4" max="4" width="12" customWidth="1"/>
+    <col min="5" max="5" width="12" customWidth="1"/>
+    <col min="6" max="6" width="12" customWidth="1"/>
+    <col min="7" max="7" width="13" customWidth="1"/>
+    <col min="8" max="8" width="12" customWidth="1"/>
+    <col min="9" max="9" width="12" customWidth="1"/>
+    <col min="10" max="10" width="12" customWidth="1"/>
+    <col min="11" max="11" width="13" customWidth="1"/>
+  </cols>
+  <sheetData>
+    <row r="1" ht="22" customHeight="1">
+      <c r="A1" s="2" t="inlineStr"><is><t>Сводная таблица КБЖУ сборника (${dishes.length} блюд)</t></is></c>
+    </row>
+    <row r="2" ht="24" customHeight="1">
+      <c r="A2" s="1" t="inlineStr"><is><t>№</t></is></c>
+      <c r="B2" s="1" t="inlineStr"><is><t>Наименование блюда</t></is></c>
+      <c r="C2" s="1" t="inlineStr"><is><t>Выход, г</t></is></c>
+      <c r="D2" s="1" t="inlineStr"><is><t>Б, г</t></is></c>
+      <c r="E2" s="1" t="inlineStr"><is><t>Ж, г</t></is></c>
+      <c r="F2" s="1" t="inlineStr"><is><t>У, г</t></is></c>
+      <c r="G2" s="1" t="inlineStr"><is><t>Ккал</t></is></c>
+      <c r="H2" s="1" t="inlineStr"><is><t>Б / 100 г</t></is></c>
+      <c r="I2" s="1" t="inlineStr"><is><t>Ж / 100 г</t></is></c>
+      <c r="J2" s="1" t="inlineStr"><is><t>У / 100 г</t></is></c>
+      <c r="K2" s="1" t="inlineStr"><is><t>Ккал / 100 г</t></is></c>
+    </row>
+''');
+
+    var rowIdx = 3;
+    final firstDataRow = rowIdx;
+    double sumP = 0, sumF = 0, sumC = 0, sumKcal = 0;
+
+    for (var i = 0; i < dishes.length; i++) {
+      final d = dishes[i];
+      final calc = CalculationEngine.calculate(d);
+      final title =
+          d.title.trim().isEmpty ? 'Блюдо без названия' : _titleText(d.title);
+      final noYield = calc.usesLossTable && !calc.hasYield;
+      sumP = _round2(sumP + calc.cookedProtein);
+      sumF = _round2(sumF + calc.cookedFat);
+      sumC = _round2(sumC + calc.cookedCarbs);
+      sumKcal = CalculationMath.round1(sumKcal + calc.cookedKcal);
+
+      final yieldCell = noYield
+          ? '<c r="C$rowIdx" s="0" t="inlineStr"><is><t>—</t></is></c>'
+          : '<c r="C$rowIdx" s="10"><v>${calc.yieldGrams.toStringAsFixed(1)}</v></c>';
+      String per100Cell(String col, String style, double val, int digits) =>
+          noYield
+              ? '<c r="$col$rowIdx" s="$style" t="inlineStr"><is><t>—</t></is></c>'
+              : '<c r="$col$rowIdx" s="$style"><v>${val.toStringAsFixed(digits)}</v></c>';
+
+      sb.write('''
+    <row r="$rowIdx" ht="18" customHeight="1">
+      <c r="A$rowIdx" s="0"><v>${i + 1}</v></c>
+      <c r="B$rowIdx" s="5" t="inlineStr"><is><t>${_escape(title)}</t></is></c>
+      $yieldCell
+      <c r="D$rowIdx" s="3"><v>${calc.cookedProtein.toStringAsFixed(2)}</v></c>
+      <c r="E$rowIdx" s="3"><v>${calc.cookedFat.toStringAsFixed(2)}</v></c>
+      <c r="F$rowIdx" s="3"><v>${calc.cookedCarbs.toStringAsFixed(2)}</v></c>
+      <c r="G$rowIdx" s="10"><v>${calc.cookedKcal.toStringAsFixed(1)}</v></c>
+      ${per100Cell('H', '3', calc.per100gProtein, 2)}
+      ${per100Cell('I', '3', calc.per100gFat, 2)}
+      ${per100Cell('J', '3', calc.per100gCarbs, 2)}
+      ${per100Cell('K', '10', calc.per100gKcal, 1)}
+    </row>
+''');
+      rowIdx++;
+    }
+
+    final lastDataRow = rowIdx - 1;
+    sb.write('''
+    <row r="$rowIdx" ht="19" customHeight="1">
+      <c r="A$rowIdx" s="6" t="inlineStr"><is><t>ИТОГО по сборнику</t></is></c>
+      <c r="B$rowIdx" s="6"/>
+      <c r="C$rowIdx" s="1"/>
+      <c r="D$rowIdx" s="8"><f>SUM(D$firstDataRow:D$lastDataRow)</f><v>${sumP.toStringAsFixed(2)}</v></c>
+      <c r="E$rowIdx" s="8"><f>SUM(E$firstDataRow:E$lastDataRow)</f><v>${sumF.toStringAsFixed(2)}</v></c>
+      <c r="F$rowIdx" s="8"><f>SUM(F$firstDataRow:F$lastDataRow)</f><v>${sumC.toStringAsFixed(2)}</v></c>
+      <c r="G$rowIdx" s="9"><f>SUM(G$firstDataRow:G$lastDataRow)</f><v>${sumKcal.toStringAsFixed(1)}</v></c>
+      <c r="H$rowIdx" s="1"/>
+      <c r="I$rowIdx" s="1"/>
+      <c r="J$rowIdx" s="1"/>
+      <c r="K$rowIdx" s="1"/>
+    </row>
+  </sheetData>
+  <mergeCells count="2">
+    <mergeCell ref="A1:K1"/>
+    <mergeCell ref="A$rowIdx:B$rowIdx"/>
+  </mergeCells>
+  <pageMargins left="0.5" right="0.5" top="0.5" bottom="0.5" header="0.3" footer="0.3"/>
+  <pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="1"/>
+</worksheet>''');
+    return sb.toString();
+  }
+
+  // 5. xl/styles.xml
+  static const String _stylesXml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
   <numFmts count="2"><numFmt numFmtId="164" formatCode="[\$-419]0.0"/><numFmt numFmtId="165" formatCode="[\$-419]0.00"/></numFmts>
   <fonts count="3">
@@ -127,7 +331,11 @@ class XlsxBlankGenerator {
   </cellXfs>
   <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
 </styleSheet>''';
-    _addFile(archive, 'xl/styles.xml', stylesXml);
+
+  static String _buildDishSheetXml(Dish dish) {
+    final calc = CalculationEngine.calculate(dish);
+    final isCrossMode = dish.blankMode == BlankMode.photoCross;
+    double totalW = 0, totalP = 0, totalF = 0, totalC = 0, totalKcal = 0;
 
     // 6. xl/worksheets/sheet1.xml
     final sheetSb = StringBuffer();
@@ -527,12 +735,7 @@ class XlsxBlankGenerator {
       '  <pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="$fitHeight"/>\n',
     );
     sheetSb.write('</worksheet>');
-
-    _addFile(archive, 'xl/worksheets/sheet1.xml', sheetSb.toString());
-
-    final zipEncoder = ZipEncoder();
-    final bytes = zipEncoder.encode(archive);
-    return Uint8List.fromList(bytes ?? []);
+    return sheetSb.toString();
   }
 
   static void _addFile(Archive archive, String filename, String content) {

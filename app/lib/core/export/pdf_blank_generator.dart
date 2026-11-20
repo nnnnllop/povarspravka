@@ -32,7 +32,67 @@ class PdfBlankGenerator {
   /// Генерация бинарного содержимого PDF бланка 1:1 с бумажным оригиналом
   static Future<Uint8List> generate(Dish dish) async {
     final pdf = pw.Document();
+    final fonts = await _loadFonts();
+    _appendDishPages(pdf, dish, fonts.regular, fonts.bold, fonts.emoji);
+    return pdf.save();
+  }
 
+  /// Пакетная генерация: сводная таблица сборника + бланки каждого блюда.
+  static Future<Uint8List> generateBatch(List<Dish> dishes) async {
+    if (dishes.isEmpty) {
+      throw ArgumentError('Выберите хотя бы одно блюдо для экспорта');
+    }
+    final pdf = pw.Document();
+    final fonts = await _loadFonts();
+    final calculated = <(Dish, CalculationResult)>[
+      for (final d in dishes) (d, CalculationEngine.calculate(d)),
+    ];
+
+    const summaryRowsPerPage = 18;
+    final summaryPages =
+        (calculated.length + summaryRowsPerPage - 1) ~/ summaryRowsPerPage;
+    for (var page = 0; page < summaryPages; page++) {
+      final start = page * summaryRowsPerPage;
+      final end = (start + summaryRowsPerPage < calculated.length)
+          ? start + summaryRowsPerPage
+          : calculated.length;
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4.landscape,
+          margin: const pw.EdgeInsets.symmetric(horizontal: 28, vertical: 18),
+          theme: pw.ThemeData.withFont(
+            base: fonts.regular,
+            bold: fonts.bold,
+            fontFallback: [fonts.emoji],
+          ),
+          build: (_) => _buildBatchSummaryPage(
+            calculated,
+            start: start,
+            end: end,
+            fontRegular: fonts.regular,
+            fontBold: fonts.bold,
+            page: page + 1,
+            pageCount: summaryPages,
+          ),
+        ),
+      );
+    }
+
+    for (final (dish, _) in calculated) {
+      _appendDishPages(
+        pdf,
+        dish.copyWith(showTitleInExport: true),
+        fonts.regular,
+        fonts.bold,
+        fonts.emoji,
+      );
+    }
+
+    return pdf.save();
+  }
+
+  static Future<({pw.Font regular, pw.Font bold, pw.Font emoji})>
+      _loadFonts() async {
     pw.Font fontRegular;
     pw.Font fontBold;
     try {
@@ -44,11 +104,20 @@ class PdfBlankGenerator {
       fontRegular = pw.Font.helvetica();
       fontBold = pw.Font.helveticaBold();
     }
-
     final emojiFont = UnicodePdfFont(
-        await rootBundle.load('assets/fonts/NotoEmoji-Regular.ttf'));
-    final calcResult = CalculationEngine.calculate(dish);
+      await rootBundle.load('assets/fonts/NotoEmoji-Regular.ttf'),
+    );
+    return (regular: fontRegular, bold: fontBold, emoji: emojiFont);
+  }
 
+  static void _appendDishPages(
+    pw.Document pdf,
+    Dish dish,
+    pw.Font fontRegular,
+    pw.Font fontBold,
+    pw.Font emojiFont,
+  ) {
+    final calcResult = CalculationEngine.calculate(dish);
     const rowsPerPage = 18;
     final pageCount = dish.ingredients.isEmpty
         ? 1
@@ -84,8 +153,142 @@ class PdfBlankGenerator {
         ),
       ));
     }
+  }
 
-    return pdf.save();
+  static pw.Widget _buildBatchSummaryPage(
+    List<(Dish, CalculationResult)> items, {
+    required int start,
+    required int end,
+    required pw.Font fontRegular,
+    required pw.Font fontBold,
+    required int page,
+    required int pageCount,
+  }) {
+    const colWidths = <int, pw.TableColumnWidth>{
+      0: pw.FixedColumnWidth(26),
+      1: pw.FixedColumnWidth(234),
+      2: pw.FixedColumnWidth(58),
+      3: pw.FixedColumnWidth(56),
+      4: pw.FixedColumnWidth(56),
+      5: pw.FixedColumnWidth(56),
+      6: pw.FixedColumnWidth(62),
+      7: pw.FixedColumnWidth(56),
+      8: pw.FixedColumnWidth(56),
+      9: pw.FixedColumnWidth(56),
+      10: pw.FixedColumnWidth(64),
+    };
+    final hStyle = pw.TextStyle(
+      font: fontBold,
+      fontSize: 8.0,
+      fontWeight: pw.FontWeight.bold,
+    );
+    final cStyle = pw.TextStyle(font: fontRegular, fontSize: 8.0);
+    final bStyle = pw.TextStyle(
+      font: fontBold,
+      fontSize: 8.0,
+      fontWeight: pw.FontWeight.bold,
+    );
+
+    pw.Widget cell(String text, pw.TextStyle style, {pw.Alignment align = pw.Alignment.center}) {
+      return pw.Container(
+        height: 18,
+        padding: const pw.EdgeInsets.symmetric(horizontal: 3),
+        alignment: align,
+        child: pw.Text(
+          text,
+          style: style,
+          maxLines: 1,
+          overflow: pw.TextOverflow.clip,
+        ),
+      );
+    }
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Container(
+          width: _totalWidth,
+          alignment: pw.Alignment.center,
+          child: pw.Text(
+            pageCount > 1
+                ? 'Сводная таблица КБЖУ сборника (стр. $page/$pageCount)'
+                : 'Сводная таблица КБЖУ сборника (${items.length} блюд)',
+            style: pw.TextStyle(
+              font: fontBold,
+              fontSize: 11,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+        ),
+        pw.SizedBox(height: 8),
+        pw.Table(
+          columnWidths: colWidths,
+          border: pw.TableBorder.all(width: 0.6, color: PdfColors.black),
+          children: [
+            pw.TableRow(
+              children: [
+                cell('№', hStyle),
+                cell('Наименование блюда', hStyle, align: pw.Alignment.centerLeft),
+                cell('Выход, г', hStyle),
+                cell('Б, г', hStyle),
+                cell('Ж, г', hStyle),
+                cell('У, г', hStyle),
+                cell('Ккал', hStyle),
+                cell('Б/100', hStyle),
+                cell('Ж/100', hStyle),
+                cell('У/100', hStyle),
+                cell('Ккал/100', hStyle),
+              ],
+            ),
+            for (var i = start; i < end; i++) ...[
+              (() {
+                final (d, r) = items[i];
+                final title = (d.title.trim().isEmpty
+                        ? 'Блюдо без названия'
+                        : d.title.trim())
+                    .replaceAll(RegExp(r'\s+'), ' ');
+                final noYield = r.usesLossTable && !r.hasYield;
+                return pw.TableRow(
+                  children: [
+                    cell('${i + 1}', cStyle),
+                    cell(title, cStyle, align: pw.Alignment.centerLeft),
+                    cell(
+                      noYield ? '—' : CalculationEngine.formatGrams(r.yieldGrams),
+                      cStyle,
+                    ),
+                    cell(CalculationEngine.formatMacro(r.cookedProtein), cStyle),
+                    cell(CalculationEngine.formatMacro(r.cookedFat), cStyle),
+                    cell(CalculationEngine.formatMacro(r.cookedCarbs), cStyle),
+                    cell(CalculationEngine.formatKcal(r.cookedKcal), bStyle),
+                    cell(
+                      noYield ? '—' : CalculationEngine.formatMacro(r.per100gProtein),
+                      cStyle,
+                    ),
+                    cell(
+                      noYield ? '—' : CalculationEngine.formatMacro(r.per100gFat),
+                      cStyle,
+                    ),
+                    cell(
+                      noYield ? '—' : CalculationEngine.formatMacro(r.per100gCarbs),
+                      cStyle,
+                    ),
+                    cell(
+                      noYield ? '—' : CalculationEngine.formatKcal(r.per100gKcal),
+                      bStyle,
+                    ),
+                  ],
+                );
+              })(),
+            ],
+          ],
+        ),
+        pw.SizedBox(height: 6),
+        pw.Text(
+          'Далее на страницах приведены полные расчётные бланки каждого блюда.',
+          style: pw.TextStyle(font: fontRegular, fontSize: 8.0),
+        ),
+      ],
+    );
   }
 
   static String _formatPercent(double retention) =>

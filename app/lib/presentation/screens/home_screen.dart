@@ -15,7 +15,10 @@ import '../providers/dish_provider.dart';
 import '../providers/search_provider.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/app_buttons.dart';
+import '../widgets/batch_export_sheet.dart';
+import '../widgets/dish_comparison_sheet.dart';
 import '../widgets/loss_clarity_hints.dart';
+import '../widgets/menu_builder_sheet.dart';
 import '../widgets/persistence_error_banner.dart';
 import '../widgets/share_recipe_sheet.dart';
 import 'recipe_editor_screen.dart';
@@ -45,6 +48,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   String _libraryQuery = '';
   String? _selectedCategory;
   _LibrarySort _librarySort = _LibrarySort.newest;
+  final Set<String> _selectedDishIds = <String>{};
+
+  void _toggleDishSelection(String dishId) {
+    AppHaptics.toggle();
+    setState(() {
+      if (!_selectedDishIds.add(dishId)) {
+        _selectedDishIds.remove(dishId);
+      }
+    });
+  }
+
+  void _startSelection(String dishId) {
+    AppHaptics.toggle();
+    setState(() {
+      _selectedDishIds.add(dishId);
+    });
+  }
 
   @override
   void dispose() {
@@ -125,31 +145,82 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       filteredDishes.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     }
 
+    final liveIds = {for (final d in savedDishes) d.id};
+    _selectedDishIds.removeWhere((id) => !liveIds.contains(id));
+    final selectedDishes = [
+      for (final d in savedDishes)
+        if (_selectedDishIds.contains(d.id)) d,
+    ];
+    final isSelecting = selectedDishes.isNotEmpty;
+    final visibleIds = {for (final d in filteredDishes) d.id};
+    final allVisibleSelected = visibleIds.isNotEmpty &&
+        visibleIds.every(_selectedDishIds.contains);
+
     return Scaffold(
       backgroundColor: p.canvas,
-      appBar: AppBar(
-        toolbarHeight: kToolbarHeight,
-        title: Row(
-          children: [
-            Icon(Icons.menu_book_rounded, size: 20, color: p.accent),
-            const SizedBox(width: Space.x2),
-            Expanded(
-              child: Text(
-                'Поварская справка',
+      appBar: isSelecting
+          ? AppBar(
+              toolbarHeight: kToolbarHeight,
+              leading: IconButton(
+                key: const ValueKey('selection-close-btn'),
+                tooltip: 'Отменить выбор',
+                icon: Icon(Icons.close_rounded, color: p.ink),
+                onPressed: () => setState(_selectedDishIds.clear),
+              ),
+              title: Text(
+                'Выбрано: ${selectedDishes.length}',
                 style: AppTypography.title.copyWith(color: p.ink),
                 overflow: TextOverflow.ellipsis,
               ),
+              actions: [
+                IconButton(
+                  key: const ValueKey('selection-toggle-all-btn'),
+                  tooltip:
+                      allVisibleSelected ? 'Снять выделение' : 'Выбрать все',
+                  icon: Icon(
+                    allVisibleSelected
+                        ? Icons.deselect_rounded
+                        : Icons.select_all_rounded,
+                    color: p.accent,
+                  ),
+                  onPressed: visibleIds.isEmpty
+                      ? null
+                      : () {
+                          AppHaptics.toggle();
+                          setState(() {
+                            if (allVisibleSelected) {
+                              _selectedDishIds.removeAll(visibleIds);
+                            } else {
+                              _selectedDishIds.addAll(visibleIds);
+                            }
+                          });
+                        },
+                ),
+              ],
+            )
+          : AppBar(
+              toolbarHeight: kToolbarHeight,
+              title: Row(
+                children: [
+                  Icon(Icons.menu_book_rounded, size: 20, color: p.accent),
+                  const SizedBox(width: Space.x2),
+                  Expanded(
+                    child: Text(
+                      'Поварская справка',
+                      style: AppTypography.title.copyWith(color: p.ink),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                IconButton(
+                  tooltip: 'Как считается',
+                  icon: Icon(Icons.info_outline_rounded, color: p.inkSecondary),
+                  onPressed: () => _showHowItWorks(context),
+                ),
+              ],
             ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Как считается',
-            icon: Icon(Icons.info_outline_rounded, color: p.inkSecondary),
-            onPressed: () => _showHowItWorks(context),
-          ),
-        ],
-      ),
       body: Column(
         children: [
           if (persistenceError != null || savedDishesError != null)
@@ -202,7 +273,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                   const SizedBox(height: Space.x3),
                 ],
-                if (hasActiveDraft) ...[
+                if (hasActiveDraft && !isSelecting) ...[
                   _ActiveDraftCard(
                     dish: activeDish,
                     onOpen: () => _openEditor(context),
@@ -370,16 +441,42 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                   )
                 else
-                  for (final dish in filteredDishes) _SavedDishCard(dish: dish),
+                  for (final dish in filteredDishes)
+                    _SavedDishCard(
+                      dish: dish,
+                      isSelecting: isSelecting,
+                      isSelected: _selectedDishIds.contains(dish.id),
+                      onToggleSelect: () => _toggleDishSelection(dish.id),
+                      onStartSelect: () => _startSelection(dish.id),
+                    ),
               ],
             ),
           ),
         ],
       ),
-      bottomNavigationBar: _HomeDock(
-        onNewCalculation: () => _newCalculation(context, ref),
-        onCatalog: () => _openCatalog(context),
-      ),
+      bottomNavigationBar: isSelecting
+          ? _SelectionDock(
+              selectedCount: selectedDishes.length,
+              onCompare: selectedDishes.length == 2
+                  ? () => DishComparisonSheet.show(
+                        context,
+                        first: selectedDishes[0],
+                        second: selectedDishes[1],
+                      )
+                  : null,
+              onMenu: () => MenuBuilderSheet.show(
+                context,
+                dishes: selectedDishes,
+              ),
+              onExport: () => BatchExportSheet.show(
+                context,
+                dishes: selectedDishes,
+              ),
+            )
+          : _HomeDock(
+              onNewCalculation: () => _newCalculation(context, ref),
+              onCatalog: () => _openCatalog(context),
+            ),
     );
   }
 
@@ -1341,27 +1438,33 @@ class _ActiveDraftCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: p.surface,
         borderRadius: Radii.cardAll,
+        border: Border.all(color: p.borderStatic),
       ),
-      padding: const EdgeInsets.all(Space.x4),
+      padding: const EdgeInsets.all(Space.x3),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: Space.x2,
-              vertical: 3,
-            ),
-            decoration: BoxDecoration(
-              color: hasDraft ? p.accentSoft : p.sunken,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              hasDraft ? 'Открытый расчёт' : 'Новый расчёт',
-              style: AppTypography.caption.copyWith(
-                color: hasDraft ? p.accent : p.inkSecondary,
-                fontWeight: FontWeight.w600,
+          Row(
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: hasDraft ? p.accent : p.inkMuted,
+                  shape: BoxShape.circle,
+                ),
               ),
-            ),
+              const SizedBox(width: Space.x2),
+              Expanded(
+                child: Text(
+                  hasDraft ? 'Открытый расчёт' : 'Новый расчёт',
+                  style: AppTypography.caption.copyWith(
+                    color: hasDraft ? p.accent : p.inkSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: Space.x1),
           Text(
@@ -1518,8 +1621,18 @@ class _EmptyLibrary extends StatelessWidget {
 /// Карточка сохранённого блюда: название, выход, ккал, меню действий.
 class _SavedDishCard extends ConsumerWidget {
   final Dish dish;
+  final bool isSelecting;
+  final bool isSelected;
+  final VoidCallback? onToggleSelect;
+  final VoidCallback? onStartSelect;
 
-  const _SavedDishCard({required this.dish});
+  const _SavedDishCard({
+    required this.dish,
+    this.isSelecting = false,
+    this.isSelected = false,
+    this.onToggleSelect,
+    this.onStartSelect,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1534,14 +1647,23 @@ class _SavedDishCard extends ConsumerWidget {
       child: Container(
         margin: const EdgeInsets.only(bottom: Space.x2),
         decoration: BoxDecoration(
-          color: p.surface,
+          color: isSelected ? p.accentSoft : p.surface,
           borderRadius: Radii.cardAll,
+          border: Border.all(
+            color: isSelected ? p.accent : p.borderStatic,
+            width: isSelected ? 1.5 : 1,
+          ),
         ),
         clipBehavior: Clip.antiAlias,
         child: Material(
           color: Colors.transparent,
           child: InkWell(
+            onLongPress: isSelecting ? onToggleSelect : onStartSelect,
             onTap: () async {
+              if (isSelecting) {
+                onToggleSelect?.call();
+                return;
+              }
               final notifier = ref.read(dishProvider.notifier);
               if (notifier.isDirty) {
                 final ok = await _confirmReplaceDirtyDraft(context, ref);
@@ -1605,12 +1727,31 @@ class _SavedDishCard extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  PopupMenuButton<String>(
-                    tooltip: 'Действия с блюдом',
-                    icon: Icon(Icons.more_vert_rounded, color: p.inkMuted),
-                    onSelected: (value) async {
-                      final notifier = ref.read(savedDishesProvider.notifier);
-                      if (value == 'share') {
+                  if (isSelecting)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: Space.x3,
+                        vertical: Space.x2,
+                      ),
+                      child: Icon(
+                        isSelected
+                            ? Icons.check_circle_rounded
+                            : Icons.radio_button_unchecked_rounded,
+                        color: isSelected ? p.accent : p.inkMuted,
+                        size: 22,
+                      ),
+                    )
+                  else
+                    PopupMenuButton<String>(
+                      tooltip: 'Действия с блюдом',
+                      icon: Icon(Icons.more_vert_rounded, color: p.inkMuted),
+                      onSelected: (value) async {
+                        final notifier = ref.read(savedDishesProvider.notifier);
+                        if (value == 'select') {
+                          onStartSelect?.call();
+                          return;
+                        }
+                        if (value == 'share') {
                         await ShareRecipeSheet.show(
                           context,
                           dish: dish,
@@ -1704,13 +1845,29 @@ class _SavedDishCard extends ConsumerWidget {
                         }
                       }
                     },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'share', child: Text('Поделиться рецептом')),
-                      PopupMenuItem(value: 'category', child: Text('Категория')),
-                      PopupMenuItem(value: 'copy', child: Text('Дублировать')),
-                      PopupMenuItem(value: 'delete', child: Text('Удалить')),
-                    ],
-                  ),
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(
+                          value: 'select',
+                          child: Text('Выбрать для меню / экспорта'),
+                        ),
+                        PopupMenuItem(
+                          value: 'share',
+                          child: Text('Поделиться рецептом'),
+                        ),
+                        PopupMenuItem(
+                          value: 'category',
+                          child: Text('Категория'),
+                        ),
+                        PopupMenuItem(
+                          value: 'copy',
+                          child: Text('Дублировать'),
+                        ),
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: Text('Удалить'),
+                        ),
+                      ],
+                    ),
                 ],
               ),
             ),
@@ -1767,6 +1924,90 @@ Future<String?> _pickDishCategory(BuildContext context, Dish dish) {
       ),
     ),
   );
+}
+
+/// Нижний док главного экрана в режиме выбора блюд: Сравнить, Меню, Экспорт.
+class _SelectionDock extends StatelessWidget {
+  final int selectedCount;
+  final VoidCallback? onCompare;
+  final VoidCallback onMenu;
+  final VoidCallback onExport;
+
+  const _SelectionDock({
+    required this.selectedCount,
+    required this.onCompare,
+    required this.onMenu,
+    required this.onExport,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final stackVertically = (width < 380 && textScale > 1.3) || width < 300;
+
+    final compareBtn = OutlinedButton.icon(
+      key: const ValueKey('selection-compare-btn'),
+      onPressed: onCompare,
+      icon: const Icon(Icons.compare_arrows_rounded, size: 18),
+      label: const FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text('Сравнить'),
+      ),
+    );
+    final menuBtn = OutlinedButton.icon(
+      key: const ValueKey('selection-menu-btn'),
+      onPressed: onMenu,
+      icon: const Icon(Icons.restaurant_rounded, size: 18),
+      label: const FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text('Меню'),
+      ),
+    );
+    final exportBtn = FilledButton.icon(
+      key: const ValueKey('selection-export-btn'),
+      onPressed: onExport,
+      icon: const Icon(Icons.ios_share_rounded, size: 18),
+      label: const FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text('Экспорт'),
+      ),
+    );
+
+    return AppBottomBar(
+      child: stackVertically
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                compareBtn,
+                const SizedBox(height: Space.x2),
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: menuBtn),
+                      const SizedBox(width: Space.x2),
+                      Expanded(child: exportBtn),
+                    ],
+                  ),
+                ),
+              ],
+            )
+          : IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: compareBtn),
+                  const SizedBox(width: Space.x2),
+                  Expanded(child: menuBtn),
+                  const SizedBox(width: Space.x2),
+                  Expanded(child: exportBtn),
+                ],
+              ),
+            ),
+    );
+  }
 }
 
 /// Нижний док главного экрана: два главных действия всегда под рукой.

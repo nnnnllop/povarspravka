@@ -3,6 +3,7 @@ import '../../core/calculation/calculation_engine.dart';
 import '../../core/calculation/calculation_math.dart';
 import '../../core/calculation/calculation_validation.dart';
 import '../../core/calculation/loss_table.dart';
+import '../../core/calculation/macro_balance.dart';
 import '../../core/calculation/models/calculation_result.dart';
 import '../../core/calculation/models/ingredient.dart';
 import '../../core/calculation/yield_explanation.dart';
@@ -11,6 +12,7 @@ import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
 import 'app_buttons.dart';
 import 'loss_clarity_hints.dart';
+import 'macro_balance_bar.dart';
 import 'yield_density_warning.dart';
 
 /// Итоги блюда как **жизненный цикл** (аудит P1-6, доработка v1.2).
@@ -500,9 +502,25 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
               _buildStepSection(
                 palette: p,
                 title: '3. Энергетическая ценность после готовки',
-                content: Text(
-                  '${m(r.cookedProtein)} × 4 + ${m(r.cookedFat)} × 9 + ${m(r.cookedCarbs)} × 4 = ${k(r.cookedKcal)} ккал',
-                  style: AppTypography.num.copyWith(color: p.ink),
+                content: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      '${m(r.cookedProtein)} × 4 + ${m(r.cookedFat)} × 9 + ${m(r.cookedCarbs)} × 4 = ${k(r.cookedKcal)} ккал',
+                      style: AppTypography.num.copyWith(color: p.ink),
+                    ),
+                    if (r.cookedKcal > 0) ...[
+                      const SizedBox(height: Space.x2),
+                      MacroBalanceBar(
+                        key: const ValueKey('inspector-macro-balance'),
+                        balance: MacroBalance.fromMacros(
+                          protein: r.cookedProtein,
+                          fat: r.cookedFat,
+                          carbs: r.cookedCarbs,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
               Divider(color: p.divider, height: Space.x5),

@@ -677,14 +677,13 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
     final rawNet = _safeGrams(() => dish.totalRawNetGrams);
     final effYield = _safeGrams(() => dish.effectiveYieldGrams);
     final explanation = YieldExplanation(rawNet, effYield);
-    final hideEditLabel = MediaQuery.sizeOf(context).width < 380 &&
-        MediaQuery.textScalerOf(context).scale(1.0) > 1.5;
 
     return Container(
-      padding: const EdgeInsets.all(Space.x4),
+      padding: const EdgeInsets.all(Space.x3),
       decoration: BoxDecoration(
         color: p.surface,
         borderRadius: Radii.cardAll,
+        border: Border.all(color: p.borderStatic),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -718,17 +717,6 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                       style: AppTypography.bodySm.copyWith(color: p.ink),
                     ),
                   ),
-                  if (!hideEditLabel) ...[
-                    Flexible(
-                      child: Text(
-                        'Изменить',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.label.copyWith(color: p.inkSecondary),
-                      ),
-                    ),
-                    const SizedBox(width: Space.x1),
-                  ],
                   Icon(Icons.chevron_right_rounded,
                       size: 18, color: p.inkMuted),
                 ],
@@ -740,9 +728,12 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
             legacy || dish.hasCustomYield
                 ? 'Выход готового блюда: ${CalculationEngine.formatGrams(effYield)} г'
                 : 'Вес готового блюда не указан',
-            style: (legacy || dish.hasCustomYield
-                    ? AppTypography.headline.copyWith(color: p.ink)
-                    : AppTypography.bodySm.copyWith(color: p.inkSecondary)),
+            style: AppTypography.bodySm.copyWith(
+              color: p.inkSecondary,
+              fontWeight: (legacy || dish.hasCustomYield)
+                  ? FontWeight.w600
+                  : FontWeight.w400,
+            ),
           ),
           if (legacy)
             SwitchListTile.adaptive(
@@ -783,7 +774,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                     ? 'Фактический выход готового блюда'
                     : 'Вес готового блюда',
                 hintText: legacy ? null : 'Взвесьте готовое блюдо',
-                helperText: legacy
+                helperText: (legacy || dish.hasCustomYield)
                     ? null
                     : 'Нужен для расчёта на 100 г и на порцию',
                 helperMaxLines: 2,
@@ -872,6 +863,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
       decoration: BoxDecoration(
         color: p.surface,
         borderRadius: Radii.cardAll,
+        border: Border.all(color: p.borderStatic),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,

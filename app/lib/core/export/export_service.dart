@@ -125,6 +125,64 @@ class ExportService {
     }
   }
 
+  /// Пакетный экспорт сборника блюд: единый PDF или книга Excel (.xlsx).
+  static Future<void> shareBatchFile(
+    List<Dish> dishes,
+    ExportType type, {
+    DateTime? now,
+  }) async {
+    if (dishes.isEmpty) {
+      throw ArgumentError('Выберите хотя бы одно блюдо для экспорта');
+    }
+    if (type == ExportType.docx) {
+      throw UnsupportedError('Пакетный экспорт поддерживается для PDF и XLSX');
+    }
+
+    final dt = now ?? DateTime.now();
+    final dateTag = '${dt.year.toString().padLeft(4, '0')}'
+        '${dt.month.toString().padLeft(2, '0')}'
+        '${dt.day.toString().padLeft(2, '0')}';
+
+    final tempDir = await getTemporaryDirectory();
+    final exportsRoot = Directory(p.join(tempDir.path, 'exports'));
+    await exportsRoot.create(recursive: true);
+    await pruneAbandonedExports(exportsRoot);
+    final exportDir = await exportsRoot.createTemp('blank_');
+
+    var handedOff = false;
+    try {
+      final String fileName;
+      final List<int> bytes;
+      final String mimeType;
+      if (type == ExportType.pdf) {
+        fileName = 'Сборник_блюд_$dateTag.pdf';
+        bytes = await PdfBlankGenerator.generateBatch(dishes);
+        mimeType = 'application/pdf';
+      } else {
+        fileName = 'Сборник_блюд_$dateTag.xlsx';
+        bytes = XlsxBlankGenerator.generateBatch(dishes);
+        mimeType =
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      }
+
+      final filePath = p.join(exportDir.path, fileName);
+      final file = File(filePath);
+      await file.writeAsBytes(bytes, flush: true);
+
+      await Share.shareXFiles(
+        [XFile(filePath, mimeType: mimeType, name: fileName)],
+        subject: 'Сборник бланков КБЖУ (${dishes.length} блюд)',
+      );
+      handedOff = true;
+    } finally {
+      if (!handedOff || defaultTargetPlatform == TargetPlatform.android) {
+        try {
+          await exportDir.delete(recursive: true);
+        } on FileSystemException {/* next prune retries */}
+      }
+    }
+  }
+
   /// Читаемая текстовая сводка КБЖУ и состава для буфера обмена и мессенджеров.
   static String formatPlainTextSummary(Dish dish, CalculationResult calc) {
     final title = dish.title.trim().isEmpty ? 'Расчёт КБЖУ' : dish.title.trim();
