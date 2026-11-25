@@ -227,7 +227,7 @@ class _MenuBuilderSheetState extends State<MenuBuilderSheet> {
       child: SafeArea(
         top: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(Space.x5, 0, Space.x5, Space.x6),
+          padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x5),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -235,7 +235,7 @@ class _MenuBuilderSheetState extends State<MenuBuilderSheet> {
                 'Набор блюд (меню)',
                 style: AppTypography.title.copyWith(color: p.ink),
               ),
-              const SizedBox(height: Space.x1),
+              const SizedBox(height: 2),
               Text(
                 'Укажите массу порции каждого блюда — итог пересчитается автоматически.',
                 style: AppTypography.bodySm.copyWith(color: p.inkSecondary),

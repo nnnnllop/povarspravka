@@ -56,7 +56,7 @@ class _BatchExportSheetState extends State<BatchExportSheet> {
     return SafeArea(
       top: false,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(Space.x5, 0, Space.x5, Space.x6),
+        padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x5),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -65,7 +65,7 @@ class _BatchExportSheetState extends State<BatchExportSheet> {
               'Пакетный экспорт',
               style: AppTypography.title.copyWith(color: p.ink),
             ),
-            const SizedBox(height: Space.x1),
+            const SizedBox(height: 2),
             Text(
               'Выбрано блюд: ${widget.dishes.length}. В документ войдут '
               'сводная таблица КБЖУ и отдельный бланк каждого блюда.',

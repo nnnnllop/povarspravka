@@ -7,6 +7,7 @@ import '../../core/calculation/macro_balance.dart';
 import '../../core/calculation/models/calculation_result.dart';
 import '../../core/calculation/models/ingredient.dart';
 import '../../core/calculation/yield_explanation.dart';
+import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
@@ -318,178 +319,163 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
           ? const BorderRadius.vertical(top: Radius.circular(Radii.slab))
           : Radii.slabAll,
       onTap: () => _inspect(context),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-                Space.x4, Space.x3 + 2, Space.x4, Space.x3),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    SignalDot(
-                      size: 6,
-                      color: canSwitch ? p.signal : p.slabFat,
+                SignalDot(
+                  size: 6,
+                  color: canSwitch ? p.signal : p.slabFat,
+                ),
+                const SizedBox(width: Space.x2),
+                Expanded(
+                  child: Text(
+                    per100
+                        ? 'После готовки · на 100 г'
+                        : 'После готовки · на всё блюдо',
+                    style: AppTypography.caption.copyWith(
+                      color: p.slabSecondary,
+                      fontWeight: FontWeight.w600,
                     ),
-                    const SizedBox(width: Space.x2),
-                    Expanded(
-                      child: Text(
-                        per100
-                            ? 'После готовки · на 100 г'
-                            : 'После готовки · на всё блюдо',
-                        style: AppTypography.caption.copyWith(
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 17,
+                  color: p.slabSecondary,
+                ),
+              ],
+            ),
+            const SizedBox(height: Space.x1 + 2),
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: Space.x2,
+              runSpacing: Space.x1,
+              children: [
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      AnimatedMetricText(
+                        value: kcalVal,
+                        formatter: k,
+                        style: AppTypography.heroKcal
+                            .copyWith(color: p.slabInk),
+                      ),
+                      const SizedBox(width: Space.x1 + 2),
+                      Text(
+                        per100 ? 'ккал / 100 г' : 'ккал',
+                        style: AppTypography.bodySm.copyWith(
                           color: p.slabSecondary,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                    ),
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      size: 18,
-                      color: p.slabSecondary,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-                const SizedBox(height: Space.x2),
-                Wrap(
-                  alignment: WrapAlignment.spaceBetween,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: Space.x2,
-                  runSpacing: Space.x1,
-                  children: [
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
-                        children: [
-                          AnimatedMetricText(
-                            value: kcalVal,
-                            formatter: k,
-                            style: AppTypography.heroKcal
-                                .copyWith(color: p.slabInk),
+                if (canSwitch)
+                  Material(
+                    color: p.accent,
+                    borderRadius: BorderRadius.circular(999),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      key: const ValueKey('hero-mode-toggle'),
+                      onTap: () {
+                        AppHaptics.toggle();
+                        setState(() => _showPer100g = !_showPer100g);
+                      },
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          minWidth: kMinTapTarget,
+                          minHeight: kMinTapTarget,
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: Space.x3,
+                            vertical: 6,
                           ),
-                          const SizedBox(width: Space.x1 + 2),
-                          Text(
-                            per100 ? 'ккал / 100 г' : 'ккал',
-                            style: AppTypography.bodySm.copyWith(
-                              color: p.slabSecondary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (canSwitch)
-                      Material(
-                        color: p.accent,
-                        borderRadius: BorderRadius.circular(999),
-                        clipBehavior: Clip.antiAlias,
-                        child: InkWell(
-                          key: const ValueKey('hero-mode-toggle'),
-                          onTap: () {
-                            AppHaptics.toggle();
-                            setState(() => _showPer100g = !_showPer100g);
-                          },
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(
-                              minWidth: kMinTapTarget,
-                              minHeight: kMinTapTarget,
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: Space.x3,
-                                vertical: Space.x2,
-                              ),
-                              child: Center(
-                                widthFactor: 1,
-                                child: FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Text(
-                                    per100
-                                        ? '${k(r.cookedKcal)} ккал всего'
-                                        : '${k(r.per100gKcal)} / 100 г',
-                                    style: AppTypography.numSm.copyWith(
-                                      color: p.onAccent,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
+                          child: Center(
+                            widthFactor: 1,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                per100
+                                    ? '${k(r.cookedKcal)} ккал всего'
+                                    : '${k(r.per100gKcal)} / 100 г',
+                                style: AppTypography.numSm.copyWith(
+                                  color: p.onAccent,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                  ],
-                ),
-                const SizedBox(height: Space.x2),
-                if (canSwitch && bal != null)
-                  MacroBalanceBar(
-                    balance: bal,
-                    barOnly: true,
-                    barHeight: 4.5,
-                    onDarkSlab: true,
-                  )
-                else if (!canSwitch)
-                  HatchedBar(
-                    color: p.signal,
-                    backgroundColor: p.slabSurface,
-                    height: 4,
+                    ),
                   ),
-                const SizedBox(height: Space.x3),
-                Wrap(
-                  spacing: Space.x4,
-                  runSpacing: Space.x2,
-                  children: [
-                    InlineMacroCell(
-                      type: NutrientType.protein,
-                      label: 'Белки',
-                      value: m(proteinVal),
-                      unit: 'г',
-                      stacked: true,
-                      compact: true,
-                      onDarkSlab: true,
-                      valueKey: const ValueKey('macro-Белки'),
-                    ),
-                    InlineMacroCell(
-                      type: NutrientType.fat,
-                      label: 'Жиры',
-                      value: m(fatVal),
-                      unit: 'г',
-                      stacked: true,
-                      compact: true,
-                      onDarkSlab: true,
-                      valueKey: const ValueKey('macro-Жиры'),
-                    ),
-                    InlineMacroCell(
-                      type: NutrientType.carbs,
-                      label: 'Углеводы',
-                      value: m(carbsVal),
-                      unit: 'г',
-                      stacked: true,
-                      compact: true,
-                      onDarkSlab: true,
-                      valueKey: const ValueKey('macro-Углеводы'),
-                    ),
-                  ],
+              ],
+            ),
+            const SizedBox(height: Space.x1 + 2),
+            if (canSwitch && bal != null)
+              MacroBalanceBar(
+                balance: bal,
+                barOnly: true,
+                barHeight: 4,
+                onDarkSlab: true,
+              )
+            else if (!canSwitch)
+              HatchedBar(
+                color: p.signal,
+                backgroundColor: p.slabSurface,
+                height: 3.5,
+              ),
+            const SizedBox(height: Space.x2),
+            Wrap(
+              spacing: Space.x4,
+              runSpacing: Space.x1,
+              children: [
+                InlineMacroCell(
+                  type: NutrientType.protein,
+                  label: 'Белки',
+                  value: m(proteinVal),
+                  unit: 'г',
+                  stacked: true,
+                  compact: true,
+                  onDarkSlab: true,
+                  valueKey: const ValueKey('macro-Белки'),
+                ),
+                InlineMacroCell(
+                  type: NutrientType.fat,
+                  label: 'Жиры',
+                  value: m(fatVal),
+                  unit: 'г',
+                  stacked: true,
+                  compact: true,
+                  onDarkSlab: true,
+                  valueKey: const ValueKey('macro-Жиры'),
+                ),
+                InlineMacroCell(
+                  type: NutrientType.carbs,
+                  label: 'Углеводы',
+                  value: m(carbsVal),
+                  unit: 'г',
+                  stacked: true,
+                  compact: true,
+                  onDarkSlab: true,
+                  valueKey: const ValueKey('macro-Углеводы'),
                 ),
               ],
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
-            child: RulerTicks(
-              color: p.slabSecondary,
-              height: 5,
-              ticks: 29,
-              majorEvery: 4,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
 
@@ -684,7 +670,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
-      backgroundColor: p.surface,
+      backgroundColor: p.canvas,
       shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
       // Фиксированная высота: неограниченный bottom sheet + Column без
       // строгих ограничений = бесконечно пружинящее полотно. Берём явную
@@ -693,7 +679,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
         height: MediaQuery.sizeOf(context).height * 0.92,
         child: SingleChildScrollView(
           padding:
-              const EdgeInsets.fromLTRB(Space.x5, 0, Space.x5, Space.x6),
+              const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x5),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
@@ -702,14 +688,15 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                 'Инспектор расчёта',
                 style: AppTypography.title.copyWith(color: p.ink),
               ),
-              const SizedBox(height: Space.x1),
+              const SizedBox(height: 2),
               Text(
-                'Откуда взялась каждая цифра — по шагам.',
+                'Порции, вклад продуктов и расчёт по шагам.',
                 style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
               ),
               const SizedBox(height: Space.x3),
+              // ── 1. Главное по блюду (тёмная плита) ──────────────────────
               InstrumentSlab(
-                padding: const EdgeInsets.all(Space.x3 + 2),
+                padding: const EdgeInsets.all(14),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -719,94 +706,74 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                         const SizedBox(width: Space.x2),
                         Expanded(
                           child: Text(
-                            'КАСКАД РАСЧЁТА',
-                            style: AppTypography.kicker
-                                .copyWith(color: p.slabSecondary),
+                            'Главное по блюду',
+                            style: AppTypography.caption.copyWith(
+                              color: p.slabSecondary,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: Space.x2),
-                    Text(
-                      'Сырьё ${g(r.rawTotalWeight)} г → ${r.process.label} → ${k(r.cookedKcal)} ккал'
-                      '${r.hasYield ? ' · выход ${g(r.yieldGrams)} г (${k(r.per100gKcal)}/100 г)' : ''}',
-                      style: AppTypography.formulaMono
-                          .copyWith(color: p.slabInk),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: Space.x4),
-              _buildStepSection(
-                palette: p,
-                title: '1. Сырье — нетто ${g(r.rawTotalWeight)} г',
-                content: Text(
-                  macros(r.rawTotalProtein, r.rawTotalFat, r.rawTotalCarbs),
-                  style: AppTypography.num.copyWith(color: p.ink),
-                ),
-              ),
-              Divider(color: p.divider, height: Space.x5),
-              // Новый расчёт: потери по каждому ингредиенту (группа × способ).
-              if (r.usesLossTable)
-                _buildLossLinesSection(p, r)
-              else
-                _buildStepSection(
-                  palette: p,
-                  title: '2. Потери при готовке — применяем сохранность',
-                  content: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      for (final row in [
-                        (
-                          'Белки',
-                          r.rawTotalProtein,
-                          r.retentionProtein,
-                          r.cookedProtein
+                    Wrap(
+                      spacing: Space.x4,
+                      runSpacing: Space.x2,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'На всё блюдо',
+                              style: AppTypography.caption
+                                  .copyWith(color: p.slabSecondary),
+                            ),
+                            Text(
+                              '${k(r.cookedKcal)} ккал',
+                              style: AppTypography.title
+                                  .copyWith(color: p.slabInk),
+                            ),
+                            Text(
+                              'Б ${m(r.cookedProtein)} · Ж ${m(r.cookedFat)} · У ${m(r.cookedCarbs)} г',
+                              style: AppTypography.numSm
+                                  .copyWith(color: p.slabSecondary),
+                            ),
+                          ],
                         ),
-                        (
-                          'Жиры',
-                          r.rawTotalFat,
-                          r.retentionFat,
-                          r.cookedFat
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'На 100 г',
+                              style: AppTypography.caption
+                                  .copyWith(color: p.slabSecondary),
+                            ),
+                            if (r.hasYield) ...[
+                              Text(
+                                '${k(r.per100gKcal)} ккал',
+                                style: AppTypography.title.copyWith(
+                                  color: AppColors.accentDark,
+                                ),
+                              ),
+                              Text(
+                                'Б ${m(r.per100gProtein)} · Ж ${m(r.per100gFat)} · У ${m(r.per100gCarbs)} г',
+                                style: AppTypography.numSm
+                                    .copyWith(color: p.slabSecondary),
+                              ),
+                            ] else
+                              Text(
+                                'Вес не задан',
+                                style: AppTypography.bodySm
+                                    .copyWith(color: p.slabSecondary),
+                              ),
+                          ],
                         ),
-                        (
-                          'Углеводы',
-                          r.rawTotalCarbs,
-                          r.retentionCarbs,
-                          r.cookedCarbs
-                        ),
-                      ])
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            '${row.$1}: ${m(row.$2)} × ${CalculationEngine.formatPercent(row.$3)}% = ${m(row.$4)} г',
-                            style: AppTypography.num.copyWith(color: p.ink),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              Divider(color: p.divider, height: Space.x5),
-              _buildStepSection(
-                palette: p,
-                title: '3. Энергетическая ценность после готовки',
-                content: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    GroupedSurface(
-                      color: p.sunken,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: Space.x3,
-                        vertical: Space.x2 + 2,
-                      ),
-                      borderRadius: Radii.fieldAll,
-                      child: Text(
-                        '${m(r.cookedProtein)} × 4 + ${m(r.cookedFat)} × 9 + ${m(r.cookedCarbs)} × 4 = ${k(r.cookedKcal)} ккал',
-                        style: AppTypography.formulaMono.copyWith(color: p.ink),
-                      ),
+                      ],
                     ),
                     if (r.cookedKcal > 0) ...[
-                      const SizedBox(height: Space.x2),
+                      const SizedBox(height: Space.x3),
                       MacroBalanceBar(
                         key: const ValueKey('inspector-macro-balance'),
                         balance: MacroBalance.fromMacros(
@@ -814,80 +781,273 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                           fat: r.cookedFat,
                           carbs: r.cookedCarbs,
                         ),
+                        onDarkSlab: true,
                       ),
                     ],
-                  ],
-                ),
-              ),
-              Divider(color: p.divider, height: Space.x5),
-              _buildStepSection(
-                palette: p,
-                title: r.usesLossTable && !r.hasYield
-                    ? '4. Вес готового блюда не указан'
-                    : '4. Выход готового блюда: ${g(r.yieldGrams)} г',
-                content: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(e.badge,
-                        style: AppTypography.bodySm.copyWith(
-                            color: p.ink, fontWeight: FontWeight.w700)),
-                    Text(e.description,
-                        style: AppTypography.bodySm
-                            .copyWith(color: p.inkSecondary)),
-                    if (r.yieldGrams > 0) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        'На 100 г: каждый итог после готовки × 100 / ${g(r.yieldGrams)}',
-                        style: AppTypography.bodySm
-                            .copyWith(color: p.inkSecondary),
-                      ),
-                      Text(
-                        '${macros(r.per100gProtein, r.per100gFat, r.per100gCarbs)} · ${k(r.per100gKcal)} ккал',
-                        style: AppTypography.num.copyWith(color: p.ink),
-                      ),
-                      if (CalculationValidation.warnsImpossiblePer100g(r)) ...[
-                        const SizedBox(height: 8),
-                        YieldDensityWarning(
-                          key: const ValueKey('inspector-yield-density-warning'),
-                          result: r,
-                        ),
+                    const SizedBox(height: Space.x3),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        for (final stepLabel in [
+                          'Сырьё ${g(r.rawTotalWeight)} г',
+                          '→ ${r.process.label}',
+                          '→ ${r.hasYield ? 'Готово ${g(r.yieldGrams)} г' : 'Выход не указан'}',
+                        ])
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: Space.x2,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: p.slabSurface,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              stepLabel,
+                              style: AppTypography.caption.copyWith(
+                                color: p.slabInk,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
                       ],
-                    ],
+                    ),
                   ],
                 ),
               ),
               if (r.yieldGrams > 0) ...[
-                Divider(color: p.divider, height: Space.x5),
-                _buildStepSection(
-                  palette: p,
-                  title: '5. Расчёт порции',
-                  content: _PortionCalculator(
-                    result: r,
-                    keyPrefix: 'inspector-',
+                const SizedBox(height: Space.x3),
+                // ── 2. Калькулятор порции ────────────────────────────────
+                GroupedSurface(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.pie_chart_outline_rounded,
+                              size: 18, color: p.accent),
+                          const SizedBox(width: Space.x2),
+                          Expanded(
+                            child: Text(
+                              'Расчёт порции',
+                              style:
+                                  AppTypography.headline.copyWith(color: p.ink),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: Space.x2),
+                      _PortionCalculator(
+                        result: r,
+                        keyPrefix: 'inspector-',
+                      ),
+                    ],
                   ),
                 ),
               ],
               if (contributions.isNotEmpty) ...[
-                Divider(color: p.divider, height: Space.x5),
-                _buildStepSection(
-                  palette: p,
-                  title: r.yieldGrams > 0
-                      ? '6. Вклад ингредиентов'
-                      : '5. Вклад ингредиентов',
-                  content: _IngredientContributionSection(
-                    items: contributions,
+                const SizedBox(height: Space.x3),
+                // ── 3. Вклад ингредиентов ────────────────────────────────
+                GroupedSurface(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.bar_chart_rounded,
+                              size: 18, color: p.accent),
+                          const SizedBox(width: Space.x2),
+                          Expanded(
+                            child: Text(
+                              'Вклад ингредиентов',
+                              style:
+                                  AppTypography.headline.copyWith(color: p.ink),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: Space.x2),
+                      _IngredientContributionSection(items: contributions),
+                    ],
                   ),
                 ),
               ],
-              const SizedBox(height: Space.x4),
+              const SizedBox(height: Space.x3),
+              // ── 4. Как получились цифры (шаги 1–4) ─────────────────────
+              GroupedSurface(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.calculate_outlined,
+                            size: 18, color: p.accent),
+                        const SizedBox(width: Space.x2),
+                        Expanded(
+                          child: Text(
+                            'Как получились цифры',
+                            style:
+                                AppTypography.headline.copyWith(color: p.ink),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: Space.x3),
+                    _buildStepSection(
+                      palette: p,
+                      stepNumber: 1,
+                      title: 'Сырьё · нетто ${g(r.rawTotalWeight)} г',
+                      content: Wrap(
+                        spacing: Space.x3,
+                        runSpacing: Space.x1,
+                        children: [
+                          InlineMacroCell(
+                            type: NutrientType.protein,
+                            value: m(r.rawTotalProtein),
+                            unit: 'г',
+                            compact: true,
+                          ),
+                          InlineMacroCell(
+                            type: NutrientType.fat,
+                            value: m(r.rawTotalFat),
+                            unit: 'г',
+                            compact: true,
+                          ),
+                          InlineMacroCell(
+                            type: NutrientType.carbs,
+                            value: m(r.rawTotalCarbs),
+                            unit: 'г',
+                            compact: true,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Divider(color: p.divider, height: Space.x4),
+                    if (r.usesLossTable)
+                      _buildLossLinesSection(p, r)
+                    else
+                      _buildStepSection(
+                        palette: p,
+                        stepNumber: 2,
+                        title: 'Потери при готовке — сохранность',
+                        content: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            for (final row in [
+                              (
+                                'Белки',
+                                r.rawTotalProtein,
+                                r.retentionProtein,
+                                r.cookedProtein
+                              ),
+                              (
+                                'Жиры',
+                                r.rawTotalFat,
+                                r.retentionFat,
+                                r.cookedFat
+                              ),
+                              (
+                                'Углеводы',
+                                r.rawTotalCarbs,
+                                r.retentionCarbs,
+                                r.cookedCarbs
+                              ),
+                            ])
+                              Padding(
+                                padding: const EdgeInsets.only(top: 3),
+                                child: Text(
+                                  '${row.$1}: ${m(row.$2)} × ${CalculationEngine.formatPercent(row.$3)}% = ${m(row.$4)} г',
+                                  style: AppTypography.numSm
+                                      .copyWith(color: p.ink),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    Divider(color: p.divider, height: Space.x4),
+                    _buildStepSection(
+                      palette: p,
+                      stepNumber: 3,
+                      title: 'Энергетическая ценность после готовки',
+                      content: GroupedSurface(
+                        color: p.sunken,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: Space.x3,
+                          vertical: Space.x2,
+                        ),
+                        borderRadius: Radii.fieldAll,
+                        child: Text(
+                          '${m(r.cookedProtein)} × 4 + ${m(r.cookedFat)} × 9 + ${m(r.cookedCarbs)} × 4 = ${k(r.cookedKcal)} ккал',
+                          style: AppTypography.formulaMono.copyWith(color: p.ink),
+                        ),
+                      ),
+                    ),
+                    Divider(color: p.divider, height: Space.x4),
+                    _buildStepSection(
+                      palette: p,
+                      stepNumber: 4,
+                      title: r.usesLossTable && !r.hasYield
+                          ? 'Вес готового блюда не указан'
+                          : 'Выход готового блюда: ${g(r.yieldGrams)} г',
+                      content: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            e.badge,
+                            style: AppTypography.bodySm.copyWith(
+                              color: p.ink,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            e.description,
+                            style: AppTypography.bodySm
+                                .copyWith(color: p.inkSecondary),
+                          ),
+                          if (r.yieldGrams > 0) ...[
+                            const SizedBox(height: Space.x2),
+                            Text(
+                              'На 100 г: каждый итог после готовки × 100 / ${g(r.yieldGrams)}',
+                              style: AppTypography.caption
+                                  .copyWith(color: p.inkMuted),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${macros(r.per100gProtein, r.per100gFat, r.per100gCarbs)} · ${k(r.per100gKcal)} ккал',
+                              style: AppTypography.numSm.copyWith(
+                                color: p.ink,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            if (CalculationValidation.warnsImpossiblePer100g(
+                                r)) ...[
+                              const SizedBox(height: 8),
+                              YieldDensityWarning(
+                                key: const ValueKey(
+                                    'inspector-yield-density-warning'),
+                                result: r,
+                              ),
+                            ],
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: Space.x3),
               Text(
                 'Сырой состав и готовое блюдо — разные стадии, а не противоречащие значения. '
                 '${r.usesLossTable ? 'Потери берутся из таблицы по группе каждого продукта; вес готового блюда вводит повар. $kNotGostNotice ' : 'Сохранность задаётся в параметрах и не определяет уварку. '}Округление как в бланке: '
                 'БЖУ до 0,01 г, энергия до 0,1 ккал; энергия считается по округлённым БЖУ.',
-                style:
-                    AppTypography.bodySm.copyWith(color: p.inkSecondary),
+                style: AppTypography.caption.copyWith(color: p.inkMuted),
               ),
-              const SizedBox(height: Space.x4),
+              const SizedBox(height: Space.x3),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
@@ -911,64 +1071,120 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
         'Б: ${m(p)} · Ж: ${m(f)} · У: ${m(c)} г';
     return _buildStepSection(
       palette: p,
-      title: '2. Потери при готовке — по таблице для группы продукта',
+      stepNumber: 2,
+      title: 'Потери при готовке по продуктам',
       content: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: Space.x3,
+              vertical: Space.x2,
+            ),
+            decoration: BoxDecoration(
+              color: p.accentSoft,
+              borderRadius: Radii.fieldAll,
+            ),
+            child: Text(
+              'Итого после готовки: ${macros(r.cookedProtein, r.cookedFat, r.cookedCarbs)}',
+              key: const ValueKey('inspector-loss-total'),
+              style: AppTypography.numSm
+                  .copyWith(color: p.accent, fontWeight: FontWeight.w700),
+            ),
+          ),
+          const SizedBox(height: Space.x2),
           for (final line in r.lines)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
+            Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.symmetric(
+                horizontal: Space.x3,
+                vertical: Space.x2,
+              ),
+              decoration: BoxDecoration(
+                color: p.sunken,
+                borderRadius: Radii.fieldAll,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '${line.productName.isEmpty ? 'Ингредиент' : line.productName}: '
-                    '${line.group.label}${line.groupIsManual ? ' (вручную)' : ''} · '
-                    '${line.process.label}${line.processIsManual ? ' (вручную)' : ''} — '
-                    'потери Б ${pct(line.loss.protein)} %, Ж ${pct(line.loss.fat)} %, '
-                    'У ${pct(line.loss.carbs)} %'
-                    '${line.loss.isVerified ? '' : ' (оценка)'}',
-                    style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: line.productName.isEmpty
+                              ? 'Ингредиент'
+                              : line.productName,
+                          style: AppTypography.bodySm.copyWith(
+                            color: p.ink,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        TextSpan(
+                          text:
+                              '\n${line.group.label}${line.groupIsManual ? ' (вручную)' : ''} · '
+                              '${line.process.label}${line.processIsManual ? ' (вручную)' : ''} — '
+                              'потери Б ${pct(line.loss.protein)} %, Ж ${pct(line.loss.fat)} %, '
+                              'У ${pct(line.loss.carbs)} %'
+                              '${line.loss.isVerified ? '' : ' (оценка)'}',
+                          style: AppTypography.caption
+                              .copyWith(color: p.inkSecondary),
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(height: 3),
                   Text(
                     'Б ${m(line.rawProtein)} → ${m(line.cookedProtein)} · '
                     'Ж ${m(line.rawFat)} → ${m(line.cookedFat)} · '
                     'У ${m(line.rawCarbs)} → ${m(line.cookedCarbs)} г',
-                    style: AppTypography.num.copyWith(color: p.ink),
+                    style: AppTypography.numSm.copyWith(
+                      color: p.ink,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ),
             ),
-          const SizedBox(height: 6),
-          Text(
-            'Итого после готовки: ${macros(r.cookedProtein, r.cookedFat, r.cookedCarbs)}',
-            key: const ValueKey('inspector-loss-total'),
-            style: AppTypography.num
-                .copyWith(color: p.ink, fontWeight: FontWeight.w700),
-          ),
           Text(
             'Источник потерь: МР 2.3.0419-26, прил. 4–5; «оценка» — '
             'ближайший аналог, строки в источнике нет.',
-            style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
+            style: AppTypography.caption.copyWith(color: p.inkMuted),
           ),
           if (LossClarityHints.forLines(
             r.lines.map((l) => (group: l.group, process: l.process)),
           )
               case final clarityNotes when clarityNotes.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Column(
+            const SizedBox(height: Space.x2),
+            Container(
               key: const ValueKey('inspector-loss-clarity-hints'),
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final note in clarityNotes)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(
-                      '• $note',
-                      style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
+              padding: const EdgeInsets.all(Space.x2 + 2),
+              decoration: BoxDecoration(
+                color: p.accentSoft,
+                borderRadius: Radii.fieldAll,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.info_outline_rounded, size: 15, color: p.accent),
+                  const SizedBox(width: Space.x2),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final note in clarityNotes)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 2),
+                            child: Text(
+                              note,
+                              style: AppTypography.caption
+                                  .copyWith(color: p.ink),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
-              ],
+                ],
+              ),
             ),
           ],
         ],
@@ -978,17 +1194,41 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
 
   static Widget _buildStepSection({
     required Palette palette,
+    required int stepNumber,
     required String title,
     required Widget content,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: AppTypography.label.copyWith(color: palette.ink),
+        Row(
+          children: [
+            Container(
+              width: 20,
+              height: 20,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: palette.accentSoft,
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                '$stepNumber',
+                style: AppTypography.caption.copyWith(
+                  color: palette.accent,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(width: Space.x2),
+            Expanded(
+              child: Text(
+                title,
+                style: AppTypography.label.copyWith(color: palette.ink),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: Space.x1),
+        const SizedBox(height: Space.x2),
         content,
       ],
     );
@@ -1199,12 +1439,23 @@ class _PortionCalculatorState extends State<_PortionCalculator> {
           },
         ),
         const SizedBox(height: Space.x2),
-        Text(
-          'Порция ${g(_portionGrams)} г: '
-          'Б: ${m(portion.protein)} · Ж: ${m(portion.fat)} · У: ${m(portion.carbs)} г '
-          '· ${k(portion.kcal)} ккал',
-          key: ValueKey('${prefix}portion-result'),
-          style: AppTypography.numSm.copyWith(color: p.ink),
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: Space.x3,
+            vertical: Space.x2,
+          ),
+          decoration: BoxDecoration(
+            color: p.sunken,
+            borderRadius: Radii.fieldAll,
+          ),
+          child: Text(
+            'Порция ${g(_portionGrams)} г: '
+            'Б: ${m(portion.protein)} · Ж: ${m(portion.fat)} · У: ${m(portion.carbs)} г '
+            '· ${k(portion.kcal)} ккал',
+            key: ValueKey('${prefix}portion-result'),
+            style: AppTypography.numSm
+                .copyWith(color: p.ink, fontWeight: FontWeight.w600),
+          ),
         ),
       ],
     );

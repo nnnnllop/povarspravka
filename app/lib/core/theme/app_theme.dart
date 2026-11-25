@@ -138,7 +138,7 @@ class AppTheme {
         fillColor: p.sunken,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: Space.x3,
-          vertical: Space.x3,
+          vertical: 10,
         ),
         hintStyle: AppTypography.bodySm.copyWith(color: p.inkMuted),
         labelStyle: AppTypography.bodySm.copyWith(color: p.inkSecondary),
@@ -190,8 +190,8 @@ class AppTheme {
           minimumSize: const Size(0, kMinTapTarget),
           tapTargetSize: MaterialTapTargetSize.padded,
           padding: const EdgeInsets.symmetric(
-            horizontal: Space.x4,
-            vertical: Space.x3,
+            horizontal: 14,
+            vertical: 10,
           ),
           shape: const StadiumBorder(),
           textStyle: AppTypography.label,
@@ -207,8 +207,8 @@ class AppTheme {
           minimumSize: const Size(0, kMinTapTarget),
           tapTargetSize: MaterialTapTargetSize.padded,
           padding: const EdgeInsets.symmetric(
-            horizontal: Space.x4,
-            vertical: Space.x3,
+            horizontal: 14,
+            vertical: 10,
           ),
           shape: const StadiumBorder(),
           textStyle: AppTypography.label,
@@ -222,8 +222,8 @@ class AppTheme {
           minimumSize: const Size(0, kMinTapTarget),
           tapTargetSize: MaterialTapTargetSize.padded,
           padding: const EdgeInsets.symmetric(
-            horizontal: Space.x4,
-            vertical: Space.x3,
+            horizontal: 14,
+            vertical: 10,
           ),
           side: BorderSide(color: p.borderStatic, width: 1),
           shape: const StadiumBorder(),
@@ -236,8 +236,8 @@ class AppTheme {
           minimumSize: const Size(0, kMinTapTarget),
           tapTargetSize: MaterialTapTargetSize.padded,
           padding: const EdgeInsets.symmetric(
-            horizontal: Space.x3,
-            vertical: Space.x3,
+            horizontal: 10,
+            vertical: Space.x2,
           ),
           shape: const StadiumBorder(),
           textStyle: AppTypography.label,

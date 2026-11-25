@@ -145,7 +145,7 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
       child: SafeArea(
         top: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(Space.x5, 0, Space.x5, Space.x6),
+          padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x5),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -153,12 +153,12 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
                 'Сравнение блюд',
                 style: AppTypography.title.copyWith(color: p.ink),
               ),
-              const SizedBox(height: Space.x1),
+              const SizedBox(height: 2),
               Text(
                 'Разница (Δ) показана для второго блюда относительно первого.',
                 style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
               ),
-              const SizedBox(height: Space.x3),
+              const SizedBox(height: Space.x2),
               SegmentedButton<bool>(
                 key: const ValueKey('compare-mode-segmented'),
                 showSelectedIcon: false,

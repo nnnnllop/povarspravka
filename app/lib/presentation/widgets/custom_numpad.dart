@@ -698,8 +698,8 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     return InstrumentSlab(
       borderRadius: Radii.cardAll,
       padding: const EdgeInsets.symmetric(
-        horizontal: Space.x4,
-        vertical: Space.x3,
+        horizontal: Space.x3,
+        vertical: 9,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -1141,8 +1141,8 @@ class _NumpadKeypadBlock extends StatelessWidget {
     final keyGap = compactLandscape ? 2.0 : Space.x1;
     final double keyHeight = shortHeight
         ? kMinTapTarget
-        : (52.0 * (scaler > 1.3 ? 1.15 : 1.0))
-            .clamp(kMinTapTarget, 62.0)
+        : (48.0 * (scaler > 1.3 ? 1.12 : 1.0))
+            .clamp(kMinTapTarget, 54.0)
             .toDouble();
     final gridHeight = keyHeight * 4 + keyGap * 4;
     final confirmHeight = keyHeight * 3 + keyGap * 2;
@@ -1446,8 +1446,8 @@ class _SimpleGramsNumpadSheetState extends State<SimpleGramsNumpadSheet> {
                 child: InstrumentSlab(
                   borderRadius: Radii.cardAll,
                   padding: const EdgeInsets.symmetric(
-                    horizontal: Space.x4,
-                    vertical: Space.x3,
+                    horizontal: Space.x3,
+                    vertical: 9,
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,

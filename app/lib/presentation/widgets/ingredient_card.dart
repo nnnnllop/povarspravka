@@ -135,10 +135,10 @@ class IngredientCard extends StatelessWidget {
               children: [
                 Padding(
                   padding: EdgeInsets.fromLTRB(
-                    Space.x3 + 2,
                     Space.x3,
-                    dragHandleIndex != null ? Space.x1 : Space.x3 + 2,
-                    cleanLossLabel != null ? Space.x1 : Space.x3,
+                    Space.x2,
+                    dragHandleIndex != null ? Space.x1 : Space.x3,
+                    cleanLossLabel != null ? 2 : Space.x2,
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -152,7 +152,7 @@ class IngredientCard extends StatelessWidget {
                               textBaseline: TextBaseline.alphabetic,
                               children: [
                                 SizedBox(
-                                  width: 26,
+                                  width: 22,
                                   child: Text(
                                     indexLabel,
                                     style: AppTypography.kicker.copyWith(
@@ -174,7 +174,7 @@ class IngredientCard extends StatelessWidget {
                               ],
                             ),
                             if (!inlineWeightReadout) ...[
-                              const SizedBox(height: Space.x1 + 2),
+                              const SizedBox(height: Space.x1),
                               weightReadout,
                             ],
                             if (showGross) ...[
@@ -185,7 +185,7 @@ class IngredientCard extends StatelessWidget {
                                     .copyWith(color: p.inkMuted),
                               ),
                             ],
-                            const SizedBox(height: Space.x1 + 2),
+                            const SizedBox(height: Space.x1),
                             // Полное КБЖУ с гармоничными разноцветными точками (Б/Ж/У + ккал).
                             Wrap(
                               spacing: Space.x2 + 2,
@@ -240,7 +240,7 @@ class IngredientCard extends StatelessWidget {
                               width: kMinTapTarget,
                               height: kMinTapTarget,
                               child: Icon(Icons.drag_indicator_rounded,
-                                  size: 20, color: p.inkMuted),
+                                  size: 19, color: p.inkMuted),
                             ),
                           ),
                         ),
@@ -256,10 +256,10 @@ class IngredientCard extends StatelessWidget {
                           const BoxConstraints(minHeight: kMinTapTarget),
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(
-                          Space.x3 + 2,
-                          Space.x1,
                           Space.x3,
-                          Space.x2,
+                          2,
+                          Space.x3,
+                          Space.x1 + 2,
                         ),
                         child: Row(
                           children: [
@@ -274,8 +274,6 @@ class IngredientCard extends StatelessWidget {
                                 cleanLossLabel,
                                 style: AppTypography.caption.copyWith(
                                   color: p.inkSecondary,
-                                  fontFamily: AppTypography.monoFont,
-                                  fontSize: 11.5,
                                 ),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
@@ -295,10 +293,10 @@ class IngredientCard extends StatelessWidget {
                 if (share != null)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(
-                      Space.x3 + 2,
+                      Space.x3,
                       0,
-                      Space.x3 + 2,
-                      Space.x2,
+                      Space.x3,
+                      Space.x1,
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(2),
@@ -318,7 +316,7 @@ class IngredientCard extends StatelessWidget {
                 if (!isLast)
                   Container(
                     height: 1,
-                    margin: const EdgeInsets.only(left: 42),
+                    margin: const EdgeInsets.only(left: Space.x3),
                     color: p.divider,
                   ),
               ],

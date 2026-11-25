@@ -254,7 +254,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                       textCapitalization: TextCapitalization.sentences,
                       style: AppTypography.title.copyWith(
                         color: p.ink,
-                        fontSize: 22,
+                        fontSize: 19,
                       ),
                       onChanged: (value) =>
                           ref.read(dishProvider.notifier).setTitle(value),
@@ -267,13 +267,13 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                         hintText: 'Название блюда',
                         hintStyle: AppTypography.title.copyWith(
                           color: p.inkMuted,
-                          fontSize: 22,
+                          fontSize: 19,
                         ),
                         contentPadding:
                             const EdgeInsets.symmetric(vertical: 2),
                       ),
                     ),
-                    const SizedBox(height: Space.x2),
+                    const SizedBox(height: Space.x1 + 2),
                     if (calc != null)
                       MacroSummaryBar(
                         key: ValueKey(dish.id),
@@ -894,13 +894,18 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
             },
           ),
         if (showYieldField) ...[
-          const SizedBox(height: Space.x2),
+          const SizedBox(height: Space.x1 + 2),
           TextField(
             key: const ValueKey('actual-yield'),
             controller: _yieldCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             style: AppTypography.num.copyWith(color: p.ink),
             decoration: InputDecoration(
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: Space.x3,
+                vertical: 9,
+              ),
               labelText: legacy
                   ? 'Фактический выход готового блюда'
                   : 'Вес готового блюда',
@@ -914,7 +919,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                 key: const ValueKey('yield-numpad-btn'),
                 tooltip: 'Ввести на цифровой клавиатуре',
                 icon: Icon(Icons.dialpad_rounded,
-                    size: 20, color: p.inkSecondary),
+                    size: 19, color: p.inkSecondary),
                 onPressed: () => _openYieldNumpad(dish),
               ),
               errorMaxLines: 3,
@@ -925,14 +930,14 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
         ],
         if (calc != null &&
             CalculationValidation.warnsImpossiblePer100g(calc)) ...[
-          const SizedBox(height: Space.x2),
+          const SizedBox(height: Space.x1 + 2),
           YieldDensityWarning(
             key: const ValueKey('yield-density-warning'),
             result: calc,
           ),
         ],
         if (showYieldField && (legacy || rawNet > 0)) ...[
-          const SizedBox(height: Space.x1),
+          const SizedBox(height: 2),
           Divider(color: p.divider, height: 1),
           InkWell(
             key: const ValueKey('yield-explanation'),
@@ -943,7 +948,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: kMinTapTarget),
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: Space.x1),
+                padding: const EdgeInsets.symmetric(vertical: 2),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -984,8 +989,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
 
     if (embedded) {
       return Padding(
-        padding: const EdgeInsets.fromLTRB(
-            Space.x3 + 2, Space.x2, Space.x3 + 2, Space.x2),
+        padding: const EdgeInsets.fromLTRB(14, 4, 14, 6),
         child: body,
       );
     }

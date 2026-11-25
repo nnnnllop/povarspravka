@@ -29,7 +29,7 @@ class ParsedBackup {
 class BackupService {
   static const String backupFormat = 'povarspravka-backup';
   static const int currentBackupVersion = 1;
-  static const String appVersionLabel = '1.6.0';
+  static const String appVersionLabel = '1.6.1';
 
   static String encodeBackup({
     required List<Dish> savedDishes,
