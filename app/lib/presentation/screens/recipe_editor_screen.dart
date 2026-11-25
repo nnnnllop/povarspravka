@@ -104,7 +104,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
     });
 
     final isDirty = ref.read(dishProvider.notifier).isDirty;
-    final actions = _buildActions(dish, isDirty);
+    final actions = _buildActions(dish, isDirty, calc);
 
     // Защита от тихой потери работы (аудит P0-3): системный «назад»,
     // жестовый back и кнопка в AppBar проходят через один и тот же вопрос.
@@ -141,7 +141,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
       child: Scaffold(
         appBar: AppBar(
           title: Text(
-            dish.title.trim().isEmpty ? 'Новое блюдо' : dish.title.trim(),
+            dish.title.trim().isEmpty ? 'Расчёт блюда' : dish.title.trim(),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -165,37 +165,73 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
             Expanded(
               child: ReorderableListView.builder(
                 padding: EdgeInsets.fromLTRB(
-                    listHPad, Space.x3, listHPad, Space.x6),
+                    listHPad, Space.x2, listHPad, Space.x6),
                 header: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _buildParameters(dish, calc),
-                    const SizedBox(height: Space.x5),
-                    Text(
-                      'Ингредиенты · ${dish.ingredients.length}',
-                      style: AppTypography.headline.copyWith(color: p.ink),
-                    ),
-                    const SizedBox(height: Space.x1),
-                    if (dish.ingredients.isNotEmpty)
-                      Builder(
-                        builder: (context) {
-                          final rawNet =
-                              _safeGrams(() => dish.totalRawNetGrams);
-                          final effYield =
-                              _safeGrams(() => dish.effectiveYieldGrams);
-                          final caption = rawNet > 0
-                              ? 'Сырьё нетто ${CalculationEngine.formatGrams(rawNet)} г'
-                                  '${dish.hasCustomYield && effYield > 0 ? ' · выход ${CalculationEngine.formatGrams(effYield)} г' : ''}'
-                                  ' · нажмите на продукт для правки'
-                              : 'Нажмите на продукт для правки';
-                          return Text(
-                            caption,
-                            style:
-                                AppTypography.caption.copyWith(color: p.inkMuted),
-                          );
-                        },
+                    TextField(
+                      controller: _titleCtrl,
+                      textCapitalization: TextCapitalization.sentences,
+                      style: AppTypography.title.copyWith(color: p.ink),
+                      onChanged: (value) =>
+                          ref.read(dishProvider.notifier).setTitle(value),
+                      decoration: InputDecoration(
+                        filled: false,
+                        isDense: true,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        hintText: 'Название блюда',
+                        hintStyle:
+                            AppTypography.title.copyWith(color: p.inkMuted),
+                        contentPadding:
+                            const EdgeInsets.symmetric(vertical: Space.x1),
                       ),
-                    const SizedBox(height: Space.x3),
+                    ),
+                    const SizedBox(height: Space.x2),
+                    if (calc != null) ...[
+                      MacroSummaryBar(
+                        key: ValueKey(dish.id),
+                        result: calc,
+                        hero: true,
+                        ingredients: dish.ingredients,
+                      ),
+                      const SizedBox(height: Space.x3),
+                    ],
+                    _buildParameters(dish, calc),
+                    const SizedBox(height: Space.x4),
+                    Builder(
+                      builder: (context) {
+                        final rawNet = _safeGrams(() => dish.totalRawNetGrams);
+                        final effYield =
+                            _safeGrams(() => dish.effectiveYieldGrams);
+                        final summary = (dish.process.isLegacy ||
+                                    dish.hasCustomYield) &&
+                                effYield > 0
+                            ? 'Сырьё нетто ${CalculationEngine.formatGrams(rawNet)} г · выход ${CalculationEngine.formatGrams(effYield)} г'
+                            : 'Сырьё нетто ${CalculationEngine.formatGrams(rawNet)} г';
+                        return Wrap(
+                          alignment: WrapAlignment.spaceBetween,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: Space.x2,
+                          runSpacing: Space.x1,
+                          children: [
+                            Text(
+                              'Ингредиенты · ${dish.ingredients.length}',
+                              style:
+                                  AppTypography.headline.copyWith(color: p.ink),
+                            ),
+                            if (rawNet > 0)
+                              Text(
+                                summary,
+                                style: AppTypography.caption
+                                    .copyWith(color: p.inkMuted),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                    const SizedBox(height: Space.x2),
                     if (dish.ingredients.isEmpty) _buildEmptyState(context),
                   ],
                 ),
@@ -243,29 +279,19 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
     );
   }
 
-  /// Плоский нижний док редактора: краткий итог «После готовки» + действия.
+  /// Парящий нижний док редактора: компактные действия «Бланк» + «Добавить продукт».
   Widget _buildBottomDock(CalculationResult? calc, Dish dish) {
-    final p = Palette.of(context);
     final media = MediaQuery.sizeOf(context);
     final textScale = MediaQuery.textScalerOf(context).scale(1.0);
     final stackActions =
         (media.width < 380 && textScale > 1.3) || media.width < 300;
     final shortLandscape = media.height < 460 && media.width >= 560;
-    final landscapeInline = shortLandscape;
+    final compactDock = shortLandscape || (stackActions && media.height < 640);
+    final pillShape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(stackActions ? Radii.field : 999),
+    );
 
-    final summaryWidget = calc == null
-        ? Text(
-            'После готовки · — Б — Ж — У — ккал',
-            style: AppTypography.numSm.copyWith(color: p.inkMuted),
-          )
-        : MacroSummaryBar(
-            key: ValueKey(dish.id),
-            result: calc,
-            compact: true,
-            ingredients: dish.ingredients,
-          );
-
-    final compactPad = landscapeInline
+    final compactPad = compactDock
         ? const EdgeInsets.symmetric(
             horizontal: Space.x3,
             vertical: Space.x2,
@@ -274,9 +300,10 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
 
     final blankBtn = OutlinedButton(
       onPressed: _openBlank,
-      style: compactPad != null
-          ? OutlinedButton.styleFrom(padding: compactPad)
-          : null,
+      style: OutlinedButton.styleFrom(
+        padding: compactPad,
+        shape: pillShape,
+      ),
       child: const Row(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
@@ -302,8 +329,10 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
           mode: SearchMode.pickForRecipe,
         );
       },
-      style:
-          compactPad != null ? FilledButton.styleFrom(padding: compactPad) : null,
+      style: FilledButton.styleFrom(
+        padding: compactPad,
+        shape: pillShape,
+      ),
       child: const Row(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
@@ -321,62 +350,54 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
       ),
     );
 
+    final p = Palette.of(context);
+    final buttonsWidget = stackActions
+        ? Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              addBtn,
+              SizedBox(height: compactDock ? Space.x1 : Space.x2),
+              blankBtn,
+            ],
+          )
+        : IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(flex: 2, child: blankBtn),
+                const SizedBox(width: Space.x2),
+                Expanded(flex: 3, child: addBtn),
+              ],
+            ),
+          );
+
+    // STATE-01: при невычислимом сохранённом документе показываем прочерки
+    // вместо нуля или молчаливого скрытия, закреплённые в доке при любом скролле.
+    final showNullSummary = calc == null && dish.ingredients.isNotEmpty;
+
     return AppBottomBar(
-      padding: shortLandscape
+      floating: !compactDock,
+      padding: compactDock
           ? EdgeInsets.symmetric(
               horizontal: Space.gutter(media.width),
               vertical: Space.x1,
             )
           : null,
-      child: landscapeInline
-          ? Row(
-              children: [
-                Expanded(
-                  flex: 4,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: summaryWidget,
-                  ),
-                ),
-                const SizedBox(width: Space.x2),
-                Expanded(
-                  flex: 5,
-                  child: IntrinsicHeight(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        blankBtn,
-                        const SizedBox(width: Space.x2),
-                        Expanded(child: addBtn),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            )
-          : Column(
+      child: showNullSummary
+          ? Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                summaryWidget,
-                const SizedBox(height: Space.x1),
-                if (stackActions) ...[
-                  addBtn,
-                  const SizedBox(height: Space.x2),
-                  blankBtn,
-                ] else
-                  IntrinsicHeight(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        blankBtn,
-                        const SizedBox(width: Space.x2),
-                        Expanded(child: addBtn),
-                      ],
-                    ),
-                  ),
+                Text(
+                  'После готовки · — Б — Ж — У — ккал',
+                  style: AppTypography.numSm.copyWith(color: p.inkSecondary),
+                ),
+                const SizedBox(height: Space.x2),
+                buttonsWidget,
               ],
-            ),
+            )
+          : buttonsWidget,
     );
   }
 
@@ -400,7 +421,11 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
     }
   }
 
-  List<Widget> _buildActions(Dish dish, bool isDirty) {
+  List<Widget> _buildActions(
+    Dish dish,
+    bool isDirty,
+    CalculationResult? calc,
+  ) {
     final p = Palette.of(context);
     final isSavedInLibrary =
         ref.watch(savedDishesProvider).any((d) => d.id == dish.id);
@@ -409,6 +434,17 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
     final needsSave = (isDirty || !isSavedInLibrary) && hasContent;
 
     return [
+      if (calc != null)
+        IconButton(
+          key: const ValueKey('editor-inspector-btn'),
+          icon: Icon(Icons.analytics_outlined, color: p.accent),
+          tooltip: 'Инспектор расчёта',
+          onPressed: () => MacroSummaryBar.showInspector(
+            context,
+            result: calc,
+            ingredients: dish.ingredients,
+          ),
+        ),
       IconButton(
         key: const ValueKey('save-recipe-btn'),
         icon: Icon(
@@ -684,20 +720,11 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
         color: p.surface,
         borderRadius: Radii.cardAll,
         border: Border.all(color: p.borderStatic),
+        boxShadow: p.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextField(
-            controller: _titleCtrl,
-            textCapitalization: TextCapitalization.sentences,
-            onChanged: (value) => ref.read(dishProvider.notifier).setTitle(value),
-            decoration: const InputDecoration(
-              labelText: 'Название блюда',
-              hintText: 'Например, борщ с капустой и картофелем',
-            ),
-          ),
-          const SizedBox(height: Space.x2),
           InkWell(
             key: const ValueKey('heat-process-row'),
             onTap: () => _showRetentionSettingsDialog(context, dish),
@@ -707,14 +734,17 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
               child: Row(
                 children: [
                   Icon(Icons.local_fire_department_outlined,
-                      size: 18, color: p.inkSecondary),
+                      size: 18, color: p.accent),
                   const SizedBox(width: Space.x2),
                   Expanded(
                     child: Text(
                       DishCategories.labelOf(dish.category) == null
                           ? 'Обработка: ${dish.process.label}'
                           : 'Обработка: ${dish.process.label} · ${DishCategories.labelOf(dish.category)}',
-                      style: AppTypography.bodySm.copyWith(color: p.ink),
+                      style: AppTypography.bodySm.copyWith(
+                        color: p.ink,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                   Icon(Icons.chevron_right_rounded,
@@ -723,7 +753,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
               ),
             ),
           ),
-          const SizedBox(height: Space.x1),
+          Divider(color: p.divider, height: Space.x2),
           Text(
             legacy || dish.hasCustomYield
                 ? 'Выход готового блюда: ${CalculationEngine.formatGrams(effYield)} г'

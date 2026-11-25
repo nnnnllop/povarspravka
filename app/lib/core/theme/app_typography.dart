@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 
 /// Типографическая шкала приложения «Поварская справка».
 ///
-/// Интерфейс использует системный шрифт платформы (Roboto / SF Pro) с естественными
-/// весами `w400` / `w500` / `w600` / `w700`. Шрифт `Arial` сохранён только для
-/// печатного и экранного бланка (`instrumentFont`), где требуется точное
-/// совпадение с типовым документом.
+/// Интерфейс использует встроенный офлайн-шрифт `Inter` с табличными цифрами
+/// (`tabularFigures`) и выразительным диапазоном размеров (`12–34 sp`).
+/// Шрифт `Arial` сохранён только для печатного и экранного бланка (`instrumentFont`),
+/// где требуется точное совпадение с типовым документом.
 class AppTypography {
-  /// Системный интерфейсный шрифт (`null` = нативный шрифт платформы).
-  static const String? fontName = null;
+  /// Интерфейсный шрифт (`Inter`, встроен в APK для стабильного рендера).
+  static const String? fontName = 'Inter';
 
   /// Шрифт бланка: обязан совпадать с печатным типовым бланком.
   static const instrumentFont = 'Arial';
@@ -17,38 +17,38 @@ class AppTypography {
     FontFeature.tabularFigures(),
   ];
 
-  // ─── Дисплей: одно ключевое число на экран ──────────────────────────────
+  // ─── Дисплей: главное число экрана ──────────────────────────────────────
   static const TextStyle display = TextStyle(
     fontFamily: fontName,
-    fontSize: 26,
-    height: 1.18,
+    fontSize: 30,
+    height: 1.1,
     fontWeight: FontWeight.w700,
-    letterSpacing: -0.4,
+    letterSpacing: -0.6,
     fontFeatures: _tnum,
   );
 
   static const TextStyle title = TextStyle(
     fontFamily: fontName,
-    fontSize: 20,
-    height: 1.24,
+    fontSize: 21,
+    height: 1.2,
     fontWeight: FontWeight.w700,
-    letterSpacing: -0.25,
+    letterSpacing: -0.35,
     fontFeatures: _tnum,
   );
 
   static const TextStyle headline = TextStyle(
     fontFamily: fontName,
     fontSize: 16,
-    height: 1.3,
+    height: 1.28,
     fontWeight: FontWeight.w600,
-    letterSpacing: -0.1,
+    letterSpacing: -0.15,
     fontFeatures: _tnum,
   );
 
   static const TextStyle body = TextStyle(
     fontFamily: fontName,
     fontSize: 15,
-    height: 1.42,
+    height: 1.4,
     fontWeight: FontWeight.w400,
   );
 
@@ -72,16 +72,16 @@ class AppTypography {
     fontSize: 12,
     height: 1.3,
     fontWeight: FontWeight.w500,
-    letterSpacing: 0.1,
+    letterSpacing: 0.05,
   );
 
   // ─── Числа: всегда tabular figures ──────────────────────────────────────
   static const TextStyle numLg = TextStyle(
     fontFamily: fontName,
-    fontSize: 32,
-    height: 1.05,
+    fontSize: 34,
+    height: 1.04,
     fontWeight: FontWeight.w700,
-    letterSpacing: -0.5,
+    letterSpacing: -0.7,
     fontFeatures: _tnum,
   );
 

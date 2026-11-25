@@ -1191,6 +1191,14 @@ class _NumpadKeypadBlock extends StatelessWidget {
     );
   }
 
+  static const List<BoxShadow> _keycapShadow = <BoxShadow>[
+    BoxShadow(
+      color: Color(0x12000000),
+      blurRadius: 0,
+      offset: Offset(0, 1),
+    ),
+  ];
+
   Widget _buildKey(Palette p, String k, double height) {
     final isBackspace = k == '⌫';
     return SizedBox(
@@ -1202,25 +1210,33 @@ class _NumpadKeypadBlock extends StatelessWidget {
           label: isBackspace
               ? 'Удалить символ. Долгое нажатие — сброс'
               : (k == ',' ? 'запятая' : k),
-          child: Material(
-            color: p.sunken,
-            borderRadius: Radii.fieldAll,
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTapDown: (_) => isBackspace ? onBackspace() : onKey(k),
-              onLongPress: isBackspace ? onClear : null,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: p.raised,
               borderRadius: Radii.fieldAll,
-              child: Center(
-                child: isBackspace
-                    ? Icon(Icons.backspace_outlined, size: 22, color: p.ink)
-                    : FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          k,
-                          maxLines: 1,
-                          style: AppTypography.title.copyWith(color: p.ink),
+              border: Border.all(color: p.borderStatic),
+              boxShadow: p.isDark ? const <BoxShadow>[] : _keycapShadow,
+            ),
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: Radii.fieldAll,
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTapDown: (_) => isBackspace ? onBackspace() : onKey(k),
+                onLongPress: isBackspace ? onClear : null,
+                borderRadius: Radii.fieldAll,
+                child: Center(
+                  child: isBackspace
+                      ? Icon(Icons.backspace_outlined, size: 22, color: p.ink)
+                      : FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            k,
+                            maxLines: 1,
+                            style: AppTypography.title.copyWith(color: p.ink),
+                          ),
                         ),
-                      ),
+                ),
               ),
             ),
           ),
@@ -1237,20 +1253,28 @@ class _NumpadKeypadBlock extends StatelessWidget {
         child: Semantics(
           button: true,
           label: 'Сбросить значение',
-          child: Material(
-            color: p.sunken,
-            borderRadius: Radii.fieldAll,
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTapDown: (_) => onClear(),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: p.raised,
               borderRadius: Radii.fieldAll,
-              child: Center(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    'C',
-                    maxLines: 1,
-                    style: AppTypography.title.copyWith(color: p.danger),
+              border: Border.all(color: p.borderStatic),
+              boxShadow: p.isDark ? const <BoxShadow>[] : _keycapShadow,
+            ),
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: Radii.fieldAll,
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTapDown: (_) => onClear(),
+                borderRadius: Radii.fieldAll,
+                child: Center(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'C',
+                      maxLines: 1,
+                      style: AppTypography.title.copyWith(color: p.danger),
+                    ),
                   ),
                 ),
               ),

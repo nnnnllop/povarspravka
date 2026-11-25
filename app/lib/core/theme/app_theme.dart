@@ -41,7 +41,7 @@ class AppTheme {
         if (states.contains(WidgetState.selected)) return p.onAccent;
         return p.ink;
       }),
-      side: WidgetStatePropertyAll(BorderSide(color: p.border)),
+      side: WidgetStatePropertyAll(BorderSide(color: p.borderStatic)),
       shape: const WidgetStatePropertyAll(
         RoundedRectangleBorder(borderRadius: Radii.fieldAll),
       ),
@@ -169,11 +169,11 @@ class AppTheme {
         ),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: p.sunken,
+        backgroundColor: p.surface,
         selectedColor: p.accentSoft,
         disabledColor: p.sunken,
-        side: BorderSide.none,
-        shape: RoundedRectangleBorder(borderRadius: Radii.chipAll),
+        side: BorderSide(color: p.borderStatic),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
         labelStyle: AppTypography.label.copyWith(color: p.ink),
         padding: const EdgeInsets.symmetric(
           horizontal: Space.x3,
@@ -217,15 +217,17 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
+          backgroundColor: p.isDark ? p.raised : p.sunken,
           foregroundColor: p.ink,
+          elevation: 0,
           minimumSize: const Size(0, kMinTapTarget),
           tapTargetSize: MaterialTapTargetSize.padded,
           padding: const EdgeInsets.symmetric(
             horizontal: Space.x4,
             vertical: Space.x3,
           ),
-          // Кнопка — интерактивная: граница >= 3:1.
-          side: BorderSide(color: p.border, width: 1),
+          // Швейцарская тональная кнопка без тяжёлой проволочной рамки.
+          side: BorderSide(color: p.borderStatic, width: 1),
           shape: RoundedRectangleBorder(borderRadius: Radii.fieldAll),
           textStyle: AppTypography.label,
         ),

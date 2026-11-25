@@ -84,6 +84,29 @@ class IngredientCard extends StatelessWidget {
     final cleanLossLabel =
         lossLabel?.replaceFirst(RegExp(r'^Потери:\s*'), '').trim();
 
+    final media = MediaQuery.sizeOf(context);
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final inlineWeightPill = media.width >= 340 && textScale <= 1.35;
+
+    final weightPill = Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: Space.x2 + 2,
+        vertical: Space.x1 + 2,
+      ),
+      decoration: BoxDecoration(
+        color: p.sunken,
+        borderRadius: Radii.chipAll,
+        border: Border.all(color: p.borderStatic),
+      ),
+      child: Text(
+        '$netGramsStr г',
+        style: AppTypography.num.copyWith(
+          color: p.ink,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+
     return Semantics(
       customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
         const CustomSemanticsAction(label: 'Удалить ингредиент'): onDelete,
@@ -94,222 +117,173 @@ class IngredientCard extends StatelessWidget {
           color: p.surface,
           borderRadius: Radii.cardAll,
           border: Border.all(color: p.borderStatic),
+          boxShadow: p.cardShadow,
         ),
         clipBehavior: Clip.antiAlias,
         child: Material(
           color: Colors.transparent,
           child: InkWell(
             onTap: onTap,
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                Space.x3,
-                Space.x2 + 2,
-                dragHandleIndex != null ? Space.x1 : Space.x3,
-                Space.x2,
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    Space.x3,
+                    Space.x3,
+                    dragHandleIndex != null ? Space.x1 : Space.x3,
+                    cleanLossLabel != null ? Space.x2 : Space.x3,
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              '$indexLabel ',
-                              style: AppTypography.numSm.copyWith(
-                                color: p.inkMuted,
-                                fontWeight: FontWeight.w700,
-                              ),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '$indexLabel ',
+                                  style: AppTypography.numSm.copyWith(
+                                    color: p.inkMuted,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    ing.product.name,
+                                    style: AppTypography.body.copyWith(
+                                      color: p.ink,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
                             ),
+                            if (!inlineWeightPill) ...[
+                              const SizedBox(height: Space.x2),
+                              weightPill,
+                            ],
+                            if (showGross) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                'Брутто $grossGramsStr г · −${CalculationEngine.formatWastePercent(ing.product.wastePct)} %',
+                                style: AppTypography.caption
+                                    .copyWith(color: p.inkMuted),
+                              ),
+                            ],
+                            const SizedBox(height: Space.x1 + 2),
+                            // БЖУ: микро-точки M2 и нейтральный текст.
+                            Wrap(
+                              spacing: Space.x3,
+                              runSpacing: 2,
+                              children: [
+                                InlineMacroCell(
+                                  type: NutrientType.protein,
+                                  value: _orDash(() =>
+                                      CalculationEngine.formatMacro(
+                                          ing.proteinInDish)),
+                                  compact: true,
+                                ),
+                                InlineMacroCell(
+                                  type: NutrientType.fat,
+                                  value: _orDash(() =>
+                                      CalculationEngine.formatMacro(
+                                          ing.fatInDish)),
+                                  compact: true,
+                                ),
+                                InlineMacroCell(
+                                  type: NutrientType.carbs,
+                                  value: _orDash(() =>
+                                      CalculationEngine.formatMacro(
+                                          ing.carbsInDish)),
+                                  compact: true,
+                                ),
+                                InlineMacroCell(
+                                  type: NutrientType.kcal,
+                                  value: _orDash(() =>
+                                      CalculationEngine.formatKcal(
+                                          ing.blankKcalInDish)),
+                                  compact: true,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (inlineWeightPill) ...[
+                        const SizedBox(width: Space.x2),
+                        weightPill,
+                      ],
+                      // Явная ручка перестановки ⟷ (удаление — свайп Dismissible
+                      // и действие доступности).
+                      if (dragHandleIndex != null)
+                        ReorderableDragStartListener(
+                          index: dragHandleIndex!,
+                          child: Semantics(
+                            label: 'Перетащить ингредиент',
+                            child: SizedBox(
+                              width: kMinTapTarget,
+                              height: kMinTapTarget,
+                              child: Icon(Icons.drag_indicator_rounded,
+                                  size: 20, color: p.inkMuted),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                if (cleanLossLabel != null) ...[
+                  Divider(color: p.divider, height: 1),
+                  InkWell(
+                    key: ValueKey('loss-${ing.id}'),
+                    onTap: onLossTap,
+                    child: ConstrainedBox(
+                      constraints:
+                          const BoxConstraints(minHeight: kMinTapTarget),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: Space.x3,
+                          vertical: Space.x2,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.local_fire_department_outlined,
+                              size: 14,
+                              color: p.inkSecondary,
+                            ),
+                            const SizedBox(width: 6),
                             Expanded(
                               child: Text(
-                                ing.product.name,
-                                style: AppTypography.body.copyWith(
-                                  color: p.ink,
-                                  fontWeight: FontWeight.w700,
-                                ),
+                                cleanLossLabel,
+                                style: AppTypography.caption
+                                    .copyWith(color: p.inkSecondary),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: Space.x1),
-                        // Числовая строка: масса табличными цифрами.
-                        Wrap(
-                          spacing: Space.x4,
-                          runSpacing: Space.x2,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            _MassCell(
-                              label: 'Нетто',
-                              value: '$netGramsStr г',
-                              note: showGross
-                                  ? ' −${CalculationEngine.formatWastePercent(ing.product.wastePct)} %'
-                                  : null,
-                              palette: p,
-                              emphasized: true,
-                            ),
-                            if (showGross)
-                              _MassCell(
-                                label: 'Брутто',
-                                value: '$grossGramsStr г',
-                                palette: p,
-                                emphasized: false,
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: Space.x1),
-                        // БЖУ: единый типографический компонент без плашек.
-                        Wrap(
-                          spacing: Space.x3,
-                          runSpacing: 2,
-                          children: [
-                            InlineMacroCell(
-                              type: NutrientType.protein,
-                              value: _orDash(() =>
-                                  CalculationEngine.formatMacro(
-                                      ing.proteinInDish)),
-                              compact: true,
-                            ),
-                            InlineMacroCell(
-                              type: NutrientType.fat,
-                              value: _orDash(() =>
-                                  CalculationEngine.formatMacro(
-                                      ing.fatInDish)),
-                              compact: true,
-                            ),
-                            InlineMacroCell(
-                              type: NutrientType.carbs,
-                              value: _orDash(() =>
-                                  CalculationEngine.formatMacro(
-                                      ing.carbsInDish)),
-                              compact: true,
-                            ),
-                            InlineMacroCell(
-                              type: NutrientType.kcal,
-                              value: _orDash(() =>
-                                  CalculationEngine.formatKcal(
-                                      ing.blankKcalInDish)),
-                              compact: true,
+                            const SizedBox(width: 4),
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              size: 15,
+                              color: p.inkMuted,
                             ),
                           ],
-                        ),
-                        if (cleanLossLabel != null)
-                          InkWell(
-                            key: ValueKey('loss-${ing.id}'),
-                            onTap: onLossTap,
-                            borderRadius: Radii.chipAll,
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(
-                                  minHeight: kMinTapTarget),
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: Space.x1),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.local_fire_department_outlined,
-                                        size: 14,
-                                        color: p.inkSecondary,
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Flexible(
-                                        child: Text(
-                                          cleanLossLabel,
-                                          style: AppTypography.caption
-                                              .copyWith(color: p.inkSecondary),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Icon(
-                                        Icons.chevron_right_rounded,
-                                        size: 15,
-                                        color: p.inkMuted,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  // Явная ручка перестановки ⟷ (удаление — свайп Dismissible
-                  // и действие доступности).
-                  if (dragHandleIndex != null)
-                    ReorderableDragStartListener(
-                      index: dragHandleIndex!,
-                      child: Semantics(
-                        label: 'Перетащить ингредиент',
-                        child: SizedBox(
-                          width: kMinTapTarget,
-                          height: kMinTapTarget,
-                          child: Icon(Icons.drag_indicator_rounded,
-                              size: 22, color: p.inkMuted),
                         ),
                       ),
                     ),
+                  ),
                 ],
-              ),
+              ],
             ),
           ),
         ),
       ),
-    );
-  }
-}
-
-class _MassCell extends StatelessWidget {
-  final String label;
-  final String value;
-  final String? note;
-  final Palette palette;
-  final bool emphasized;
-
-  const _MassCell({
-    required this.label,
-    required this.value,
-    required this.palette,
-    required this.emphasized,
-    this.note,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.baseline,
-      textBaseline: TextBaseline.alphabetic,
-      children: [
-        Text(
-          '$label ',
-          style: AppTypography.caption.copyWith(color: palette.inkMuted),
-        ),
-        Text(
-          value,
-          style: AppTypography.num.copyWith(
-            color: emphasized ? palette.ink : palette.inkSecondary,
-            fontWeight: emphasized ? FontWeight.w700 : FontWeight.w400,
-          ),
-        ),
-        if (note != null)
-          Flexible(
-            child: Text(
-              note!,
-              style: AppTypography.caption.copyWith(color: palette.inkMuted),
-            ),
-          ),
-      ],
     );
   }
 }

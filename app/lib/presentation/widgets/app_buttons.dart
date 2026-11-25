@@ -34,19 +34,61 @@ class AppContentFrame extends StatelessWidget {
   }
 }
 
-/// Единый плоский нижний док с 1 px верхним разделителем, SafeArea
-/// и ограничением ширины до [Space.maxWidth] — без теней и плавающих FAB.
+/// Единый нижний док с SafeArea и ограничением ширины до [Space.maxWidth] —
+/// либо плоский с 1 px разделителем, либо в виде парящей швейцарской капсулы
+/// (`floating: true`).
 class AppBottomBar extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry? padding;
+  final bool floating;
 
-  const AppBottomBar({super.key, required this.child, this.padding});
+  const AppBottomBar({
+    super.key,
+    required this.child,
+    this.padding,
+    this.floating = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     final width = MediaQuery.sizeOf(context).width;
     final hPad = Space.gutter(width);
+
+    if (floating) {
+      return SafeArea(
+        top: false,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(hPad, Space.x1, hPad, Space.x1 + 2),
+          child: Center(
+            heightFactor: 1,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: Space.maxWidth),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: p.raised,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: p.borderStatic),
+                  boxShadow: p.isDark
+                      ? const <BoxShadow>[]
+                      : const <BoxShadow>[
+                          BoxShadow(
+                            color: Color(0x14000000),
+                            blurRadius: 16,
+                            offset: Offset(0, 4),
+                          ),
+                        ],
+                ),
+                child: Padding(
+                  padding: padding ?? const EdgeInsets.all(Space.x1 + 2),
+                  child: child,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return DecoratedBox(
       decoration: BoxDecoration(

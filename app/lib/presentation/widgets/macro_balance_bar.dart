@@ -8,11 +8,15 @@ import '../../core/theme/app_typography.dart';
 class MacroBalanceBar extends StatelessWidget {
   final MacroBalance balance;
   final bool compact;
+  final bool barOnly;
+  final double barHeight;
 
   const MacroBalanceBar({
     super.key,
     required this.balance,
     this.compact = false,
+    this.barOnly = false,
+    this.barHeight = 8,
   });
 
   @override
@@ -24,28 +28,31 @@ class MacroBalanceBar extends StatelessWidget {
       (balance.fatPct, p.fat, 'Жиры ${balance.fatPct} %'),
       (balance.carbsPct, p.carbs, 'Углеводы ${balance.carbsPct} %'),
     ];
+
+    final bar = ClipRRect(
+      borderRadius: BorderRadius.circular(barHeight / 2),
+      child: SizedBox(
+        height: barHeight,
+        child: Row(
+          children: [
+            for (final seg in segments)
+              if (seg.$1 > 0)
+                Expanded(
+                  flex: seg.$1,
+                  child: Container(color: seg.$2),
+                ),
+          ],
+        ),
+      ),
+    );
+    if (barOnly) return bar;
     final ratio = balance.ratioLabel;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: SizedBox(
-            height: 8,
-            child: Row(
-              children: [
-                for (final seg in segments)
-                  if (seg.$1 > 0)
-                    Expanded(
-                      flex: seg.$1,
-                      child: Container(color: seg.$2),
-                    ),
-              ],
-            ),
-          ),
-        ),
+        bar,
         const SizedBox(height: Space.x2),
         Wrap(
           spacing: Space.x3,

@@ -1,85 +1,85 @@
 import 'package:flutter/material.dart';
 
-/// Калиброванная палитра приложения «Поварская справка».
+/// Калиброванная швейцарская палитра приложения «Поварская справка».
 ///
-/// Принцип (см. `docs/DESIGN_UX_AUDIT.md` §3.1, правило R1):
-/// **одна ось цвета = один смысл.** Три системы — бренд / данные / источник —
-/// не пересекаются по хью.
+/// Светлая тема: чистый холодно-нейтральный фон (`#F7F7F8`), белоснежные
+/// карточки с тонкими границами (`#E5E7EB`) и глубокий кобальтовый акцент
+/// (`#1E40AF`). Тёмная тема: графитовый `#0D0E10` + `#16181C` + `#73A5FF`.
 ///
 /// Все пары «текст/фон» измерены по WCAG 2.1, все значения проходят AA (4.5:1)
 /// либо 3:1 для интерактивных границ (1.4.11).
 class AppColors {
-  // ─── Основа: тёплая нейтральная палитра и один спокойный акцент ────────
-  static const canvas = Color(0xFFF4F3EF); // тёплый нейтральный фон экранов
+  // ─── Основа: стерильный нейтральный графит и кобальтовый акцент ──────────
+  static const canvas = Color(0xFFF7F7F8); // чистый швейцарский фон экранов
   static const surface = Color(0xFFFFFFFF); // чистые карточки и шиты
-  static const surfaceSunken = Color(0xFFEBE9E2); // утопленные поля и пилюли
+  static const surfaceSunken = Color(0xFFEFEFF2); // утопленные поля и тональные кнопки
 
-  static const canvasDark = Color(0xFF121413);
-  static const surfaceDark = Color(0xFF1B1E1C);
-  static const surfaceSunkenDark = Color(0xFF141615);
-  static const surfaceRaisedDark = Color(0xFF242825);
+  static const canvasDark = Color(0xFF0D0E10);
+  static const surfaceDark = Color(0xFF16181C);
+  static const surfaceSunkenDark = Color(0xFF101215);
+  static const surfaceRaisedDark = Color(0xFF1F2228);
 
   // ─── Границы и внутренние разделители ───────────────────────────────────
-  /// ≥ 3:1 для границ настоящих интерактивных контролов (поля, кнопки).
-  static const border = Color(0xFF7B7F7A);
+  /// ≥ 3:1 на canvas/surface (для доступности интерактивных границ).
+  static const border = Color(0xFF737984);
 
-  /// Мягкая разделительная/контурная линия без тяжёлой «решётки».
-  static const borderStatic = Color(0xFFE2E0D8);
+  /// Деликатный hairline-контур карточек и тональных кнопок.
+  static const borderStatic = Color(0xFFE5E7EB);
 
-  /// Внутренний деликатный разделитель строк внутри одной группы.
-  static const divider = Color(0xFFECEAE3);
+  /// Внутренний разделитель строк внутри сгруппированной карточки.
+  static const divider = Color(0xFFECEDF0);
 
   /// ≥ 3:1 к surfaceDark в тёмной теме.
-  static const borderDark = Color(0xFF717671);
-  static const borderStaticDark = Color(0xFF2C302D);
-  static const dividerDark = Color(0xFF272B28);
+  static const borderDark = Color(0xFF6D7480);
+  static const borderStaticDark = Color(0xFF272B33);
+  static const dividerDark = Color(0xFF22262E);
 
   // ─── Текст (весь текст ≥ 4.5:1 AA на canvas и surface) ──────────────────
-  static const ink = Color(0xFF171918); // >15:1 на canvas
-  static const inkSecondary = Color(0xFF4F5450); // ~7.0:1 на canvas
-  static const inkMuted = Color(0xFF616560); // ~5.28:1 на canvas
+  static const ink = Color(0xFF111214); // >17:1 на белом
+  static const inkSecondary = Color(0xFF4B4F56); // ~7.6:1 на canvas
+  static const inkMuted = Color(0xFF626770); // ~5.3:1 на canvas
 
-  static const inkDark = Color(0xFFF2F3F0);
-  static const inkSecondaryDark = Color(0xFFB4B8B2);
-  static const inkMutedDark = Color(0xFF939891);
+  static const inkDark = Color(0xFFF4F5F7);
+  static const inkSecondaryDark = Color(0xFFA9B0BA);
+  static const inkMutedDark = Color(0xFF8C94A0);
 
-  // ─── Главный акцент: глубокий кулинарный зелёный (хвоя / шалфей) ────────
-  static const accent = Color(0xFF1E5C45); // >7.0:1 на canvas, >7.8:1 на белом
+  // ─── Главный акцент: глубокий швейцарский кобальт ────────────────────────
+  static const accent = Color(0xFF1E40AF); // >8.0:1 на canvas, >8.7:1 на белом
   static const accentOn = Color(0xFFFFFFFF); // текст на accent
-  static const accentSoft = Color(0xFFE5F0EB); // мягкий фон активных пилюль
-  static const accentSoftDark = Color(0xFF21312A);
+  static const accentSoft = Color(0xFFEBF1FE); // мягкий фон активных пилюль
+  static const accentSoftDark = Color(0xFF182338);
 
-  static const accentDark = Color(0xFF82C4A6); // >8:1 на surfaceDark
-  static const accentOnDark = Color(0xFF0E1D16);
+  static const accentDark = Color(0xFF73A5FF); // >7.0:1 на surfaceDark
+  static const accentOnDark = Color(0xFF081429);
 
-  // ─── Нутриенты: чистый типографический акцент, все ≥ 4.5:1 ──────────────
-  static const protein = Color(0xFF285F3C);
-  static const fat = Color(0xFF8C5600);
-  static const carbs = Color(0xFF1E4E79);
-  static const kcal = Color(0xFF9C2C1C);
+  // ─── Нутриенты: чистые тона для микро-точек и полосы баланса ─────────────
+  static const protein = Color(0xFF1E6341);
+  static const fat = Color(0xFF8E5000);
+  static const carbs = Color(0xFF1C518C);
+  static const kcal = Color(0xFFA82820);
 
-  static const proteinDark = Color(0xFF8FD0A0);
-  static const fatDark = Color(0xFFE4B96B);
-  static const carbsDark = Color(0xFF9CC0E8);
-  static const kcalDark = Color(0xFFF09A88);
+  static const proteinDark = Color(0xFF7AD19D);
+  static const fatDark = Color(0xFFEBB863);
+  static const carbsDark = Color(0xFF89B9F0);
+  static const kcalDark = Color(0xFFF59384);
 
   // ─── Бейдж источника: спокойный нейтральный тон ─────────────────────────
-  static const sourceInk = Color(0xFF42413C);
+  static const sourceInk = Color(0xFF3F434A);
   static const sourceLine = borderStatic;
-  static const sourceInkDark = Color(0xFFCFCAC0);
+  static const sourceInkDark = Color(0xFFC4C9D2);
   static const sourceLineDark = borderStaticDark;
 
-  // ─── Статусы: единственные места, где допустим красный/зелёный ──────────
-  static const danger = Color(0xFF9B1C1C);
-  static const dangerSoft = Color(0xFFFBEAEA);
-  static const dangerDark = Color(0xFFF0A0A0);
-  static const dangerSoftDark = Color(0xFF2C1919);
-  static const warning = Color(0xFF7A4E00);
-  static const warningSoft = Color(0xFFFDF3DC);
-  static const warningDark = Color(0xFFE9B872);
-  static const warningSoftDark = Color(0xFF2C2216);
-  static const success = Color(0xFF1F6B3E);
-  static const successDark = Color(0xFF8FD0A0);
+  // ─── Статусы ─────────────────────────────────────────────────────────────
+  static const danger = Color(0xFFB42318);
+  static const dangerSoft = Color(0xFFFEECEB);
+  static const dangerDark = Color(0xFFF49494);
+  static const dangerSoftDark = Color(0xFF301818);
+  static const warning = Color(0xFF8A4F00);
+  static const warningSoft = Color(0xFFFEF4E2);
+  static const warningDark = Color(0xFFEAB96E);
+  static const warningSoftDark = Color(0xFF2E2212);
+  static const success = Color(0xFF156B3E);
+  static const successDark = Color(0xFF7CD49F);
 
   // ─── Бланк: «бумажная» палитра. Привязана к печати — НЕ трогать ─────────
   static const paper = Color(0xFFFFFFFF);

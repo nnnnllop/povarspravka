@@ -31,6 +31,9 @@ class MacroSummaryBar extends StatefulWidget {
   /// одна строка + «Инспектор расчёта».
   final bool compact;
 
+  /// Главный Hero-виджет итогов в верхней части редактора (стратегия Swiss E1).
+  final bool hero;
+
   /// Необязательный список ингредиентов для вклада в режиме legacy
   /// (для нового расчёта используются строки [CalculationResult.lines]).
   final List<Ingredient>? ingredients;
@@ -39,8 +42,21 @@ class MacroSummaryBar extends StatefulWidget {
     super.key,
     required this.result,
     this.compact = false,
+    this.hero = false,
     this.ingredients,
   });
+
+  /// Открывает модальный инспектор расчёта (шаги потерь, выход, вклад).
+  static void showInspector(
+    BuildContext context, {
+    required CalculationResult result,
+    List<Ingredient>? ingredients,
+  }) =>
+      _MacroSummaryBarState._openInspector(
+        context,
+        result: result,
+        ingredients: ingredients,
+      );
 
   @override
   State<MacroSummaryBar> createState() => _MacroSummaryBarState();
@@ -60,6 +76,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
     final r = widget.result;
     final p = Palette.of(context);
 
+    if (widget.hero) return _buildHero(context, p, r);
     if (widget.compact) return _buildCompact(context, p, r);
 
     return Container(
@@ -273,6 +290,190 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
     );
   }
 
+  /// Главный Hero-виджет итогов для верхней части редактора (`hero: true`).
+  Widget _buildHero(BuildContext context, Palette p, CalculationResult r) {
+    final canSwitch = r.hasYield;
+    final per100 = canSwitch && _showPer100g;
+    final kcalVal = per100 ? r.per100gKcal : r.cookedKcal;
+    final proteinVal = per100 ? r.per100gProtein : r.cookedProtein;
+    final fatVal = per100 ? r.per100gFat : r.cookedFat;
+    final carbsVal = per100 ? r.per100gCarbs : r.cookedCarbs;
+    final bal = r.cookedKcal > 0
+        ? MacroBalance.fromMacros(
+            protein: r.cookedProtein,
+            fat: r.cookedFat,
+            carbs: r.cookedCarbs,
+          )
+        : null;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: Radii.cardAll,
+        border: Border.all(color: p.borderStatic),
+        boxShadow: p.cardShadow,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _inspect(context),
+          child: Padding(
+            padding: const EdgeInsets.all(Space.x3),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        per100
+                            ? 'После готовки · на 100 г'
+                            : 'После готовки · на всё блюдо',
+                        style: AppTypography.caption.copyWith(
+                          color: p.inkSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 18,
+                      color: p.inkMuted,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: Space.x1),
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: Space.x2,
+                  runSpacing: Space.x1,
+                  children: [
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(
+                            k(kcalVal),
+                            style: AppTypography.display.copyWith(color: p.ink),
+                          ),
+                          const SizedBox(width: Space.x1),
+                          Text(
+                            per100 ? 'ккал / 100 г' : 'ккал',
+                            style: AppTypography.bodySm.copyWith(
+                              color: p.inkSecondary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (canSwitch)
+                      Material(
+                        color: p.accentSoft,
+                        borderRadius: BorderRadius.circular(999),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          key: const ValueKey('hero-mode-toggle'),
+                          onTap: () {
+                            AppHaptics.toggle();
+                            setState(() => _showPer100g = !_showPer100g);
+                          },
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(
+                              minWidth: kMinTapTarget,
+                              minHeight: kMinTapTarget,
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: Space.x3,
+                                vertical: Space.x2,
+                              ),
+                              child: Center(
+                                widthFactor: 1,
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    per100
+                                        ? '${k(r.cookedKcal)} ккал всего'
+                                        : '${k(r.per100gKcal)} / 100 г',
+                                    style: AppTypography.numSm.copyWith(
+                                      color: p.accent,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                if (bal != null) ...[
+                  const SizedBox(height: Space.x2),
+                  MacroBalanceBar(
+                    balance: bal,
+                    barOnly: true,
+                    barHeight: 5,
+                  ),
+                ],
+                const SizedBox(height: Space.x3),
+                Wrap(
+                  spacing: Space.x4,
+                  runSpacing: Space.x2,
+                  children: [
+                    InlineMacroCell(
+                      type: NutrientType.protein,
+                      label: 'Белки',
+                      value: m(proteinVal),
+                      unit: 'г',
+                      stacked: true,
+                      compact: true,
+                      valueKey: const ValueKey('macro-Белки'),
+                    ),
+                    InlineMacroCell(
+                      type: NutrientType.fat,
+                      label: 'Жиры',
+                      value: m(fatVal),
+                      unit: 'г',
+                      stacked: true,
+                      compact: true,
+                      valueKey: const ValueKey('macro-Жиры'),
+                    ),
+                    InlineMacroCell(
+                      type: NutrientType.carbs,
+                      label: 'Углеводы',
+                      value: m(carbsVal),
+                      unit: 'г',
+                      stacked: true,
+                      compact: true,
+                      valueKey: const ValueKey('macro-Углеводы'),
+                    ),
+                    InlineMacroCell(
+                      type: NutrientType.kcal,
+                      label: 'Энергия',
+                      value: k(kcalVal),
+                      unit: 'ккал',
+                      stacked: true,
+                      compact: true,
+                      valueKey: const ValueKey('macro-Энергия'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Компактная полоса для нижнего дока: одна числовая строка + инспектор.
   ///
   /// Выход блюда здесь сознательно НЕ дублируется: он уже выведен крупной
@@ -414,11 +615,26 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
     );
   }
 
-  void _inspect(BuildContext context) {
-    final r = widget.result;
+  void _inspect(BuildContext context) => _openInspector(
+        context,
+        result: widget.result,
+        ingredients: widget.ingredients,
+      );
+
+  static void _openInspector(
+    BuildContext context, {
+    required CalculationResult result,
+    List<Ingredient>? ingredients,
+  }) {
+    final r = result;
     final e = YieldExplanation(r.rawTotalWeight, r.yieldGrams);
     final p = Palette.of(context);
-    final contributions = _buildContributionItems(r, widget.ingredients);
+    final contributions = _buildContributionItems(r, ingredients);
+    String m(double value) => CalculationEngine.formatMacro(value);
+    String g(double value) => CalculationEngine.formatGrams(value);
+    String k(double value) => CalculationEngine.formatKcal(value);
+    String macros(double p, double f, double c) =>
+        'Б: ${m(p)} · Ж: ${m(f)} · У: ${m(c)} г';
 
     showModalBottomSheet<void>(
       context: context,
@@ -608,8 +824,11 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
 
   /// Шаг 2 нового расчёта: потери по каждому ингредиенту — группа, способ,
   /// проценты из таблицы и «сырьё → после готовки» для Б/Ж/У.
-  Widget _buildLossLinesSection(Palette p, CalculationResult r) {
+  static Widget _buildLossLinesSection(Palette p, CalculationResult r) {
     String pct(double v) => CalculationEngine.formatGrams(v);
+    String m(double value) => CalculationEngine.formatMacro(value);
+    String macros(double p, double f, double c) =>
+        'Б: ${m(p)} · Ж: ${m(f)} · У: ${m(c)} г';
     return _buildStepSection(
       palette: p,
       title: '2. Потери при готовке — по таблице для группы продукта',
@@ -677,7 +896,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
     );
   }
 
-  Widget _buildStepSection({
+  static Widget _buildStepSection({
     required Palette palette,
     required String title,
     required Widget content,

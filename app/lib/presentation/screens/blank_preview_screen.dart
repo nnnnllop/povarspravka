@@ -262,7 +262,9 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
 
               // Лист бланка: пинч-зум, автоподгонка по ширине и перетаскивание.
               Expanded(
-                child: LayoutBuilder(
+                child: ColoredBox(
+                  color: p.mountingTable,
+                  child: LayoutBuilder(
                   builder: (context, viewerConstraints) {
                     final viewportW = viewerConstraints.maxWidth;
                     final nextFit = (calc != null &&
@@ -310,6 +312,7 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
                   },
                 ),
               ),
+            ),
 
           // Панель масштаба: плоский нижний док с 1 px верхним разделителем.
           AppBottomBar(
@@ -657,9 +660,9 @@ class _BlankPreviewDocument extends StatelessWidget {
         border: Border.all(color: Colors.black26, width: 1),
         boxShadow: const [
           BoxShadow(
-            color: Color.fromRGBO(0, 0, 0, 0.06),
-            blurRadius: 8,
-            offset: Offset(0, 2),
+            color: Color.fromRGBO(0, 0, 0, 0.14),
+            blurRadius: 20,
+            offset: Offset(0, 6),
           ),
         ],
       ),

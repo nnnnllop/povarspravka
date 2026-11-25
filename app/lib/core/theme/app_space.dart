@@ -31,8 +31,8 @@ class Space {
 class Radii {
   static const double chip = 8;
   static const double field = 12;
-  static const double card = 16;
-  static const double sheet = 22;
+  static const double card = 14;
+  static const double sheet = 20;
   static const double dialog = 18;
 
   static const BorderRadius chipAll = BorderRadius.all(Radius.circular(chip));
@@ -106,4 +106,22 @@ class Palette {
   Color get warningSoft =>
       isDark ? AppColors.warningSoftDark : AppColors.warningSoft;
   Color get success => isDark ? AppColors.successDark : AppColors.success;
+
+  /// Поднятая поверхность для плавающих капсул и кнопок в тёмной теме.
+  Color get raised => isDark ? AppColors.surfaceRaisedDark : AppColors.surface;
+
+  /// Контрастный «монтажный стол» под белым печатным листом бланка.
+  Color get mountingTable =>
+      isDark ? const Color(0xFF090A0C) : const Color(0xFFE6E8EC);
+
+  /// Деликатная тень для карточек только в светлой теме (в тёмной — контур).
+  List<BoxShadow> get cardShadow => isDark
+      ? const <BoxShadow>[]
+      : const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 10,
+            offset: Offset(0, 2),
+          ),
+        ];
 }

@@ -132,18 +132,21 @@ class InlineMacroCell extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     final resolvedTint = tint ?? type!.tintOf(p);
+    final showDot = type != NutrientType.kcal;
     final resolvedLabel = label ?? type!.shortLabel;
     final hasUnit =
         unit != null && unit!.isNotEmpty && !value.endsWith(unit!);
     final displayValue = hasUnit ? '$value $unit' : value;
     final valueColor = muted ? p.inkSecondary : p.ink;
+    final labelColor = p.inkSecondary;
     final valueStyle =
         (compact ? AppTypography.numSm : AppTypography.num).copyWith(
       color: valueColor,
-      fontWeight: FontWeight.w600,
+      fontWeight: type == NutrientType.kcal ? FontWeight.w700 : FontWeight.w600,
     );
 
-    final a11yLabel = semanticsLabel ?? _defaultSemanticsLabel(resolvedLabel, displayValue);
+    final a11yLabel =
+        semanticsLabel ?? _defaultSemanticsLabel(resolvedLabel, displayValue);
 
     final valueText = Text(
       displayValue,
@@ -151,17 +154,35 @@ class InlineMacroCell extends StatelessWidget {
       style: valueStyle,
     );
 
+    final dotWidget = showDot
+        ? Container(
+            width: 6,
+            height: 6,
+            margin: const EdgeInsets.only(right: 4),
+            decoration: BoxDecoration(
+              color: resolvedTint,
+              shape: BoxShape.circle,
+            ),
+          )
+        : null;
+
     final Widget content = stacked
         ? Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                resolvedLabel,
-                style: AppTypography.caption.copyWith(
-                  color: resolvedTint,
-                  fontWeight: FontWeight.w600,
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (dotWidget != null) dotWidget,
+                  Text(
+                    resolvedLabel,
+                    style: AppTypography.caption.copyWith(
+                      color: labelColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
               valueText,
             ],
@@ -170,12 +191,13 @@ class InlineMacroCell extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              if (dotWidget != null) dotWidget,
               Text(
                 '$resolvedLabel ',
                 style: (compact ? AppTypography.caption : AppTypography.label)
                     .copyWith(
-                  color: resolvedTint,
-                  fontWeight: FontWeight.w600,
+                  color: labelColor,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
               valueText,

@@ -18,7 +18,9 @@ import '../widgets/app_buttons.dart';
 import '../widgets/batch_export_sheet.dart';
 import '../widgets/dish_comparison_sheet.dart';
 import '../widgets/loss_clarity_hints.dart';
+import '../widgets/macro_balance_bar.dart';
 import '../widgets/menu_builder_sheet.dart';
+import '../../core/calculation/macro_balance.dart';
 import '../widgets/persistence_error_banner.dart';
 import '../widgets/share_recipe_sheet.dart';
 import 'recipe_editor_screen.dart';
@@ -82,6 +84,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final persistenceError = ref.watch(persistenceErrorProvider);
     final savedDishesError = ref.watch(savedDishesErrorProvider);
     final width = MediaQuery.sizeOf(context).width;
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
     final gutter = Space.gutter(width);
     final listHPad = math.max(gutter, (width - Space.maxWidth) / 2);
     final hasActiveDraft =
@@ -161,6 +164,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       appBar: isSelecting
           ? AppBar(
               toolbarHeight: kToolbarHeight,
+              backgroundColor: p.accentSoft,
               leading: IconButton(
                 key: const ValueKey('selection-close-btn'),
                 tooltip: 'Отменить выбор',
@@ -202,7 +206,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               toolbarHeight: kToolbarHeight,
               title: Row(
                 children: [
-                  Icon(Icons.menu_book_rounded, size: 20, color: p.accent),
+                  Icon(Icons.balance_rounded, size: 20, color: p.accent),
                   const SizedBox(width: Space.x2),
                   Expanded(
                     child: Text(
@@ -214,9 +218,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ],
               ),
               actions: [
+                if (savedDishes.length >= 2)
+                  IconButton(
+                    key: const ValueKey('home-select-mode-btn'),
+                    tooltip: 'Выбрать блюда',
+                    icon: Icon(Icons.checklist_rounded, color: p.inkSecondary),
+                    onPressed: () {
+                      final target = filteredDishes.isNotEmpty
+                          ? filteredDishes.first.id
+                          : savedDishes.first.id;
+                      _startSelection(target);
+                    },
+                  ),
                 IconButton(
                   tooltip: 'Как считается',
-                  icon: Icon(Icons.info_outline_rounded, color: p.inkSecondary),
+                  icon: Icon(Icons.tune_rounded, color: p.inkSecondary),
                   onPressed: () => _showHowItWorks(context),
                 ),
               ],
@@ -279,7 +295,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     onOpen: () => _openEditor(context),
                     onNew: () => _newCalculation(context, ref),
                   ),
-                  const SizedBox(height: Space.x5),
+                  SizedBox(height: textScale > 1.35 ? Space.x2 : Space.x4),
                 ],
 
                 // ── Мои блюда ────────────────────────────────────────────────
@@ -567,7 +583,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       runSpacing: Space.x1,
                       children: [
                         Text(
-                          'Как считается',
+                          'Настройки и справка',
                           style: AppTypography.title.copyWith(color: p.ink),
                         ),
                         DecoratedBox(
@@ -590,62 +606,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: Space.x1),
-                    Text(
-                      'Справочник Скурихина (2002) · Немецкий справочник BLS 4.0. '
-                      'Всё считается на устройстве, без интернета.',
-                      style:
-                          AppTypography.bodySm.copyWith(color: p.inkSecondary),
-                    ),
-                    const SizedBox(height: Space.x4),
-                    Divider(color: p.divider, height: Space.x5),
-                    _InfoSection(
-                      palette: p,
-                      icon: Icons.functions_rounded,
-                      title: 'Формула энергетической ценности',
-                      body: 'Коэффициенты Этуотера:\n'
-                          '• 1 г белков = 4,0 ккал\n'
-                          '• 1 г жиров = 9,0 ккал\n'
-                          '• 1 г углеводов = 4,0 ккал\n\n'
-                          'ЭЦ = Б × 4 + Ж × 9 + У × 4. Расчёт идёт по нутриентам '
-                          'после тепловой обработки; вклад алкоголя, пищевых волокон и '
-                          'органических кислот формулой не учитывается.',
-                    ),
-                    Divider(color: p.divider, height: Space.x5),
-                    _InfoSection(
-                      palette: p,
-                      icon: Icons.thermostat_rounded,
-                      title: 'Потери при тепловой обработке',
-                      body: 'Б, Ж и У каждого продукта уменьшаются на процент потерь '
-                          'для его группы и способа обработки (варка, тушение, жарка, '
-                          'запекание, на пару, бульон); без тепловой обработки потерь '
-                          'нет. Энергия считается от готовых Б/Ж/У. Вес готового блюда '
-                          'вводит повар; без него итог дан на всё блюдо. Расчёты, '
-                          'сохранённые прежней версией (сохранность 94 / 88 / 91 %), '
-                          'открываются с прежними числами.\n\n'
-                          'Ключевые допущения модели:\n'
-                          '${LossClarityHints.overviewBullets}\n\n'
-                          '$kNotGostNotice',
-                    ),
-                    Divider(color: p.divider, height: Space.x5),
-                    _InfoSection(
-                      palette: p,
-                      icon: Icons.splitscreen_rounded,
-                      title: 'Два режима бланка',
-                      body: '1. «Бланк с крестом (учебный)» — диагональный крест в '
-                          'колонке ккал сырья, калорийность только после готовки.\n'
-                          '2. «Подробный расчёт» — калории рассчитаны для каждого продукта.',
-                    ),
-                    Divider(color: p.divider, height: Space.x5),
-                    _InfoSection(
-                      palette: p,
-                      icon: Icons.file_download_outlined,
-                      title: 'Форматы экспорта',
-                      body: 'PDF (векторный, идентичен типовому бланку), Word (.docx) '
-                          'и Excel (.xlsx) с живыми формулами — файлы сохраняются на '
-                          'телефоне и печатаются оттуда.',
-                    ),
-                    Divider(color: p.divider, height: Space.x5),
+                    const SizedBox(height: Space.x3),
                     Row(
                       children: [
                         Icon(
@@ -846,6 +807,65 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           label: const Text('Восстановить из копии'),
                         ),
                       ],
+                    ),
+                    Divider(color: p.divider, height: Space.x5),
+                    Text(
+                      'Как считается · Справочники',
+                      style: AppTypography.headline.copyWith(color: p.ink),
+                    ),
+                    const SizedBox(height: Space.x1),
+                    Text(
+                      'Справочник Скурихина (2002) · Немецкий справочник BLS 4.0. '
+                      'Всё считается на устройстве, без интернета.',
+                      style:
+                          AppTypography.bodySm.copyWith(color: p.inkSecondary),
+                    ),
+                    Divider(color: p.divider, height: Space.x5),
+                    _InfoSection(
+                      palette: p,
+                      icon: Icons.functions_rounded,
+                      title: 'Формула энергетической ценности',
+                      body: 'Коэффициенты Этуотера:\n'
+                          '• 1 г белков = 4,0 ккал\n'
+                          '• 1 г жиров = 9,0 ккал\n'
+                          '• 1 г углеводов = 4,0 ккал\n\n'
+                          'ЭЦ = Б × 4 + Ж × 9 + У × 4. Расчёт идёт по нутриентам '
+                          'после тепловой обработки; вклад алкоголя, пищевых волокон и '
+                          'органических кислот формулой не учитывается.',
+                    ),
+                    Divider(color: p.divider, height: Space.x5),
+                    _InfoSection(
+                      palette: p,
+                      icon: Icons.thermostat_rounded,
+                      title: 'Потери при тепловой обработке',
+                      body: 'Б, Ж и У каждого продукта уменьшаются на процент потерь '
+                          'для его группы и способа обработки (варка, тушение, жарка, '
+                          'запекание, на пару, бульон); без тепловой обработки потерь '
+                          'нет. Энергия считается от готовых Б/Ж/У. Вес готового блюда '
+                          'вводит повар; без него итог дан на всё блюдо. Расчёты, '
+                          'сохранённые прежней версией (сохранность 94 / 88 / 91 %), '
+                          'открываются с прежними числами.\n\n'
+                          'Ключевые допущения модели:\n'
+                          '${LossClarityHints.overviewBullets}\n\n'
+                          '$kNotGostNotice',
+                    ),
+                    Divider(color: p.divider, height: Space.x5),
+                    _InfoSection(
+                      palette: p,
+                      icon: Icons.splitscreen_rounded,
+                      title: 'Два режима бланка',
+                      body: '1. «Бланк с крестом (учебный)» — диагональный крест в '
+                          'колонке ккал сырья, калорийность только после готовки.\n'
+                          '2. «Подробный расчёт» — калории рассчитаны для каждого продукта.',
+                    ),
+                    Divider(color: p.divider, height: Space.x5),
+                    _InfoSection(
+                      palette: p,
+                      icon: Icons.file_download_outlined,
+                      title: 'Форматы экспорта',
+                      body: 'PDF (векторный, идентичен типовому бланку), Word (.docx) '
+                          'и Excel (.xlsx) с живыми формулами — файлы сохраняются на '
+                          'телефоне и печатаются оттуда.',
                     ),
                     Divider(color: p.divider, height: Space.x5),
                     Theme(
@@ -1424,6 +1444,9 @@ class _ActiveDraftCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
+    final media = MediaQuery.sizeOf(context);
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final compactDraft = media.height < 640 && textScale > 1.4;
     final hasIngredients = dish.ingredients.isNotEmpty;
     final hasTitle = dish.title.trim().isNotEmpty;
     final hasDraft = hasIngredients || hasTitle;
@@ -1434,82 +1457,140 @@ class _ActiveDraftCard extends StatelessWidget {
         ? (hasIngredients ? 'Черновик без названия' : 'Новый расчёт')
         : dish.title.trim();
 
-    return Container(
-      decoration: BoxDecoration(
-        color: p.surface,
-        borderRadius: Radii.cardAll,
-        border: Border.all(color: p.borderStatic),
-      ),
-      padding: const EdgeInsets.all(Space.x3),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: hasDraft ? p.accent : p.inkMuted,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: Space.x2),
-              Expanded(
-                child: Text(
-                  hasDraft ? 'Открытый расчёт' : 'Новый расчёт',
-                  style: AppTypography.caption.copyWith(
-                    color: hasDraft ? p.accent : p.inkSecondary,
-                    fontWeight: FontWeight.w600,
+    return TactilePress(
+      child: Container(
+        decoration: BoxDecoration(
+          color: p.surface,
+          borderRadius: Radii.cardAll,
+          border: Border.all(color: p.borderStatic),
+          boxShadow: p.cardShadow,
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: hasDraft ? onOpen : onNew,
+            child: Padding(
+              padding: EdgeInsets.all(textScale > 1.35 ? Space.x2 : Space.x3),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: Space.x2,
+                      runSpacing: Space.x1,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration: BoxDecoration(
+                                color: hasDraft ? p.accent : p.inkMuted,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: Space.x2),
+                            Flexible(
+                              child: Text(
+                                hasDraft ? 'Открытый расчёт' : 'Новый расчёт',
+                                style: AppTypography.caption.copyWith(
+                                  color: hasDraft ? p.accent : p.inkSecondary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                hasDraft ? 'Продолжить расчёт' : 'Новый расчёт',
+                                style: AppTypography.caption.copyWith(
+                                  color: p.accent,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(
+                              Icons.arrow_forward_rounded,
+                              size: 14,
+                              color: p.accent,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                  SizedBox(height: compactDraft ? Space.x1 : Space.x2),
+                  Text(
+                    title,
+                    style: AppTypography.title.copyWith(color: p.ink),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (hasIngredients) ...[
+                    SizedBox(height: compactDraft ? Space.x1 : Space.x2),
+                    if (calc != null) ...[
+                      Wrap(
+                        spacing: Space.x2,
+                        runSpacing: 2,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(
+                            calc.hasYield
+                                ? '${CalculationEngine.formatKcal(calc.per100gKcal)} ккал/100 г'
+                                : '${CalculationEngine.formatKcal(calc.cookedKcal)} ккал',
+                            style: AppTypography.headline.copyWith(
+                              color: p.ink,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          Text(
+                            '${pluralIngredients(dish.ingredients.length)} · '
+                            '${calc.usesLossTable && !calc.hasYield ? 'вес готового блюда не указан' : 'выход ${CalculationEngine.formatGrams(calc.yieldGrams)} г'}',
+                            style: AppTypography.numSm
+                                .copyWith(color: p.inkSecondary),
+                          ),
+                        ],
+                      ),
+                      if (calc.cookedKcal > 0 && !compactDraft) ...[
+                        const SizedBox(height: Space.x2),
+                        MacroBalanceBar(
+                          balance: MacroBalance.fromMacros(
+                            protein: calc.cookedProtein,
+                            fat: calc.cookedFat,
+                            carbs: calc.cookedCarbs,
+                          ),
+                          barOnly: true,
+                          barHeight: 3.5,
+                        ),
+                      ],
+                    ] else
+                      Text(
+                        '${pluralIngredients(dish.ingredients.length)} · выход — г · — ккал',
+                        style:
+                            AppTypography.numSm.copyWith(color: p.inkSecondary),
+                      ),
+                  ] else if (hasTitle) ...[
+                    const SizedBox(height: Space.x1),
+                    Text(
+                      'Ингредиенты ещё не добавлены',
+                      style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
+                    ),
+                  ],
+                ],
               ),
-            ],
-          ),
-          const SizedBox(height: Space.x1),
-          Text(
-            title,
-            style: AppTypography.title.copyWith(color: p.ink),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          if (hasIngredients) ...[
-            const SizedBox(height: Space.x1),
-            Text(
-              calc == null
-                  ? '${pluralIngredients(dish.ingredients.length)} · выход — г · — ккал'
-                  : '${pluralIngredients(dish.ingredients.length)} · '
-                      '${calc.usesLossTable && !calc.hasYield ? 'вес готового блюда не указан' : 'выход ${CalculationEngine.formatGrams(calc.yieldGrams)} г'} · '
-                      '${CalculationEngine.formatKcal(calc.cookedKcal)} ккал',
-              style: AppTypography.numSm.copyWith(color: p.inkSecondary),
-            ),
-          ] else if (hasTitle) ...[
-            const SizedBox(height: Space.x1),
-            Text(
-              'Ингредиенты ещё не добавлены',
-              style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
-            ),
-          ],
-          const SizedBox(height: Space.x3),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: hasDraft ? onOpen : onNew,
-              style: hasDraft
-                  ? FilledButton.styleFrom(
-                      backgroundColor: p.accentSoft,
-                      foregroundColor: p.accent,
-                      elevation: 0,
-                    )
-                  : null,
-              icon: Icon(
-                hasDraft ? Icons.edit_note_rounded : Icons.add_rounded,
-                size: 20,
-              ),
-              label: Text(hasDraft ? 'Продолжить расчёт' : 'Новый расчёт'),
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1643,6 +1724,18 @@ class _SavedDishCard extends ConsumerWidget {
         dish.title.trim().isEmpty ? 'Блюдо без названия' : dish.title.trim();
     final categoryLabel = DishCategories.labelOf(dish.category);
 
+    final media = MediaQuery.sizeOf(context);
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final showRightKcal =
+        calc != null && media.width >= 340 && textScale <= 1.35;
+    final bal = (calc != null && calc.cookedKcal > 0)
+        ? MacroBalance.fromMacros(
+            protein: calc.cookedProtein,
+            fat: calc.cookedFat,
+            carbs: calc.cookedCarbs,
+          )
+        : null;
+
     return TactilePress(
       child: Container(
         margin: const EdgeInsets.only(bottom: Space.x2),
@@ -1653,6 +1746,7 @@ class _SavedDishCard extends ConsumerWidget {
             color: isSelected ? p.accent : p.borderStatic,
             width: isSelected ? 1.5 : 1,
           ),
+          boxShadow: isSelected ? const <BoxShadow>[] : p.cardShadow,
         ),
         clipBehavior: Clip.antiAlias,
         child: Material(
@@ -1677,50 +1771,95 @@ class _SavedDishCard extends ConsumerWidget {
             },
             child: Padding(
               padding: const EdgeInsets.fromLTRB(
-                  Space.x4, Space.x3, Space.x1, Space.x3),
+                  Space.x4, Space.x2 + 2, Space.x1, Space.x2 + 2),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Wrap(
-                          spacing: Space.x2,
-                          runSpacing: 4,
-                          crossAxisAlignment: WrapCrossAlignment.center,
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              title,
-                              style: AppTypography.body.copyWith(
-                                  color: p.ink, fontWeight: FontWeight.w700),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (categoryLabel != null)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 7, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: p.accentSoft,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  categoryLabel,
-                                  style: AppTypography.caption.copyWith(
-                                    color: p.accent,
-                                    fontWeight: FontWeight.w600,
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (categoryLabel != null) ...[
+                                    Text(
+                                      categoryLabel.toUpperCase(),
+                                      style: AppTypography.caption.copyWith(
+                                        color: p.accent,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 0.4,
+                                        fontSize: 11,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 2),
+                                  ],
+                                  Text(
+                                    title,
+                                    style: AppTypography.headline
+                                        .copyWith(color: p.ink),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                ),
+                                ],
                               ),
+                            ),
+                            if (showRightKcal) ...[
+                              const SizedBox(width: Space.x2),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    CalculationEngine.formatKcal(
+                                      calc.hasYield
+                                          ? calc.per100gKcal
+                                          : calc.cookedKcal,
+                                    ),
+                                    style: AppTypography.headline.copyWith(
+                                      color: p.ink,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  Text(
+                                    calc.hasYield ? 'ккал/100 г' : 'ккал',
+                                    style: AppTypography.caption.copyWith(
+                                      color: p.inkMuted,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ],
                         ),
-                        const SizedBox(height: 2),
+                        if (bal != null) ...[
+                          const SizedBox(height: Space.x1 + 2),
+                          MacroBalanceBar(
+                            balance: bal,
+                            barOnly: true,
+                            barHeight: 3.5,
+                          ),
+                        ],
+                        const SizedBox(height: Space.x1 + 2),
                         Text(
                           calc == null
                               ? '${pluralIngredients(dish.ingredients.length)} · выход — г · — ккал'
-                              : '${pluralIngredients(dish.ingredients.length)} · '
-                                  '${calc.usesLossTable && !calc.hasYield ? 'вес готового блюда не указан' : 'выход ${CalculationEngine.formatGrams(calc.yieldGrams)} г'} · '
-                                  '${CalculationEngine.formatKcal(calc.cookedKcal)} ккал',
+                              : showRightKcal
+                                  ? '${pluralIngredients(dish.ingredients.length)} · '
+                                      '${calc.usesLossTable && !calc.hasYield ? 'вес готового блюда не указан' : 'выход ${CalculationEngine.formatGrams(calc.yieldGrams)} г'} · '
+                                      'Б ${CalculationEngine.formatMacro(calc.hasYield ? calc.per100gProtein : calc.cookedProtein)} · '
+                                      'Ж ${CalculationEngine.formatMacro(calc.hasYield ? calc.per100gFat : calc.cookedFat)} · '
+                                      'У ${CalculationEngine.formatMacro(calc.hasYield ? calc.per100gCarbs : calc.cookedCarbs)}'
+                                  : '${pluralIngredients(dish.ingredients.length)} · '
+                                      '${calc.usesLossTable && !calc.hasYield ? 'вес не указан' : '${CalculationEngine.formatGrams(calc.yieldGrams)} г'} · '
+                                      '${CalculationEngine.formatKcal(calc.hasYield ? calc.per100gKcal : calc.cookedKcal)} '
+                                      '${calc.hasYield ? 'ккал/100 г' : 'ккал'}',
                           style:
                               AppTypography.numSm.copyWith(color: p.inkSecondary),
                         ),
@@ -1942,13 +2081,24 @@ class _SelectionDock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
+    final size = MediaQuery.sizeOf(context);
+    final width = size.width;
     final textScale = MediaQuery.textScalerOf(context).scale(1.0);
     final stackVertically = (width < 380 && textScale > 1.3) || width < 300;
+    final compactDock = stackVertically && size.height < 640;
+    final compactPad = compactDock
+        ? const EdgeInsets.symmetric(
+            horizontal: Space.x3,
+            vertical: Space.x2,
+          )
+        : null;
 
     final compareBtn = OutlinedButton.icon(
       key: const ValueKey('selection-compare-btn'),
       onPressed: onCompare,
+      style: compactPad == null
+          ? null
+          : OutlinedButton.styleFrom(padding: compactPad),
       icon: const Icon(Icons.compare_arrows_rounded, size: 18),
       label: const FittedBox(
         fit: BoxFit.scaleDown,
@@ -1958,6 +2108,9 @@ class _SelectionDock extends StatelessWidget {
     final menuBtn = OutlinedButton.icon(
       key: const ValueKey('selection-menu-btn'),
       onPressed: onMenu,
+      style: compactPad == null
+          ? null
+          : OutlinedButton.styleFrom(padding: compactPad),
       icon: const Icon(Icons.restaurant_rounded, size: 18),
       label: const FittedBox(
         fit: BoxFit.scaleDown,
@@ -1967,6 +2120,9 @@ class _SelectionDock extends StatelessWidget {
     final exportBtn = FilledButton.icon(
       key: const ValueKey('selection-export-btn'),
       onPressed: onExport,
+      style: compactPad == null
+          ? null
+          : FilledButton.styleFrom(padding: compactPad),
       icon: const Icon(Icons.ios_share_rounded, size: 18),
       label: const FittedBox(
         fit: BoxFit.scaleDown,
@@ -1975,13 +2131,20 @@ class _SelectionDock extends StatelessWidget {
     );
 
     return AppBottomBar(
+      floating: !compactDock,
+      padding: compactDock
+          ? EdgeInsets.symmetric(
+              horizontal: Space.gutter(width),
+              vertical: Space.x1,
+            )
+          : null,
       child: stackVertically
           ? Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 compareBtn,
-                const SizedBox(height: Space.x2),
+                SizedBox(height: compactDock ? Space.x1 : Space.x2),
                 IntrinsicHeight(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2010,7 +2173,7 @@ class _SelectionDock extends StatelessWidget {
   }
 }
 
-/// Нижний док главного экрана: два главных действия всегда под рукой.
+/// Нижний док главного экрана: парящая капсула с главным действием и базой.
 class _HomeDock extends StatelessWidget {
   final VoidCallback onNewCalculation;
   final VoidCallback onCatalog;
@@ -2022,29 +2185,73 @@ class _HomeDock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
+    final size = MediaQuery.sizeOf(context);
+    final width = size.width;
     final textScale = MediaQuery.textScalerOf(context).scale(1.0);
     final stackVertically = (width < 380 && textScale > 1.3) || width < 300;
-
-    final newBtn = FilledButton.icon(
-      onPressed: onNewCalculation,
-      icon: const Icon(Icons.add_rounded, size: 20),
-      label: const Text('Новый расчёт', textAlign: TextAlign.center),
+    final compactDock = stackVertically && size.height < 640;
+    final narrowRow = !stackVertically && width < 380;
+    final pillShape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(stackVertically ? Radii.field : 999),
     );
-    final catalogBtn = OutlinedButton.icon(
+    final btnPadding = compactDock
+        ? const EdgeInsets.symmetric(
+            horizontal: Space.x3,
+            vertical: Space.x2,
+          )
+        : (narrowRow
+            ? const EdgeInsets.symmetric(
+                horizontal: Space.x2,
+                vertical: Space.x2,
+              )
+            : null);
+    final iconGap = narrowRow ? Space.x1 : Space.x2;
+    final iconSize = narrowRow ? 18.0 : 20.0;
+
+    Widget buildBtnChild(IconData icon, String label) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: iconSize),
+          SizedBox(width: iconGap),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 2,
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
+      );
+    }
+
+    final newBtn = FilledButton(
+      onPressed: onNewCalculation,
+      style: FilledButton.styleFrom(shape: pillShape, padding: btnPadding),
+      child: buildBtnChild(Icons.add_rounded, 'Новый расчёт'),
+    );
+    final catalogBtn = OutlinedButton(
       onPressed: onCatalog,
-      icon: const Icon(Icons.search_rounded, size: 20),
-      label: const Text('Справочник', textAlign: TextAlign.center),
+      style: OutlinedButton.styleFrom(shape: pillShape, padding: btnPadding),
+      child: buildBtnChild(Icons.search_rounded, 'Справочник'),
     );
 
     return AppBottomBar(
+      floating: !compactDock,
+      padding: compactDock
+          ? EdgeInsets.symmetric(
+              horizontal: Space.gutter(width),
+              vertical: Space.x1,
+            )
+          : null,
       child: stackVertically
           ? Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 newBtn,
-                const SizedBox(height: Space.x2),
+                SizedBox(height: compactDock ? Space.x1 : Space.x2),
                 catalogBtn,
               ],
             )
@@ -2052,9 +2259,9 @@ class _HomeDock extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(child: newBtn),
+                  Expanded(flex: 6, child: newBtn),
                   const SizedBox(width: Space.x2),
-                  Expanded(child: catalogBtn),
+                  Expanded(flex: 5, child: catalogBtn),
                 ],
               ),
             ),

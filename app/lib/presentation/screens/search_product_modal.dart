@@ -370,159 +370,154 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x1),
-      child: SizedBox(
-        width: double.infinity,
-        child: Wrap(
-          spacing: Space.x2,
-          runSpacing: 0,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            if (isCatalog)
-              _FilterPill(
-                label: 'Все',
-                selected: selectedIsDish == null,
-                palette: p,
-                onTap: () {
-                  AppHaptics.toggle();
-                  ref.read(searchProvider.notifier).setIsDishFilter(null);
-                },
-              ),
+      child: Wrap(
+        spacing: Space.x2,
+        runSpacing: 0,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          if (isCatalog)
             _FilterPill(
-              label: 'Продукты',
-              selected: selectedIsDish == false,
+              label: 'Все',
+              selected: selectedIsDish == null,
               palette: p,
               onTap: () {
                 AppHaptics.toggle();
-                ref.read(searchProvider.notifier).setIsDishFilter(false);
+                ref.read(searchProvider.notifier).setIsDishFilter(null);
               },
             ),
-            _FilterPill(
-              label: 'Готовые',
-              selected: selectedIsDish == true,
-              palette: p,
-              onTap: () {
-                AppHaptics.toggle();
-                ref.read(searchProvider.notifier).setIsDishFilter(true);
-              },
-            ),
-            PopupMenuButton<String>(
-              tooltip: 'Источник справочника',
-              padding: EdgeInsets.zero,
-              onSelected: (value) {
-                AppHaptics.toggle();
-                final notifier = ref.read(searchProvider.notifier);
-                if (value == _allSourcesValue) {
-                  if (selectedSource != null) {
-                    notifier.setSourceFilter(_allSourcesValue);
-                  }
-                } else if (selectedSource != value) {
-                  notifier.setSourceFilter(value);
+          _FilterPill(
+            label: 'Продукты',
+            selected: selectedIsDish == false,
+            palette: p,
+            onTap: () {
+              AppHaptics.toggle();
+              ref.read(searchProvider.notifier).setIsDishFilter(false);
+            },
+          ),
+          _FilterPill(
+            label: 'Готовые',
+            selected: selectedIsDish == true,
+            palette: p,
+            onTap: () {
+              AppHaptics.toggle();
+              ref.read(searchProvider.notifier).setIsDishFilter(true);
+            },
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'Источник справочника',
+            padding: EdgeInsets.zero,
+            onSelected: (value) {
+              AppHaptics.toggle();
+              final notifier = ref.read(searchProvider.notifier);
+              if (value == _allSourcesValue) {
+                if (selectedSource != null) {
+                  notifier.setSourceFilter(_allSourcesValue);
                 }
-              },
-              itemBuilder: (_) => [
+              } else if (selectedSource != value) {
+                notifier.setSourceFilter(value);
+              }
+            },
+            itemBuilder: (_) => [
+              PopupMenuItem<String>(
+                value: _allSourcesValue,
+                child: Row(
+                  children: [
+                    const Expanded(child: Text('Все источники')),
+                    if (selectedSource == null)
+                      Icon(Icons.check_rounded, size: 18, color: p.accent),
+                  ],
+                ),
+              ),
+              for (final (code, count) in [
+                ('skurikhin', counts.skurikhin),
+                ('bls', counts.bls),
+                if (counts.supplement > 0) ('supplement', counts.supplement),
+                if (counts.custom > 0) ('custom', counts.custom),
+              ])
                 PopupMenuItem<String>(
-                  value: _allSourcesValue,
+                  value: code,
                   child: Row(
                     children: [
-                      const Expanded(child: Text('Все источники')),
-                      if (selectedSource == null)
+                      Expanded(
+                        child: Text(menuLabel(SourceLabel.of(code), count)),
+                      ),
+                      if (selectedSource == code)
                         Icon(Icons.check_rounded, size: 18, color: p.accent),
                     ],
                   ),
                 ),
-                for (final (code, count) in [
-                  ('skurikhin', counts.skurikhin),
-                  ('bls', counts.bls),
-                  if (counts.supplement > 0) ('supplement', counts.supplement),
-                  if (counts.custom > 0) ('custom', counts.custom),
-                ])
-                  PopupMenuItem<String>(
-                    value: code,
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(menuLabel(SourceLabel.of(code), count)),
-                        ),
-                        if (selectedSource == code)
-                          Icon(Icons.check_rounded, size: 18, color: p.accent),
-                      ],
-                    ),
+            ],
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                minWidth: kMinTapTarget,
+                minHeight: kMinTapTarget,
+              ),
+              child: Center(
+                widthFactor: 1,
+                child: Container(
+                  height: 34,
+                  padding: const EdgeInsets.symmetric(horizontal: Space.x3),
+                  decoration: BoxDecoration(
+                    color: selectedSource != null ? p.accentSoft : p.sunken,
+                    borderRadius: BorderRadius.circular(18),
                   ),
-              ],
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  minWidth: kMinTapTarget,
-                  minHeight: kMinTapTarget,
-                ),
-                child: Center(
-                  widthFactor: 1,
-                  child: Container(
-                    height: 34,
-                    padding: const EdgeInsets.symmetric(horizontal: Space.x3),
-                    decoration: BoxDecoration(
-                      color:
-                          selectedSource != null ? p.accentSoft : p.sunken,
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          sourceButtonLabel,
-                          style: AppTypography.label.copyWith(
-                            color: selectedSource != null
-                                ? p.accent
-                                : p.inkSecondary,
-                          ),
-                        ),
-                        const SizedBox(width: 2),
-                        Icon(
-                          Icons.expand_more_rounded,
-                          size: 16,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        sourceButtonLabel,
+                        style: AppTypography.label.copyWith(
                           color: selectedSource != null
                               ? p.accent
                               : p.inkSecondary,
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 2),
+                      Icon(
+                        Icons.expand_more_rounded,
+                        size: 16,
+                        color:
+                            selectedSource != null ? p.accent : p.inkSecondary,
+                      ),
+                    ],
                   ),
                 ),
               ),
             ),
-            if (favoritesCount > 0)
-              _FilterPill(
-                key: const ValueKey('favorites-filter-pill'),
-                label: '★ Избранное · $favoritesCount',
-                selected: _onlyFavorites,
-                palette: p,
-                onTap: () {
-                  AppHaptics.toggle();
-                  setState(() => _onlyFavorites = !_onlyFavorites);
-                },
-              ),
-            if (counts.custom > 0)
-              _FilterPill(
-                key: const ValueKey('custom-source-pill'),
-                label: 'Свои · ${counts.custom}',
-                selected: selectedSource == 'custom',
-                palette: p,
-                onTap: () {
-                  AppHaptics.toggle();
-                  ref.read(searchProvider.notifier).setSourceFilter(
-                      selectedSource == 'custom' ? _allSourcesValue : 'custom');
-                },
-              ),
-            if (groups.isNotEmpty)
-              _FilterPill(
-                key: const ValueKey('group-filter-pill'),
-                label: selectedGroup?.name ?? 'Категория',
-                trailingIcon: Icons.expand_more_rounded,
-                selected: selectedGroupId != null,
-                palette: p,
-                onTap: () => _openGroupPicker(groups, selectedGroupId),
-              ),
-          ],
-        ),
+          ),
+          if (favoritesCount > 0)
+            _FilterPill(
+              key: const ValueKey('favorites-filter-pill'),
+              label: '★ Избранное · $favoritesCount',
+              selected: _onlyFavorites,
+              palette: p,
+              onTap: () {
+                AppHaptics.toggle();
+                setState(() => _onlyFavorites = !_onlyFavorites);
+              },
+            ),
+          if (counts.custom > 0)
+            _FilterPill(
+              key: const ValueKey('custom-source-pill'),
+              label: 'Свои · ${counts.custom}',
+              selected: selectedSource == 'custom',
+              palette: p,
+              onTap: () {
+                AppHaptics.toggle();
+                ref.read(searchProvider.notifier).setSourceFilter(
+                    selectedSource == 'custom' ? _allSourcesValue : 'custom');
+              },
+            ),
+          if (groups.isNotEmpty)
+            _FilterPill(
+              key: const ValueKey('group-filter-pill'),
+              label: selectedGroup?.name ?? 'Категория',
+              trailingIcon: Icons.expand_more_rounded,
+              selected: selectedGroupId != null,
+              palette: p,
+              onTap: () => _openGroupPicker(groups, selectedGroupId),
+            ),
+        ],
       ),
     );
   }
