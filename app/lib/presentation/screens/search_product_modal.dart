@@ -576,6 +576,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                 favEntries[idx],
                 favoriteIds: favoriteIds,
                 ingredientsByProductId: ingredientsByProductId,
+                highlightQuery: searchState.query,
                 isCatalog: isCatalog,
                 showTypeBadge: searchState.selectedIsDish == null,
               ),
@@ -593,6 +594,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
           favEntries[idx],
           favoriteIds: favoriteIds,
           ingredientsByProductId: ingredientsByProductId,
+          highlightQuery: searchState.query,
           isCatalog: isCatalog,
           showTypeBadge: searchState.selectedIsDish == null,
         ),
@@ -675,6 +677,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
               entries[idx],
               favoriteIds: favoriteIds,
               ingredientsByProductId: ingredientsByProductId,
+              highlightQuery: searchState.query,
               isCatalog: isCatalog,
               showTypeBadge: searchState.selectedIsDish == null,
             ),
@@ -693,6 +696,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
         entries[idx],
         favoriteIds: favoriteIds,
         ingredientsByProductId: ingredientsByProductId,
+        highlightQuery: searchState.query,
         isCatalog: isCatalog,
         showTypeBadge: searchState.selectedIsDish == null,
       ),
@@ -760,6 +764,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
     required Map<int, List<Ingredient>> ingredientsByProductId,
     required bool isCatalog,
     required bool showTypeBadge,
+    String highlightQuery = '',
   }) {
     if (entry is _SearchSectionHeader) {
       return Padding(
@@ -859,14 +864,14 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                                   size: 14,
                                   color: p.accent,
                                 ),
-                              Text(
-                                product.name,
-                                style: AppTypography.body.copyWith(
+                              _HighlightedProductName(
+                                name: product.name,
+                                query: highlightQuery,
+                                baseStyle: AppTypography.body.copyWith(
                                   color: valid ? p.ink : p.inkSecondary,
                                   fontWeight: FontWeight.w500,
                                 ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
+                                highlightColor: p.accent,
                               ),
                               if (inDishBadgeText != null)
                                 Container(
@@ -1351,8 +1356,8 @@ class _FilterPill extends StatelessWidget {
                 height: 34,
                 padding: const EdgeInsets.symmetric(horizontal: Space.x3),
                 decoration: BoxDecoration(
-                  color: selected ? palette.accentSoft : palette.sunken,
-                  borderRadius: BorderRadius.circular(18),
+                  color: selected ? palette.accent : palette.sunken,
+                  borderRadius: BorderRadius.circular(999),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -1365,7 +1370,7 @@ class _FilterPill extends StatelessWidget {
                         softWrap: false,
                         style: AppTypography.label.copyWith(
                           color: selected
-                              ? palette.accent
+                              ? palette.onAccent
                               : palette.inkSecondary,
                         ),
                       ),
@@ -1375,8 +1380,9 @@ class _FilterPill extends StatelessWidget {
                       Icon(
                         trailingIcon,
                         size: 16,
-                        color:
-                            selected ? palette.accent : palette.inkSecondary,
+                        color: selected
+                            ? palette.onAccent
+                            : palette.inkSecondary,
                       ),
                     ],
                   ],
@@ -1386,6 +1392,84 @@ class _FilterPill extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _HighlightedProductName extends StatelessWidget {
+  final String name;
+  final String query;
+  final TextStyle baseStyle;
+  final Color highlightColor;
+
+  const _HighlightedProductName({
+    required this.name,
+    required this.query,
+    required this.baseStyle,
+    required this.highlightColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) {
+      return Text(
+        name,
+        style: baseStyle,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+
+    final lowerName = name.toLowerCase();
+    final tokens = trimmed
+        .toLowerCase()
+        .split(RegExp(r'\s+'))
+        .where((t) => t.isNotEmpty)
+        .toList();
+    if (tokens.isEmpty) {
+      return Text(
+        name,
+        style: baseStyle,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+
+    final spans = <TextSpan>[];
+    var cursor = 0;
+    while (cursor < name.length) {
+      var bestStart = name.length;
+      var bestLen = 0;
+      for (final tok in tokens) {
+        final idx = lowerName.indexOf(tok, cursor);
+        if (idx >= 0 && (idx < bestStart || (idx == bestStart && tok.length > bestLen))) {
+          bestStart = idx;
+          bestLen = tok.length;
+        }
+      }
+      if (bestLen == 0) {
+        spans.add(TextSpan(text: name.substring(cursor), style: baseStyle));
+        break;
+      }
+      if (bestStart > cursor) {
+        spans.add(TextSpan(
+            text: name.substring(cursor, bestStart), style: baseStyle));
+      }
+      spans.add(TextSpan(
+        text: name.substring(bestStart, bestStart + bestLen),
+        style: baseStyle.copyWith(
+          color: highlightColor,
+          fontWeight: FontWeight.w700,
+        ),
+      ));
+      cursor = bestStart + bestLen;
+    }
+
+    return Text.rich(
+      TextSpan(children: spans),
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
     );
   }
 }

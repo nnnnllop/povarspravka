@@ -5,11 +5,13 @@ import '../../core/calculation/calculation_engine.dart';
 import '../../core/calculation/models/product.dart';
 import '../../core/calculation/models/ingredient.dart';
 import '../../core/calculation/models/source_label.dart';
+import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
 import 'adaptive_host.dart';
 import 'app_buttons.dart';
+import 'instrument_widgets.dart';
 import 'source_badge.dart';
 
 /// Ввод массы продукта (аудит P0-1, P0-2).
@@ -693,14 +695,11 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     final unit = _isEditingWaste ? '%' : 'г';
     final safeNet = (net.isFinite && net > 0) ? net : 0.0;
 
-    return Container(
+    return InstrumentSlab(
+      borderRadius: Radii.cardAll,
       padding: const EdgeInsets.symmetric(
         horizontal: Space.x4,
         vertical: Space.x3,
-      ),
-      decoration: BoxDecoration(
-        color: p.sunken,
-        borderRadius: Radii.cardAll,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -712,7 +711,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                 'Процент отходов при обработке (0–99%)',
                 textAlign: TextAlign.center,
                 style: AppTypography.caption.copyWith(
-                  color: p.accent,
+                  color: AppColors.accentDark,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -727,11 +726,11 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                   duration: Motion.fast,
                   curve: Motion.ease,
                   padding: EdgeInsets.symmetric(
-                    horizontal: isFresh ? Space.x2 : 0,
+                    horizontal: isFresh ? Space.x2 + 2 : 0,
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    color: isFresh ? p.accentSoft : Colors.transparent,
+                    color: isFresh ? p.slabSurface : Colors.transparent,
                     borderRadius: Radii.chipAll,
                   ),
                   child: AnimatedSwitcher(
@@ -743,7 +742,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.numLg.copyWith(
-                        color: isFresh ? p.accent : p.ink,
+                        color: isFresh ? AppColors.accentDark : p.slabInk,
                       ),
                     ),
                   ),
@@ -752,7 +751,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
               const SizedBox(width: Space.x1),
               Text(
                 unit,
-                style: AppTypography.title.copyWith(color: p.inkSecondary),
+                style: AppTypography.title.copyWith(color: p.slabSecondary),
               ),
             ],
           ),
@@ -761,7 +760,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
             Text(
               'цифра заменит значение · +г прибавит',
               textAlign: TextAlign.center,
-              style: AppTypography.caption.copyWith(color: p.inkMuted),
+              style: AppTypography.caption.copyWith(color: p.slabSecondary),
             ),
           ],
           const SizedBox(height: Space.x1),
@@ -788,13 +787,15 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
           _wasteError ?? 'масса: $_currentInput г · нажмите «Готово»',
           textAlign: TextAlign.center,
           style: AppTypography.numSm.copyWith(
-            color: _wasteError != null ? p.danger : p.inkSecondary,
+            color:
+                _wasteError != null ? AppColors.dangerDark : p.slabSecondary,
           ),
         ),
         TextButton(
           key: const ValueKey('waste-edit-cancel'),
           onPressed: _toggleWasteEdit,
           style: TextButton.styleFrom(
+            foregroundColor: AppColors.accentDark,
             minimumSize: const Size(kMinTapTarget, kMinTapTarget),
             padding: const EdgeInsets.symmetric(horizontal: Space.x2),
           ),
@@ -827,7 +828,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
           text,
           textAlign: TextAlign.center,
           style: AppTypography.numSm.copyWith(
-            color: ok ? p.inkSecondary : p.warning,
+            color: ok ? p.slabSecondary : AppColors.warningDark,
           ),
         ),
         if (hasWaste || _isGross)
@@ -835,6 +836,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
             key: const ValueKey('waste-edit-toggle'),
             onPressed: _toggleWasteEdit,
             style: TextButton.styleFrom(
+              foregroundColor: AppColors.accentDark,
               minimumSize: const Size(kMinTapTarget, kMinTapTarget),
               padding: const EdgeInsets.symmetric(horizontal: Space.x2),
             ),
@@ -856,21 +858,28 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
         type: NutrientType.protein,
         value: CalculationEngine.formatMacro(protein),
         compact: true,
+        onDarkSlab: true,
+        dotSize: 5.5,
       ),
       InlineMacroCell(
         type: NutrientType.fat,
         value: CalculationEngine.formatMacro(fat),
         compact: true,
+        onDarkSlab: true,
+        dotSize: 5.5,
       ),
       InlineMacroCell(
         type: NutrientType.carbs,
         value: CalculationEngine.formatMacro(carbs),
         compact: true,
+        onDarkSlab: true,
+        dotSize: 5.5,
       ),
       InlineMacroCell(
         type: NutrientType.kcal,
         value: CalculationEngine.formatKcal(kcal),
         compact: true,
+        onDarkSlab: true,
       ),
     ];
     return Wrap(
@@ -1086,12 +1095,12 @@ class _NumpadKeypadBlock extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 2),
                 child: TactilePress(
                   child: Material(
-                    color: p.sunken,
-                    borderRadius: Radii.chipAll,
+                    color: p.accentSoft,
+                    borderRadius: BorderRadius.circular(14),
                     clipBehavior: Clip.antiAlias,
                     child: InkWell(
                       onTapDown: (_) => item.$2(),
-                      borderRadius: Radii.chipAll,
+                      borderRadius: BorderRadius.circular(14),
                       child: Container(
                         height: kMinTapTarget,
                         alignment: Alignment.center,
@@ -1103,8 +1112,8 @@ class _NumpadKeypadBlock extends StatelessWidget {
                             item.$1,
                             maxLines: 1,
                             style: AppTypography.numSm.copyWith(
-                              color: p.ink,
-                              fontWeight: FontWeight.w600,
+                              color: p.accent,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
@@ -1191,14 +1200,6 @@ class _NumpadKeypadBlock extends StatelessWidget {
     );
   }
 
-  static const List<BoxShadow> _keycapShadow = <BoxShadow>[
-    BoxShadow(
-      color: Color(0x12000000),
-      blurRadius: 0,
-      offset: Offset(0, 1),
-    ),
-  ];
-
   Widget _buildKey(Palette p, String k, double height) {
     final isBackspace = k == '⌫';
     return SizedBox(
@@ -1210,33 +1211,25 @@ class _NumpadKeypadBlock extends StatelessWidget {
           label: isBackspace
               ? 'Удалить символ. Долгое нажатие — сброс'
               : (k == ',' ? 'запятая' : k),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: p.raised,
+          child: Material(
+            color: p.isDark ? p.raised : p.sunken,
+            borderRadius: Radii.fieldAll,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTapDown: (_) => isBackspace ? onBackspace() : onKey(k),
+              onLongPress: isBackspace ? onClear : null,
               borderRadius: Radii.fieldAll,
-              border: Border.all(color: p.borderStatic),
-              boxShadow: p.isDark ? const <BoxShadow>[] : _keycapShadow,
-            ),
-            child: Material(
-              color: Colors.transparent,
-              borderRadius: Radii.fieldAll,
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTapDown: (_) => isBackspace ? onBackspace() : onKey(k),
-                onLongPress: isBackspace ? onClear : null,
-                borderRadius: Radii.fieldAll,
-                child: Center(
-                  child: isBackspace
-                      ? Icon(Icons.backspace_outlined, size: 22, color: p.ink)
-                      : FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            k,
-                            maxLines: 1,
-                            style: AppTypography.title.copyWith(color: p.ink),
-                          ),
+              child: Center(
+                child: isBackspace
+                    ? Icon(Icons.backspace_outlined, size: 22, color: p.ink)
+                    : FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          k,
+                          maxLines: 1,
+                          style: AppTypography.title.copyWith(color: p.ink),
                         ),
-                ),
+                      ),
               ),
             ),
           ),
@@ -1253,28 +1246,20 @@ class _NumpadKeypadBlock extends StatelessWidget {
         child: Semantics(
           button: true,
           label: 'Сбросить значение',
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: p.raised,
+          child: Material(
+            color: p.isDark ? p.raised : p.sunken,
+            borderRadius: Radii.fieldAll,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTapDown: (_) => onClear(),
               borderRadius: Radii.fieldAll,
-              border: Border.all(color: p.borderStatic),
-              boxShadow: p.isDark ? const <BoxShadow>[] : _keycapShadow,
-            ),
-            child: Material(
-              color: Colors.transparent,
-              borderRadius: Radii.fieldAll,
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTapDown: (_) => onClear(),
-                borderRadius: Radii.fieldAll,
-                child: Center(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      'C',
-                      maxLines: 1,
-                      style: AppTypography.title.copyWith(color: p.danger),
-                    ),
+              child: Center(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    'C',
+                    maxLines: 1,
+                    style: AppTypography.title.copyWith(color: p.danger),
                   ),
                 ),
               ),
@@ -1295,7 +1280,7 @@ class _NumpadKeypadBlock extends StatelessWidget {
         child: Material(
           key: confirmMaterialKey,
           color: canConfirm ? p.accent : p.borderStatic,
-          borderRadius: Radii.fieldAll,
+          borderRadius: Radii.cardAll,
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: canConfirm ? onConfirm : null,
@@ -1458,14 +1443,11 @@ class _SimpleGramsNumpadSheetState extends State<SimpleGramsNumpadSheet> {
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: Space.x4),
-                child: Container(
+                child: InstrumentSlab(
+                  borderRadius: Radii.cardAll,
                   padding: const EdgeInsets.symmetric(
                     horizontal: Space.x4,
                     vertical: Space.x3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: p.sunken,
-                    borderRadius: Radii.cardAll,
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -1478,7 +1460,7 @@ class _SimpleGramsNumpadSheetState extends State<SimpleGramsNumpadSheet> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTypography.numLg.copyWith(
-                            color: _isFresh ? p.accent : p.ink,
+                            color: _isFresh ? AppColors.accentDark : p.slabInk,
                           ),
                         ),
                       ),
@@ -1486,7 +1468,7 @@ class _SimpleGramsNumpadSheetState extends State<SimpleGramsNumpadSheet> {
                       Text(
                         'г',
                         style: AppTypography.title.copyWith(
-                          color: p.inkSecondary,
+                          color: p.slabSecondary,
                         ),
                       ),
                     ],

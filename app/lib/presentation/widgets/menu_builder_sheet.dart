@@ -11,6 +11,7 @@ import '../../core/calculation/models/dish.dart';
 import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
+import 'instrument_widgets.dart';
 import 'macro_balance_bar.dart';
 import 'nutrient_chip.dart';
 
@@ -255,22 +256,27 @@ class _MenuBuilderSheetState extends State<MenuBuilderSheet> {
               ],
               if (_items.isNotEmpty) ...[
                 const SizedBox(height: Space.x3),
-                Container(
+                InstrumentSlab(
                   key: const ValueKey('menu-total-card'),
-                  padding: const EdgeInsets.all(Space.x3),
-                  decoration: BoxDecoration(
-                    color: p.sunken,
-                    borderRadius: Radii.cardAll,
-                    border: Border.all(color: p.borderStatic),
-                  ),
+                  padding: const EdgeInsets.all(Space.x3 + 2),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(
-                        summary.totalGrams > 0 && !summary.hasWholeDishWithoutYield
-                            ? 'Итого по меню (${g(summary.totalGrams)} г)'
-                            : 'Итого по меню',
-                        style: AppTypography.label.copyWith(color: p.ink),
+                      Row(
+                        children: [
+                          const SignalDot(size: 6),
+                          const SizedBox(width: Space.x2),
+                          Expanded(
+                            child: Text(
+                              summary.totalGrams > 0 &&
+                                      !summary.hasWholeDishWithoutYield
+                                  ? 'Итого по меню (${g(summary.totalGrams)} г)'
+                                  : 'Итого по меню',
+                              style:
+                                  AppTypography.label.copyWith(color: p.slabInk),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: Space.x2),
                       Wrap(
@@ -283,6 +289,7 @@ class _MenuBuilderSheetState extends State<MenuBuilderSheet> {
                             value: m(summary.totalProtein),
                             unit: 'г',
                             stacked: true,
+                            onDarkSlab: true,
                           ),
                           InlineMacroCell(
                             type: NutrientType.fat,
@@ -290,6 +297,7 @@ class _MenuBuilderSheetState extends State<MenuBuilderSheet> {
                             value: m(summary.totalFat),
                             unit: 'г',
                             stacked: true,
+                            onDarkSlab: true,
                           ),
                           InlineMacroCell(
                             type: NutrientType.carbs,
@@ -297,6 +305,7 @@ class _MenuBuilderSheetState extends State<MenuBuilderSheet> {
                             value: m(summary.totalCarbs),
                             unit: 'г',
                             stacked: true,
+                            onDarkSlab: true,
                           ),
                           InlineMacroCell(
                             type: NutrientType.kcal,
@@ -304,6 +313,7 @@ class _MenuBuilderSheetState extends State<MenuBuilderSheet> {
                             value: k(summary.totalKcal),
                             unit: 'ккал',
                             stacked: true,
+                            onDarkSlab: true,
                           ),
                         ],
                       ),
@@ -312,6 +322,7 @@ class _MenuBuilderSheetState extends State<MenuBuilderSheet> {
                         MacroBalanceBar(
                           key: const ValueKey('menu-macro-balance'),
                           balance: summary.balance,
+                          onDarkSlab: true,
                         ),
                       ],
                     ],

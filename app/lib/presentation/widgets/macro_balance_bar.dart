@@ -10,6 +10,7 @@ class MacroBalanceBar extends StatelessWidget {
   final bool compact;
   final bool barOnly;
   final double barHeight;
+  final bool onDarkSlab;
 
   const MacroBalanceBar({
     super.key,
@@ -17,16 +18,26 @@ class MacroBalanceBar extends StatelessWidget {
     this.compact = false,
     this.barOnly = false,
     this.barHeight = 8,
+    this.onDarkSlab = false,
   });
 
   @override
   Widget build(BuildContext context) {
     if (!balance.hasEnergy) return const SizedBox.shrink();
     final p = Palette.of(context);
+    final disableAnimations =
+        MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    final cProtein = onDarkSlab ? p.slabProtein : p.protein;
+    final cFat = onDarkSlab ? p.slabFat : p.fat;
+    final cCarbs = onDarkSlab ? p.slabCarbs : p.carbs;
     final segments = <(int pct, Color color, String label)>[
-      (balance.proteinPct, p.protein, 'Белки ${balance.proteinPct} %'),
-      (balance.fatPct, p.fat, 'Жиры ${balance.fatPct} %'),
-      (balance.carbsPct, p.carbs, 'Углеводы ${balance.carbsPct} %'),
+      (balance.proteinPct, cProtein, 'Белки ${balance.proteinPct} %'),
+      (balance.fatPct, cFat, 'Жиры ${balance.fatPct} %'),
+      (balance.carbsPct, cCarbs, 'Углеводы ${balance.carbsPct} %'),
+    ];
+    final active = [
+      for (final seg in segments)
+        if (seg.$1 > 0) seg,
     ];
 
     final bar = ClipRRect(
@@ -35,18 +46,25 @@ class MacroBalanceBar extends StatelessWidget {
         height: barHeight,
         child: Row(
           children: [
-            for (final seg in segments)
-              if (seg.$1 > 0)
-                Expanded(
-                  flex: seg.$1,
-                  child: Container(color: seg.$2),
+            for (int i = 0; i < active.length; i++) ...[
+              if (i > 0 && barHeight >= 6) const SizedBox(width: 1.5),
+              Expanded(
+                flex: active[i].$1,
+                child: AnimatedContainer(
+                  duration: disableAnimations ? Duration.zero : Motion.base,
+                  curve: Motion.ease,
+                  color: active[i].$2,
                 ),
+              ),
+            ],
           ],
         ),
       ),
     );
     if (barOnly) return bar;
     final ratio = balance.ratioLabel;
+    final textColor = onDarkSlab ? p.slabInk : p.ink;
+    final secondaryColor = onDarkSlab ? p.slabSecondary : p.inkSecondary;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -63,8 +81,8 @@ class MacroBalanceBar extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    width: 7,
-                    height: 7,
+                    width: 6,
+                    height: 6,
                     decoration: BoxDecoration(
                       color: seg.$2,
                       shape: BoxShape.circle,
@@ -76,7 +94,7 @@ class MacroBalanceBar extends StatelessWidget {
                       seg.$3,
                       style:
                           (compact ? AppTypography.caption : AppTypography.numSm)
-                              .copyWith(color: p.ink),
+                              .copyWith(color: textColor),
                     ),
                   ),
                 ],
@@ -87,7 +105,7 @@ class MacroBalanceBar extends StatelessWidget {
           const SizedBox(height: Space.x1),
           Text(
             'Соотношение Б : Ж : У = $ratio',
-            style: AppTypography.caption.copyWith(color: p.inkSecondary),
+            style: AppTypography.caption.copyWith(color: secondaryColor),
           ),
         ],
       ],

@@ -49,6 +49,13 @@ class IngredientCard extends StatelessWidget {
   /// Индекс в `ReorderableListView` — включает явную ручку перетаскивания.
   final int? dragHandleIndex;
 
+  /// Флаги сгруппированного списка (скругления 20 dp на первой/последней строке).
+  final bool isFirst;
+  final bool isLast;
+
+  /// Доля ингредиента в общей калорийности блюда (`0..1`) для тонкой шкалы вклада.
+  final double? kcalShare;
+
   const IngredientCard({
     super.key,
     required this.index,
@@ -58,6 +65,9 @@ class IngredientCard extends StatelessWidget {
     this.dragHandleIndex,
     this.lossLabel,
     this.onLossTap,
+    this.isFirst = true,
+    this.isLast = true,
+    this.kcalShare,
   });
 
   /// Строка потерь нового расчёта (таблица потерь по группам продуктов).
@@ -72,7 +82,7 @@ class IngredientCard extends StatelessWidget {
     final p = Palette.of(context);
     final ing = ingredient;
 
-    final indexLabel = '$index.';
+    final indexLabel = '${index < 10 ? '0$index' : '$index'}.';
     // MATH-04: при больших отходах печатаем больше знаков, иначе обратный
     // пересчёт брутто теряет десятки граммов.
     // Сохранённый документ может содержать отход 100 % — тогда нетто не
@@ -86,38 +96,34 @@ class IngredientCard extends StatelessWidget {
 
     final media = MediaQuery.sizeOf(context);
     final textScale = MediaQuery.textScalerOf(context).scale(1.0);
-    final inlineWeightPill = media.width >= 340 && textScale <= 1.35;
+    final inlineWeightReadout = media.width >= 360 && textScale <= 1.2;
 
-    final weightPill = Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: Space.x2 + 2,
-        vertical: Space.x1 + 2,
-      ),
-      decoration: BoxDecoration(
-        color: p.sunken,
-        borderRadius: Radii.chipAll,
-        border: Border.all(color: p.borderStatic),
-      ),
-      child: Text(
-        '$netGramsStr г',
-        style: AppTypography.num.copyWith(
-          color: p.ink,
-          fontWeight: FontWeight.w700,
-        ),
+    final weightReadout = Text(
+      '$netGramsStr г',
+      style: AppTypography.num.copyWith(
+        color: p.ink,
+        fontWeight: FontWeight.w700,
       ),
     );
+
+    final rowRadius = BorderRadius.vertical(
+      top: Radius.circular(isFirst ? Radii.card : 0),
+      bottom: Radius.circular(isLast ? Radii.card : 0),
+    );
+
+    final share = kcalShare != null && kcalShare! > 0.01
+        ? kcalShare!.clamp(0.02, 1.0)
+        : null;
 
     return Semantics(
       customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
         const CustomSemanticsAction(label: 'Удалить ингредиент'): onDelete,
       },
       child: Container(
-        margin: const EdgeInsets.only(bottom: Space.x2),
+        margin: EdgeInsets.only(bottom: isLast ? Space.x2 : 0),
         decoration: BoxDecoration(
           color: p.surface,
-          borderRadius: Radii.cardAll,
-          border: Border.all(color: p.borderStatic),
-          boxShadow: p.cardShadow,
+          borderRadius: rowRadius,
         ),
         clipBehavior: Clip.antiAlias,
         child: Material(
@@ -129,10 +135,10 @@ class IngredientCard extends StatelessWidget {
               children: [
                 Padding(
                   padding: EdgeInsets.fromLTRB(
+                    Space.x3 + 2,
                     Space.x3,
-                    Space.x3,
-                    dragHandleIndex != null ? Space.x1 : Space.x3,
-                    cleanLossLabel != null ? Space.x2 : Space.x3,
+                    dragHandleIndex != null ? Space.x1 : Space.x3 + 2,
+                    cleanLossLabel != null ? Space.x1 : Space.x3,
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -142,13 +148,16 @@ class IngredientCard extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.baseline,
+                              textBaseline: TextBaseline.alphabetic,
                               children: [
-                                Text(
-                                  '$indexLabel ',
-                                  style: AppTypography.numSm.copyWith(
-                                    color: p.inkMuted,
-                                    fontWeight: FontWeight.w600,
+                                SizedBox(
+                                  width: 26,
+                                  child: Text(
+                                    indexLabel,
+                                    style: AppTypography.kicker.copyWith(
+                                      color: p.inkMuted,
+                                    ),
                                   ),
                                 ),
                                 Expanded(
@@ -164,12 +173,12 @@ class IngredientCard extends StatelessWidget {
                                 ),
                               ],
                             ),
-                            if (!inlineWeightPill) ...[
-                              const SizedBox(height: Space.x2),
-                              weightPill,
+                            if (!inlineWeightReadout) ...[
+                              const SizedBox(height: Space.x1 + 2),
+                              weightReadout,
                             ],
                             if (showGross) ...[
-                              const SizedBox(height: 3),
+                              const SizedBox(height: 2),
                               Text(
                                 'Брутто $grossGramsStr г · −${CalculationEngine.formatWastePercent(ing.product.wastePct)} %',
                                 style: AppTypography.caption
@@ -177,9 +186,9 @@ class IngredientCard extends StatelessWidget {
                               ),
                             ],
                             const SizedBox(height: Space.x1 + 2),
-                            // БЖУ: микро-точки M2 и нейтральный текст.
+                            // Полное КБЖУ с гармоничными разноцветными точками (Б/Ж/У + ккал).
                             Wrap(
-                              spacing: Space.x3,
+                              spacing: Space.x2 + 2,
                               runSpacing: 2,
                               children: [
                                 InlineMacroCell(
@@ -188,6 +197,7 @@ class IngredientCard extends StatelessWidget {
                                       CalculationEngine.formatMacro(
                                           ing.proteinInDish)),
                                   compact: true,
+                                  dotSize: 5.5,
                                 ),
                                 InlineMacroCell(
                                   type: NutrientType.fat,
@@ -195,6 +205,7 @@ class IngredientCard extends StatelessWidget {
                                       CalculationEngine.formatMacro(
                                           ing.fatInDish)),
                                   compact: true,
+                                  dotSize: 5.5,
                                 ),
                                 InlineMacroCell(
                                   type: NutrientType.carbs,
@@ -202,6 +213,7 @@ class IngredientCard extends StatelessWidget {
                                       CalculationEngine.formatMacro(
                                           ing.carbsInDish)),
                                   compact: true,
+                                  dotSize: 5.5,
                                 ),
                                 InlineMacroCell(
                                   type: NutrientType.kcal,
@@ -215,12 +227,10 @@ class IngredientCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      if (inlineWeightPill) ...[
+                      if (inlineWeightReadout) ...[
                         const SizedBox(width: Space.x2),
-                        weightPill,
+                        weightReadout,
                       ],
-                      // Явная ручка перестановки ⟷ (удаление — свайп Dismissible
-                      // и действие доступности).
                       if (dragHandleIndex != null)
                         ReorderableDragStartListener(
                           index: dragHandleIndex!,
@@ -237,8 +247,7 @@ class IngredientCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (cleanLossLabel != null) ...[
-                  Divider(color: p.divider, height: 1),
+                if (cleanLossLabel != null)
                   InkWell(
                     key: ValueKey('loss-${ing.id}'),
                     onTap: onLossTap,
@@ -246,23 +255,28 @@ class IngredientCard extends StatelessWidget {
                       constraints:
                           const BoxConstraints(minHeight: kMinTapTarget),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: Space.x3,
-                          vertical: Space.x2,
+                        padding: const EdgeInsets.fromLTRB(
+                          Space.x3 + 2,
+                          Space.x1,
+                          Space.x3,
+                          Space.x2,
                         ),
                         child: Row(
                           children: [
                             Icon(
                               Icons.local_fire_department_outlined,
-                              size: 14,
-                              color: p.inkSecondary,
+                              size: 13,
+                              color: p.accent,
                             ),
-                            const SizedBox(width: 6),
+                            const SizedBox(width: 5),
                             Expanded(
                               child: Text(
                                 cleanLossLabel,
-                                style: AppTypography.caption
-                                    .copyWith(color: p.inkSecondary),
+                                style: AppTypography.caption.copyWith(
+                                  color: p.inkSecondary,
+                                  fontFamily: AppTypography.monoFont,
+                                  fontSize: 11.5,
+                                ),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -278,7 +292,35 @@ class IngredientCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                ],
+                if (share != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      Space.x3 + 2,
+                      0,
+                      Space.x3 + 2,
+                      Space.x2,
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(2),
+                      child: Container(
+                        height: 2,
+                        color: p.sunken.withOpacity(0.65),
+                        alignment: Alignment.centerLeft,
+                        child: FractionallySizedBox(
+                          widthFactor: share,
+                          child: Container(
+                            color: p.accent.withOpacity(0.45),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                if (!isLast)
+                  Container(
+                    height: 1,
+                    margin: const EdgeInsets.only(left: 42),
+                    color: p.divider,
+                  ),
               ],
             ),
           ),

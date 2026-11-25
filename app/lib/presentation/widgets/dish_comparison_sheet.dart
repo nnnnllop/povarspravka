@@ -8,6 +8,7 @@ import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
 import 'app_buttons.dart';
+import 'instrument_widgets.dart';
 import 'macro_balance_bar.dart';
 
 /// Шторка сравнения двух блюд: по 100 г или целиком, с разницей (Δ) и балансом Б/Ж/У.
@@ -204,13 +205,9 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
                 ),
               ],
               const SizedBox(height: Space.x3),
-              Container(
-                padding: const EdgeInsets.all(Space.x3),
-                decoration: BoxDecoration(
-                  color: p.sunken,
-                  borderRadius: Radii.cardAll,
-                  border: Border.all(color: p.borderStatic),
-                ),
+              GroupedSurface(
+                color: p.sunken,
+                padding: const EdgeInsets.all(Space.x3 + 2),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [

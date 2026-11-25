@@ -66,21 +66,29 @@ class AppBottomBar extends StatelessWidget {
               constraints: const BoxConstraints(maxWidth: Space.maxWidth),
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: p.raised,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: p.borderStatic),
+                  color: p.isDark ? p.raised : p.surface,
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(
+                    color: p.borderStatic.withOpacity(p.isDark ? 0.9 : 0.75),
+                  ),
                   boxShadow: p.isDark
-                      ? const <BoxShadow>[]
+                      ? const <BoxShadow>[
+                          BoxShadow(
+                            color: Color(0x33000000),
+                            blurRadius: 16,
+                            offset: Offset(0, 6),
+                          ),
+                        ]
                       : const <BoxShadow>[
                           BoxShadow(
-                            color: Color(0x14000000),
-                            blurRadius: 16,
-                            offset: Offset(0, 4),
+                            color: Color(0x16000000),
+                            blurRadius: 20,
+                            offset: Offset(0, 6),
                           ),
                         ],
                 ),
                 child: Padding(
-                  padding: padding ?? const EdgeInsets.all(Space.x1 + 2),
+                  padding: padding ?? const EdgeInsets.all(6),
                   child: child,
                 ),
               ),

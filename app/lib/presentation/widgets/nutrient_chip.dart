@@ -51,6 +51,8 @@ class NutrientChip extends StatelessWidget {
   final bool showUnit;
   final bool stacked;
   final bool muted;
+  final bool onDarkSlab;
+  final double dotSize;
 
   const NutrientChip({
     super.key,
@@ -62,6 +64,8 @@ class NutrientChip extends StatelessWidget {
     this.showUnit = true,
     this.stacked = false,
     this.muted = false,
+    this.onDarkSlab = false,
+    this.dotSize = 6,
   });
 
   @override
@@ -79,6 +83,8 @@ class NutrientChip extends StatelessWidget {
       stacked: stacked,
       compact: compact,
       muted: muted,
+      onDarkSlab: onDarkSlab,
+      dotSize: dotSize,
       valueKey: valueKey,
     );
   }
@@ -99,6 +105,8 @@ class InlineMacroCell extends StatelessWidget {
   final bool stacked;
   final bool compact;
   final bool muted;
+  final bool onDarkSlab;
+  final double dotSize;
   final Key? valueKey;
   final String? semanticsLabel;
 
@@ -111,6 +119,8 @@ class InlineMacroCell extends StatelessWidget {
     this.stacked = false,
     this.compact = false,
     this.muted = false,
+    this.onDarkSlab = false,
+    this.dotSize = 6,
     this.valueKey,
     this.semanticsLabel,
   }) : tint = null;
@@ -124,6 +134,8 @@ class InlineMacroCell extends StatelessWidget {
     this.stacked = false,
     this.compact = false,
     this.muted = false,
+    this.onDarkSlab = false,
+    this.dotSize = 6,
     this.valueKey,
     this.semanticsLabel,
   }) : type = null;
@@ -131,14 +143,24 @@ class InlineMacroCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
-    final resolvedTint = tint ?? type!.tintOf(p);
+    final resolvedTint = tint ??
+        (onDarkSlab
+            ? switch (type!) {
+                NutrientType.protein => p.slabProtein,
+                NutrientType.fat => p.slabFat,
+                NutrientType.carbs => p.slabCarbs,
+                NutrientType.kcal => p.kcal,
+              }
+            : type!.tintOf(p));
     final showDot = type != NutrientType.kcal;
     final resolvedLabel = label ?? type!.shortLabel;
     final hasUnit =
         unit != null && unit!.isNotEmpty && !value.endsWith(unit!);
     final displayValue = hasUnit ? '$value $unit' : value;
-    final valueColor = muted ? p.inkSecondary : p.ink;
-    final labelColor = p.inkSecondary;
+    final valueColor = onDarkSlab
+        ? (muted ? p.slabSecondary : p.slabInk)
+        : (muted ? p.inkSecondary : p.ink);
+    final labelColor = onDarkSlab ? p.slabSecondary : p.inkSecondary;
     final valueStyle =
         (compact ? AppTypography.numSm : AppTypography.num).copyWith(
       color: valueColor,
@@ -156,8 +178,8 @@ class InlineMacroCell extends StatelessWidget {
 
     final dotWidget = showDot
         ? Container(
-            width: 6,
-            height: 6,
+            width: dotSize,
+            height: dotSize,
             margin: const EdgeInsets.only(right: 4),
             decoration: BoxDecoration(
               color: resolvedTint,

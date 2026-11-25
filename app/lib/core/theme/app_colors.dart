@@ -1,67 +1,86 @@
 import 'package:flutter/material.dart';
 
-/// Калиброванная швейцарская палитра приложения «Поварская справка».
+/// Калиброванная палитра «Прибор» (Instrument · Sage) для «Поварской справки».
 ///
-/// Светлая тема: чистый холодно-нейтральный фон (`#F7F7F8`), белоснежные
-/// карточки с тонкими границами (`#E5E7EB`) и глубокий кобальтовый акцент
-/// (`#1E40AF`). Тёмная тема: графитовый `#0D0E10` + `#16181C` + `#73A5FF`.
+/// Светлая тема: тёплый приборный холст (`#F2F2EF`), чисто-белые сгруппированные
+/// поверхности (`#FFFFFF`), графитовая приборная плита (`#15171A`) и глубокий
+/// шалфейный акцент (`#1D5E46`).
+/// Тёмная тема: `#0B0C0E` + `#17191D` + приподнятая плита `#1E2126` + мятный
+/// шалфей (`#6FD09C`).
 ///
 /// Все пары «текст/фон» измерены по WCAG 2.1, все значения проходят AA (4.5:1)
 /// либо 3:1 для интерактивных границ (1.4.11).
 class AppColors {
-  // ─── Основа: стерильный нейтральный графит и кобальтовый акцент ──────────
-  static const canvas = Color(0xFFF7F7F8); // чистый швейцарский фон экранов
-  static const surface = Color(0xFFFFFFFF); // чистые карточки и шиты
-  static const surfaceSunken = Color(0xFFEFEFF2); // утопленные поля и тональные кнопки
+  // ─── Основа: тёплый приборный холст и шалфейный акцент ───────────────────
+  static const canvas = Color(0xFFF2F2EF); // тёплый матовый фон экранов
+  static const surface = Color(0xFFFFFFFF); // сгруппированные карточки и шиты
+  static const surfaceSunken = Color(0xFFE7E7E2); // утопленные поля и клавиши
 
-  static const canvasDark = Color(0xFF0D0E10);
-  static const surfaceDark = Color(0xFF16181C);
+  static const canvasDark = Color(0xFF0B0C0E);
+  static const surfaceDark = Color(0xFF17191D);
   static const surfaceSunkenDark = Color(0xFF101215);
   static const surfaceRaisedDark = Color(0xFF1F2228);
 
+  // ─── Приборная плита (Hero / Readout / Меню) ─────────────────────────────
+  static const slab = Color(0xFF15171A);
+  static const slabInk = Color(0xFFF7F7F8);
+  static const slabSecondary = Color(0xFFA3A9B3);
+  static const slabEdge = Color(0xFF2A2E36);
+  static const slabSurface = Color(0xFF23262C);
+  static const signal = Color(0xFFFF6A1F);
+  static const sheetHandle = Color(0xFFB8BCC4);
+
+  static const slabDark = Color(0xFF1E2126);
+  static const slabInkDark = Color(0xFFF7F7F8);
+  static const slabSecondaryDark = Color(0xFFAEB4BE);
+  static const slabEdgeDark = Color(0xFF2E333B);
+  static const slabSurfaceDark = Color(0xFF2A2D33);
+  static const signalDark = Color(0xFFFF8A4C);
+  static const sheetHandleDark = Color(0xFF3B404A);
+
   // ─── Границы и внутренние разделители ───────────────────────────────────
   /// ≥ 3:1 на canvas/surface (для доступности интерактивных границ).
-  static const border = Color(0xFF737984);
+  static const border = Color(0xFF6B7079);
 
-  /// Деликатный hairline-контур карточек и тональных кнопок.
-  static const borderStatic = Color(0xFFE5E7EB);
+  /// Деликатный hairline-контур и неактивный ободок.
+  static const borderStatic = Color(0xFFD9DAD5);
 
-  /// Внутренний разделитель строк внутри сгруппированной карточки.
-  static const divider = Color(0xFFECEDF0);
+  /// Внутренний разделитель строк внутри сгруппированной поверхности.
+  static const divider = Color(0xFFE3E4DF);
 
   /// ≥ 3:1 к surfaceDark в тёмной теме.
-  static const borderDark = Color(0xFF6D7480);
-  static const borderStaticDark = Color(0xFF272B33);
-  static const dividerDark = Color(0xFF22262E);
+  static const borderDark = Color(0xFF737A86);
+  static const borderStaticDark = Color(0xFF262A31);
+  static const dividerDark = Color(0xFF262A31);
 
   // ─── Текст (весь текст ≥ 4.5:1 AA на canvas и surface) ──────────────────
   static const ink = Color(0xFF111214); // >17:1 на белом
-  static const inkSecondary = Color(0xFF4B4F56); // ~7.6:1 на canvas
-  static const inkMuted = Color(0xFF626770); // ~5.3:1 на canvas
+  static const inkSecondary = Color(0xFF4B4F56); // ~7.4:1 на canvas
+  static const inkMuted = Color(0xFF5E636B); // ~5.4:1 на canvas
 
   static const inkDark = Color(0xFFF4F5F7);
-  static const inkSecondaryDark = Color(0xFFA9B0BA);
-  static const inkMutedDark = Color(0xFF8C94A0);
+  static const inkSecondaryDark = Color(0xFFAEB4BE);
+  static const inkMutedDark = Color(0xFF949BA6);
 
-  // ─── Главный акцент: глубокий швейцарский кобальт ────────────────────────
-  static const accent = Color(0xFF1E40AF); // >8.0:1 на canvas, >8.7:1 на белом
+  // ─── Главный акцент: шалфей (Sage) ───────────────────────────────────────
+  static const accent = Color(0xFF1D5E46); // ~7.1:1 на canvas, ~7.8:1 на белом
   static const accentOn = Color(0xFFFFFFFF); // текст на accent
-  static const accentSoft = Color(0xFFEBF1FE); // мягкий фон активных пилюль
-  static const accentSoftDark = Color(0xFF182338);
+  static const accentSoft = Color(0xFFE6F2EC); // мягкий фон активных пилюль
+  static const accentSoftDark = Color(0xFF13261B);
 
-  static const accentDark = Color(0xFF73A5FF); // >7.0:1 на surfaceDark
-  static const accentOnDark = Color(0xFF081429);
+  static const accentDark = Color(0xFF6FD09C); // >8.0:1 на surfaceDark
+  static const accentOnDark = Color(0xFF071D12);
 
-  // ─── Нутриенты: чистые тона для микро-точек и полосы баланса ─────────────
-  static const protein = Color(0xFF1E6341);
-  static const fat = Color(0xFF8E5000);
-  static const carbs = Color(0xFF1C518C);
-  static const kcal = Color(0xFFA82820);
+  // ─── Нутриенты: чистые гармоничные тона для точек Б/Ж/У и полосы баланса ──
+  static const protein = Color(0xFF23703B);
+  static const fat = Color(0xFF945200);
+  static const carbs = Color(0xFF2455A4);
+  static const kcal = Color(0xFFB42B22);
 
-  static const proteinDark = Color(0xFF7AD19D);
-  static const fatDark = Color(0xFFEBB863);
-  static const carbsDark = Color(0xFF89B9F0);
-  static const kcalDark = Color(0xFFF59384);
+  static const proteinDark = Color(0xFF6EE09B);
+  static const fatDark = Color(0xFFF0B85A);
+  static const carbsDark = Color(0xFF7EB4FF);
+  static const kcalDark = Color(0xFFF69484);
 
   // ─── Бейдж источника: спокойный нейтральный тон ─────────────────────────
   static const sourceInk = Color(0xFF3F434A);

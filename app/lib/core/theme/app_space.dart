@@ -27,17 +27,19 @@ class Space {
   static double gutter(double width) => width >= 400 ? x5 : x4;
 }
 
-/// Радиусы (аудит §3.4).
+/// Скругления в стиле Material 3 / iOS (дизайн «Прибор»).
 class Radii {
-  static const double chip = 8;
-  static const double field = 12;
-  static const double card = 14;
-  static const double sheet = 20;
-  static const double dialog = 18;
+  static const double chip = 10;
+  static const double field = 16;
+  static const double card = 20;
+  static const double slab = 22;
+  static const double sheet = 28;
+  static const double dialog = 24;
 
   static const BorderRadius chipAll = BorderRadius.all(Radius.circular(chip));
   static const BorderRadius fieldAll = BorderRadius.all(Radius.circular(field));
   static const BorderRadius cardAll = BorderRadius.all(Radius.circular(card));
+  static const BorderRadius slabAll = BorderRadius.all(Radius.circular(slab));
   static const BorderRadius sheetTop = BorderRadius.vertical(
     top: Radius.circular(sheet),
   );
@@ -107,6 +109,23 @@ class Palette {
       isDark ? AppColors.warningSoftDark : AppColors.warningSoft;
   Color get success => isDark ? AppColors.successDark : AppColors.success;
 
+  /// Тёмная графитовая приборная плита (Hero / Readout / Меню).
+  Color get slab => isDark ? AppColors.slabDark : AppColors.slab;
+  Color get slabInk => isDark ? AppColors.slabInkDark : AppColors.slabInk;
+  Color get slabSecondary =>
+      isDark ? AppColors.slabSecondaryDark : AppColors.slabSecondary;
+  Color get slabEdge => isDark ? AppColors.slabEdgeDark : AppColors.slabEdge;
+  Color get slabSurface =>
+      isDark ? AppColors.slabSurfaceDark : AppColors.slabSurface;
+  Color get signal => isDark ? AppColors.signalDark : AppColors.signal;
+  Color get sheetHandle =>
+      isDark ? AppColors.sheetHandleDark : AppColors.sheetHandle;
+
+  /// Цвета точек/полосы макронутриентов на тёмной приборной плите (AA >= 4.5).
+  Color get slabProtein => AppColors.proteinDark;
+  Color get slabFat => AppColors.fatDark;
+  Color get slabCarbs => AppColors.carbsDark;
+
   /// Поднятая поверхность для плавающих капсул и кнопок в тёмной теме.
   Color get raised => isDark ? AppColors.surfaceRaisedDark : AppColors.surface;
 
@@ -114,14 +133,10 @@ class Palette {
   Color get mountingTable =>
       isDark ? const Color(0xFF090A0C) : const Color(0xFFE6E8EC);
 
-  /// Деликатная тень для карточек только в светлой теме (в тёмной — контур).
-  List<BoxShadow> get cardShadow => isDark
-      ? const <BoxShadow>[]
-      : const <BoxShadow>[
-          BoxShadow(
-            color: Color(0x0A000000),
-            blurRadius: 10,
-            offset: Offset(0, 2),
-          ),
-        ];
+  /// Калибровочная точка монтажного стола под печатным бланком.
+  Color get tableDot =>
+      isDark ? const Color(0xFF181A1F) : const Color(0xFFD5D8DF);
+
+  /// Поверхности в «Приборе» разделяются тоном и скруглениями без диффузных теней.
+  List<BoxShadow> get cardShadow => const <BoxShadow>[];
 }

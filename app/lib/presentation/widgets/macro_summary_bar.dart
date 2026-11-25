@@ -11,6 +11,7 @@ import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
 import 'app_buttons.dart';
+import 'instrument_widgets.dart';
 import 'loss_clarity_hints.dart';
 import 'macro_balance_bar.dart';
 import 'yield_density_warning.dart';
@@ -38,12 +39,16 @@ class MacroSummaryBar extends StatefulWidget {
   /// (для нового расчёта используются строки [CalculationResult.lines]).
   final List<Ingredient>? ingredients;
 
+  /// Интегрированный нижний ярус Hero-карточки (параметры обработки и выхода).
+  final Widget? heroFooter;
+
   const MacroSummaryBar({
     super.key,
     required this.result,
     this.compact = false,
     this.hero = false,
     this.ingredients,
+    this.heroFooter,
   });
 
   /// Открывает модальный инспектор расчёта (шаги потерь, выход, вклад).
@@ -290,7 +295,8 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
     );
   }
 
-  /// Главный Hero-виджет итогов для верхней части редактора (`hero: true`).
+  /// Главный Hero-виджет «Прибор» (`hero: true`): тёмная графитовая плита
+  /// + встроенный при необходимости нижний ярус параметров.
   Widget _buildHero(BuildContext context, Palette p, CalculationResult r) {
     final canSwitch = r.hasYield;
     final per100 = canSwitch && _showPer100g;
@@ -305,33 +311,36 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
             carbs: r.cookedCarbs,
           )
         : null;
+    final hasFooter = widget.heroFooter != null;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: p.surface,
-        borderRadius: Radii.cardAll,
-        border: Border.all(color: p.borderStatic),
-        boxShadow: p.cardShadow,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => _inspect(context),
-          child: Padding(
-            padding: const EdgeInsets.all(Space.x3),
+    final slab = InstrumentSlab(
+      borderRadius: hasFooter
+          ? const BorderRadius.vertical(top: Radius.circular(Radii.slab))
+          : Radii.slabAll,
+      onTap: () => _inspect(context),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+                Space.x4, Space.x3 + 2, Space.x4, Space.x3),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Row(
                   children: [
+                    SignalDot(
+                      size: 6,
+                      color: canSwitch ? p.signal : p.slabFat,
+                    ),
+                    const SizedBox(width: Space.x2),
                     Expanded(
                       child: Text(
                         per100
                             ? 'После готовки · на 100 г'
                             : 'После готовки · на всё блюдо',
                         style: AppTypography.caption.copyWith(
-                          color: p.inkSecondary,
+                          color: p.slabSecondary,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -339,11 +348,11 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                     Icon(
                       Icons.chevron_right_rounded,
                       size: 18,
-                      color: p.inkMuted,
+                      color: p.slabSecondary,
                     ),
                   ],
                 ),
-                const SizedBox(height: Space.x1),
+                const SizedBox(height: Space.x2),
                 Wrap(
                   alignment: WrapAlignment.spaceBetween,
                   crossAxisAlignment: WrapCrossAlignment.center,
@@ -358,15 +367,17 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                         crossAxisAlignment: CrossAxisAlignment.baseline,
                         textBaseline: TextBaseline.alphabetic,
                         children: [
-                          Text(
-                            k(kcalVal),
-                            style: AppTypography.display.copyWith(color: p.ink),
+                          AnimatedMetricText(
+                            value: kcalVal,
+                            formatter: k,
+                            style: AppTypography.heroKcal
+                                .copyWith(color: p.slabInk),
                           ),
-                          const SizedBox(width: Space.x1),
+                          const SizedBox(width: Space.x1 + 2),
                           Text(
                             per100 ? 'ккал / 100 г' : 'ккал',
                             style: AppTypography.bodySm.copyWith(
-                              color: p.inkSecondary,
+                              color: p.slabSecondary,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -375,7 +386,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                     ),
                     if (canSwitch)
                       Material(
-                        color: p.accentSoft,
+                        color: p.accent,
                         borderRadius: BorderRadius.circular(999),
                         clipBehavior: Clip.antiAlias,
                         child: InkWell(
@@ -403,7 +414,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                                         ? '${k(r.cookedKcal)} ккал всего'
                                         : '${k(r.per100gKcal)} / 100 г',
                                     style: AppTypography.numSm.copyWith(
-                                      color: p.accent,
+                                      color: p.onAccent,
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
@@ -415,14 +426,20 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                       ),
                   ],
                 ),
-                if (bal != null) ...[
-                  const SizedBox(height: Space.x2),
+                const SizedBox(height: Space.x2),
+                if (canSwitch && bal != null)
                   MacroBalanceBar(
                     balance: bal,
                     barOnly: true,
-                    barHeight: 5,
+                    barHeight: 4.5,
+                    onDarkSlab: true,
+                  )
+                else if (!canSwitch)
+                  HatchedBar(
+                    color: p.signal,
+                    backgroundColor: p.slabSurface,
+                    height: 4,
                   ),
-                ],
                 const SizedBox(height: Space.x3),
                 Wrap(
                   spacing: Space.x4,
@@ -435,6 +452,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                       unit: 'г',
                       stacked: true,
                       compact: true,
+                      onDarkSlab: true,
                       valueKey: const ValueKey('macro-Белки'),
                     ),
                     InlineMacroCell(
@@ -444,6 +462,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                       unit: 'г',
                       stacked: true,
                       compact: true,
+                      onDarkSlab: true,
                       valueKey: const ValueKey('macro-Жиры'),
                     ),
                     InlineMacroCell(
@@ -453,22 +472,46 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                       unit: 'г',
                       stacked: true,
                       compact: true,
+                      onDarkSlab: true,
                       valueKey: const ValueKey('macro-Углеводы'),
-                    ),
-                    InlineMacroCell(
-                      type: NutrientType.kcal,
-                      label: 'Энергия',
-                      value: k(kcalVal),
-                      unit: 'ккал',
-                      stacked: true,
-                      compact: true,
-                      valueKey: const ValueKey('macro-Энергия'),
                     ),
                   ],
                 ),
               ],
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
+            child: RulerTicks(
+              color: p.slabSecondary,
+              height: 5,
+              ticks: 29,
+              majorEvery: 4,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (!hasFooter) return slab;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: Radii.slabAll,
+        border: p.isDark
+            ? Border.all(color: p.borderStatic.withOpacity(0.8), width: 1)
+            : null,
+      ),
+      child: ClipRRect(
+        borderRadius: Radii.slabAll,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            slab,
+            widget.heroFooter!,
+          ],
         ),
       ),
     );
@@ -664,6 +707,35 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                 'Откуда взялась каждая цифра — по шагам.',
                 style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
               ),
+              const SizedBox(height: Space.x3),
+              InstrumentSlab(
+                padding: const EdgeInsets.all(Space.x3 + 2),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        const SignalDot(size: 6),
+                        const SizedBox(width: Space.x2),
+                        Expanded(
+                          child: Text(
+                            'КАСКАД РАСЧЁТА',
+                            style: AppTypography.kicker
+                                .copyWith(color: p.slabSecondary),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: Space.x2),
+                    Text(
+                      'Сырьё ${g(r.rawTotalWeight)} г → ${r.process.label} → ${k(r.cookedKcal)} ккал'
+                      '${r.hasYield ? ' · выход ${g(r.yieldGrams)} г (${k(r.per100gKcal)}/100 г)' : ''}',
+                      style: AppTypography.formulaMono
+                          .copyWith(color: p.slabInk),
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: Space.x4),
               _buildStepSection(
                 palette: p,
@@ -721,9 +793,17 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                 content: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      '${m(r.cookedProtein)} × 4 + ${m(r.cookedFat)} × 9 + ${m(r.cookedCarbs)} × 4 = ${k(r.cookedKcal)} ккал',
-                      style: AppTypography.num.copyWith(color: p.ink),
+                    GroupedSurface(
+                      color: p.sunken,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: Space.x3,
+                        vertical: Space.x2 + 2,
+                      ),
+                      borderRadius: Radii.fieldAll,
+                      child: Text(
+                        '${m(r.cookedProtein)} × 4 + ${m(r.cookedFat)} × 9 + ${m(r.cookedCarbs)} × 4 = ${k(r.cookedKcal)} ккал',
+                        style: AppTypography.formulaMono.copyWith(color: p.ink),
+                      ),
                     ),
                     if (r.cookedKcal > 0) ...[
                       const SizedBox(height: Space.x2),

@@ -17,6 +17,7 @@ import '../providers/settings_provider.dart';
 import '../widgets/app_buttons.dart';
 import '../widgets/batch_export_sheet.dart';
 import '../widgets/dish_comparison_sheet.dart';
+import '../widgets/instrument_widgets.dart';
 import '../widgets/loss_clarity_hints.dart';
 import '../widgets/macro_balance_bar.dart';
 import '../widgets/menu_builder_sheet.dart';
@@ -164,16 +165,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       appBar: isSelecting
           ? AppBar(
               toolbarHeight: kToolbarHeight,
-              backgroundColor: p.accentSoft,
+              backgroundColor: p.ink,
+              foregroundColor: p.canvas,
               leading: IconButton(
                 key: const ValueKey('selection-close-btn'),
                 tooltip: 'Отменить выбор',
-                icon: Icon(Icons.close_rounded, color: p.ink),
+                icon: Icon(Icons.close_rounded, color: p.canvas),
                 onPressed: () => setState(_selectedDishIds.clear),
               ),
               title: Text(
                 'Выбрано: ${selectedDishes.length}',
-                style: AppTypography.title.copyWith(color: p.ink),
+                style: AppTypography.title.copyWith(color: p.canvas),
                 overflow: TextOverflow.ellipsis,
               ),
               actions: [
@@ -185,7 +187,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     allVisibleSelected
                         ? Icons.deselect_rounded
                         : Icons.select_all_rounded,
-                    color: p.accent,
+                    color: p.canvas,
                   ),
                   onPressed: visibleIds.isEmpty
                       ? null
@@ -206,8 +208,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               toolbarHeight: kToolbarHeight,
               title: Row(
                 children: [
-                  Icon(Icons.balance_rounded, size: 20, color: p.accent),
-                  const SizedBox(width: Space.x2),
+                  const AppScaleGlyph(size: 22),
+                  const SizedBox(width: Space.x2 + 2),
                   Expanded(
                     child: Text(
                       'Поварская справка',
@@ -457,13 +459,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                   )
                 else
-                  for (final dish in filteredDishes)
+                  for (var i = 0; i < filteredDishes.length; i++)
                     _SavedDishCard(
-                      dish: dish,
+                      dish: filteredDishes[i],
+                      isFirst: i == 0,
+                      isLast: i == filteredDishes.length - 1,
                       isSelecting: isSelecting,
-                      isSelected: _selectedDishIds.contains(dish.id),
-                      onToggleSelect: () => _toggleDishSelection(dish.id),
-                      onStartSelect: () => _startSelection(dish.id),
+                      isSelected:
+                          _selectedDishIds.contains(filteredDishes[i].id),
+                      onToggleSelect: () =>
+                          _toggleDishSelection(filteredDishes[i].id),
+                      onStartSelect: () =>
+                          _startSelection(filteredDishes[i].id),
                     ),
               ],
             ),
@@ -1458,138 +1465,120 @@ class _ActiveDraftCard extends StatelessWidget {
         : dish.title.trim();
 
     return TactilePress(
-      child: Container(
-        decoration: BoxDecoration(
-          color: p.surface,
-          borderRadius: Radii.cardAll,
-          border: Border.all(color: p.borderStatic),
-          boxShadow: p.cardShadow,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: hasDraft ? onOpen : onNew,
-            child: Padding(
-              padding: EdgeInsets.all(textScale > 1.35 ? Space.x2 : Space.x3),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      child: InstrumentSlab(
+        onTap: hasDraft ? onOpen : onNew,
+        padding: EdgeInsets.all(textScale > 1.35 ? Space.x2 : Space.x3 + 2),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: double.infinity,
+              child: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: Space.x2,
+                runSpacing: Space.x1,
                 children: [
-                  SizedBox(
-                    width: double.infinity,
-                    child: Wrap(
-                      alignment: WrapAlignment.spaceBetween,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: Space.x2,
-                      runSpacing: Space.x1,
-                      children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 7,
-                              height: 7,
-                              decoration: BoxDecoration(
-                                color: hasDraft ? p.accent : p.inkMuted,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: Space.x2),
-                            Flexible(
-                              child: Text(
-                                hasDraft ? 'Открытый расчёт' : 'Новый расчёт',
-                                style: AppTypography.caption.copyWith(
-                                  color: hasDraft ? p.accent : p.inkSecondary,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                hasDraft ? 'Продолжить расчёт' : 'Новый расчёт',
-                                style: AppTypography.caption.copyWith(
-                                  color: p.accent,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(
-                              Icons.arrow_forward_rounded,
-                              size: 14,
-                              color: p.accent,
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: compactDraft ? Space.x1 : Space.x2),
-                  Text(
-                    title,
-                    style: AppTypography.title.copyWith(color: p.ink),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (hasIngredients) ...[
-                    SizedBox(height: compactDraft ? Space.x1 : Space.x2),
-                    if (calc != null) ...[
-                      Wrap(
-                        spacing: Space.x2,
-                        runSpacing: 2,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          Text(
-                            calc.hasYield
-                                ? '${CalculationEngine.formatKcal(calc.per100gKcal)} ккал/100 г'
-                                : '${CalculationEngine.formatKcal(calc.cookedKcal)} ккал',
-                            style: AppTypography.headline.copyWith(
-                              color: p.ink,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          Text(
-                            '${pluralIngredients(dish.ingredients.length)} · '
-                            '${calc.usesLossTable && !calc.hasYield ? 'вес готового блюда не указан' : 'выход ${CalculationEngine.formatGrams(calc.yieldGrams)} г'}',
-                            style: AppTypography.numSm
-                                .copyWith(color: p.inkSecondary),
-                          ),
-                        ],
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SignalDot(
+                        size: 7,
+                        color: hasDraft ? p.signal : p.slabSecondary,
                       ),
-                      if (calc.cookedKcal > 0 && !compactDraft) ...[
-                        const SizedBox(height: Space.x2),
-                        MacroBalanceBar(
-                          balance: MacroBalance.fromMacros(
-                            protein: calc.cookedProtein,
-                            fat: calc.cookedFat,
-                            carbs: calc.cookedCarbs,
+                      const SizedBox(width: Space.x2),
+                      Flexible(
+                        child: Text(
+                          hasDraft ? 'Открытый расчёт' : 'Новый расчёт',
+                          style: AppTypography.caption.copyWith(
+                            color: p.slabSecondary,
+                            fontWeight: FontWeight.w700,
                           ),
-                          barOnly: true,
-                          barHeight: 3.5,
                         ),
-                      ],
-                    ] else
-                      Text(
-                        '${pluralIngredients(dish.ingredients.length)} · выход — г · — ккал',
-                        style:
-                            AppTypography.numSm.copyWith(color: p.inkSecondary),
                       ),
-                  ] else if (hasTitle) ...[
-                    const SizedBox(height: Space.x1),
-                    Text(
-                      'Ингредиенты ещё не добавлены',
-                      style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
-                    ),
-                  ],
+                    ],
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          hasDraft ? 'Продолжить расчёт' : 'Новый расчёт',
+                          style: AppTypography.caption.copyWith(
+                            color: p.slabInk,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 14,
+                        color: p.slabInk,
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
-          ),
+            SizedBox(height: compactDraft ? Space.x1 : Space.x2),
+            Text(
+              title,
+              style: AppTypography.title.copyWith(color: p.slabInk),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (hasIngredients) ...[
+              SizedBox(height: compactDraft ? Space.x1 : Space.x2),
+              if (calc != null) ...[
+                Wrap(
+                  spacing: Space.x2,
+                  runSpacing: 2,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      calc.hasYield
+                          ? '${CalculationEngine.formatKcal(calc.per100gKcal)} ккал/100 г'
+                          : '${CalculationEngine.formatKcal(calc.cookedKcal)} ккал',
+                      style: AppTypography.headline.copyWith(
+                        color: p.slabInk,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      '${pluralIngredients(dish.ingredients.length)} · '
+                      '${calc.usesLossTable && !calc.hasYield ? 'вес готового блюда не указан' : 'выход ${CalculationEngine.formatGrams(calc.yieldGrams)} г'}',
+                      style: AppTypography.numSm
+                          .copyWith(color: p.slabSecondary),
+                    ),
+                  ],
+                ),
+                if (calc.cookedKcal > 0 && !compactDraft) ...[
+                  const SizedBox(height: Space.x2),
+                  MacroBalanceBar(
+                    balance: MacroBalance.fromMacros(
+                      protein: calc.cookedProtein,
+                      fat: calc.cookedFat,
+                      carbs: calc.cookedCarbs,
+                    ),
+                    barOnly: true,
+                    barHeight: 3.5,
+                    onDarkSlab: true,
+                  ),
+                ],
+              ] else
+                Text(
+                  '${pluralIngredients(dish.ingredients.length)} · выход — г · — ккал',
+                  style: AppTypography.numSm.copyWith(color: p.slabSecondary),
+                ),
+            ] else if (hasTitle) ...[
+              const SizedBox(height: Space.x1),
+              Text(
+                'Ингредиенты ещё не добавлены',
+                style: AppTypography.bodySm.copyWith(color: p.slabSecondary),
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -1656,24 +1645,19 @@ class _EmptyLibrary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GroupedSurface(
       padding: const EdgeInsets.all(Space.x4),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: Radii.cardAll,
-      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
               color: palette.accentSoft,
-              borderRadius: Radii.chipAll,
+              borderRadius: Radii.fieldAll,
             ),
-            child: Icon(Icons.menu_book_rounded,
-                size: 18, color: palette.accent),
+            child: const Center(child: AppScaleGlyph(size: 20)),
           ),
           const SizedBox(width: Space.x3),
           Expanded(
@@ -1699,9 +1683,11 @@ class _EmptyLibrary extends StatelessWidget {
   }
 }
 
-/// Карточка сохранённого блюда: название, выход, ккал, меню действий.
+/// Карточка сохранённого блюда: сгруппированная строка `R = 20 dp`.
 class _SavedDishCard extends ConsumerWidget {
   final Dish dish;
+  final bool isFirst;
+  final bool isLast;
   final bool isSelecting;
   final bool isSelected;
   final VoidCallback? onToggleSelect;
@@ -1709,6 +1695,8 @@ class _SavedDishCard extends ConsumerWidget {
 
   const _SavedDishCard({
     required this.dish,
+    this.isFirst = true,
+    this.isLast = true,
     this.isSelecting = false,
     this.isSelected = false,
     this.onToggleSelect,
@@ -1736,17 +1724,20 @@ class _SavedDishCard extends ConsumerWidget {
           )
         : null;
 
+    final rowRadius = BorderRadius.vertical(
+      top: Radius.circular(isFirst ? Radii.card : 0),
+      bottom: Radius.circular(isLast ? Radii.card : 0),
+    );
+
     return TactilePress(
       child: Container(
-        margin: const EdgeInsets.only(bottom: Space.x2),
+        margin: EdgeInsets.only(bottom: isLast ? Space.x2 : 0),
         decoration: BoxDecoration(
           color: isSelected ? p.accentSoft : p.surface,
-          borderRadius: Radii.cardAll,
-          border: Border.all(
-            color: isSelected ? p.accent : p.borderStatic,
-            width: isSelected ? 1.5 : 1,
-          ),
-          boxShadow: isSelected ? const <BoxShadow>[] : p.cardShadow,
+          borderRadius: rowRadius,
+          border: isSelected
+              ? Border.all(color: p.accent, width: 1.5)
+              : null,
         ),
         clipBehavior: Clip.antiAlias,
         child: Material(
@@ -1769,246 +1760,266 @@ class _SavedDishCard extends ConsumerWidget {
                 MaterialPageRoute(builder: (_) => const RecipeEditorScreen()),
               );
             },
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                  Space.x4, Space.x2 + 2, Space.x1, Space.x2 + 2),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                      Space.x4, Space.x3, Space.x1, Space.x3),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (categoryLabel != null) ...[
-                                    Text(
-                                      categoryLabel.toUpperCase(),
-                                      style: AppTypography.caption.copyWith(
-                                        color: p.accent,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: 0.4,
-                                        fontSize: 11,
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      if (categoryLabel != null) ...[
+                                        Text(
+                                          categoryLabel.toUpperCase(),
+                                          style: AppTypography.kicker.copyWith(
+                                            color: p.accent,
+                                            fontSize: 10.5,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 2),
+                                      ],
+                                      Text(
+                                        title,
+                                        style: AppTypography.headline
+                                            .copyWith(color: p.ink),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 2),
-                                  ],
-                                  Text(
-                                    title,
-                                    style: AppTypography.headline
-                                        .copyWith(color: p.ink),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
+                                    ],
+                                  ),
+                                ),
+                                if (showRightKcal) ...[
+                                  const SizedBox(width: Space.x2),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text(
+                                        CalculationEngine.formatKcal(
+                                          calc.hasYield
+                                              ? calc.per100gKcal
+                                              : calc.cookedKcal,
+                                        ),
+                                        style: AppTypography.headline.copyWith(
+                                          color: p.ink,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      Text(
+                                        calc.hasYield ? 'ккал/100 г' : 'ккал',
+                                        style: AppTypography.caption.copyWith(
+                                          color: p.inkMuted,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
-                              ),
+                              ],
                             ),
-                            if (showRightKcal) ...[
-                              const SizedBox(width: Space.x2),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    CalculationEngine.formatKcal(
-                                      calc.hasYield
-                                          ? calc.per100gKcal
-                                          : calc.cookedKcal,
-                                    ),
-                                    style: AppTypography.headline.copyWith(
-                                      color: p.ink,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  Text(
-                                    calc.hasYield ? 'ккал/100 г' : 'ккал',
-                                    style: AppTypography.caption.copyWith(
-                                      color: p.inkMuted,
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                ],
+                            if (bal != null) ...[
+                              const SizedBox(height: Space.x1 + 2),
+                              MacroBalanceBar(
+                                balance: bal,
+                                barOnly: true,
+                                barHeight: 3.5,
                               ),
                             ],
+                            const SizedBox(height: Space.x1 + 2),
+                            Text(
+                              calc == null
+                                  ? '${pluralIngredients(dish.ingredients.length)} · выход — г · — ккал'
+                                  : showRightKcal
+                                      ? '${pluralIngredients(dish.ingredients.length)} · '
+                                          '${calc.usesLossTable && !calc.hasYield ? 'вес готового блюда не указан' : 'выход ${CalculationEngine.formatGrams(calc.yieldGrams)} г'} · '
+                                          'Б ${CalculationEngine.formatMacro(calc.hasYield ? calc.per100gProtein : calc.cookedProtein)} · '
+                                          'Ж ${CalculationEngine.formatMacro(calc.hasYield ? calc.per100gFat : calc.cookedFat)} · '
+                                          'У ${CalculationEngine.formatMacro(calc.hasYield ? calc.per100gCarbs : calc.cookedCarbs)}'
+                                      : '${pluralIngredients(dish.ingredients.length)} · '
+                                          '${calc.usesLossTable && !calc.hasYield ? 'вес не указан' : '${CalculationEngine.formatGrams(calc.yieldGrams)} г'} · '
+                                          '${CalculationEngine.formatKcal(calc.hasYield ? calc.per100gKcal : calc.cookedKcal)} '
+                                          '${calc.hasYield ? 'ккал/100 г' : 'ккал'}',
+                              style: AppTypography.numSm
+                                  .copyWith(color: p.inkSecondary),
+                            ),
                           ],
                         ),
-                        if (bal != null) ...[
-                          const SizedBox(height: Space.x1 + 2),
-                          MacroBalanceBar(
-                            balance: bal,
-                            barOnly: true,
-                            barHeight: 3.5,
+                      ),
+                      if (isSelecting)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: Space.x3,
+                            vertical: Space.x2,
                           ),
-                        ],
-                        const SizedBox(height: Space.x1 + 2),
-                        Text(
-                          calc == null
-                              ? '${pluralIngredients(dish.ingredients.length)} · выход — г · — ккал'
-                              : showRightKcal
-                                  ? '${pluralIngredients(dish.ingredients.length)} · '
-                                      '${calc.usesLossTable && !calc.hasYield ? 'вес готового блюда не указан' : 'выход ${CalculationEngine.formatGrams(calc.yieldGrams)} г'} · '
-                                      'Б ${CalculationEngine.formatMacro(calc.hasYield ? calc.per100gProtein : calc.cookedProtein)} · '
-                                      'Ж ${CalculationEngine.formatMacro(calc.hasYield ? calc.per100gFat : calc.cookedFat)} · '
-                                      'У ${CalculationEngine.formatMacro(calc.hasYield ? calc.per100gCarbs : calc.cookedCarbs)}'
-                                  : '${pluralIngredients(dish.ingredients.length)} · '
-                                      '${calc.usesLossTable && !calc.hasYield ? 'вес не указан' : '${CalculationEngine.formatGrams(calc.yieldGrams)} г'} · '
-                                      '${CalculationEngine.formatKcal(calc.hasYield ? calc.per100gKcal : calc.cookedKcal)} '
-                                      '${calc.hasYield ? 'ккал/100 г' : 'ккал'}',
-                          style:
-                              AppTypography.numSm.copyWith(color: p.inkSecondary),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (isSelecting)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: Space.x3,
-                        vertical: Space.x2,
-                      ),
-                      child: Icon(
-                        isSelected
-                            ? Icons.check_circle_rounded
-                            : Icons.radio_button_unchecked_rounded,
-                        color: isSelected ? p.accent : p.inkMuted,
-                        size: 22,
-                      ),
-                    )
-                  else
-                    PopupMenuButton<String>(
-                      tooltip: 'Действия с блюдом',
-                      icon: Icon(Icons.more_vert_rounded, color: p.inkMuted),
-                      onSelected: (value) async {
-                        final notifier = ref.read(savedDishesProvider.notifier);
-                        if (value == 'select') {
-                          onStartSelect?.call();
-                          return;
-                        }
-                        if (value == 'share') {
-                        await ShareRecipeSheet.show(
-                          context,
-                          dish: dish,
-                          customProducts: ref.read(customProductsProvider),
-                        );
-                        return;
-                      }
-                      if (value == 'category') {
-                        final chosen = await _pickDishCategory(context, dish);
-                        if (chosen == null || !context.mounted) return;
-                        final nextCat = chosen.isEmpty ? null : chosen;
-                        try {
-                          await notifier.setDishCategory(dish.id, nextCat);
-                          if (ref.read(dishProvider).id == dish.id) {
-                            ref.read(dishProvider.notifier).setCategory(nextCat);
-                          }
-                        } catch (e) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  friendlyErrorMessage(
-                                    e,
-                                    prefix: 'Не удалось обновить категорию',
+                          child: Icon(
+                            isSelected
+                                ? Icons.check_circle_rounded
+                                : Icons.radio_button_unchecked_rounded,
+                            color: isSelected ? p.accent : p.inkMuted,
+                            size: 22,
+                          ),
+                        )
+                      else
+                        PopupMenuButton<String>(
+                          tooltip: 'Действия с блюдом',
+                          icon: Icon(Icons.more_vert_rounded, color: p.inkMuted),
+                          onSelected: (value) async {
+                            final notifier =
+                                ref.read(savedDishesProvider.notifier);
+                            if (value == 'select') {
+                              onStartSelect?.call();
+                              return;
+                            }
+                            if (value == 'share') {
+                              await ShareRecipeSheet.show(
+                                context,
+                                dish: dish,
+                                customProducts:
+                                    ref.read(customProductsProvider),
+                              );
+                              return;
+                            }
+                            if (value == 'category') {
+                              final chosen =
+                                  await _pickDishCategory(context, dish);
+                              if (chosen == null || !context.mounted) return;
+                              final nextCat = chosen.isEmpty ? null : chosen;
+                              try {
+                                await notifier.setDishCategory(dish.id, nextCat);
+                                if (ref.read(dishProvider).id == dish.id) {
+                                  ref
+                                      .read(dishProvider.notifier)
+                                      .setCategory(nextCat);
+                                }
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        friendlyErrorMessage(
+                                          e,
+                                          prefix:
+                                              'Не удалось обновить категорию',
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }
+                              }
+                              return;
+                            }
+                            if (value == 'delete') {
+                              final confirmed = await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text('Удалить блюдо?'),
+                                  content: Text(
+                                    'Блюдо «$title» будет удалено из «Моих блюд».',
                                   ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(ctx, false),
+                                      child: const Text('Отмена'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx, true),
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: p.danger,
+                                      ),
+                                      child: const Text('Удалить'),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                            );
-                          }
-                        }
-                        return;
-                      }
-                      if (value == 'delete') {
-                        final confirmed = await showDialog<bool>(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text('Удалить блюдо?'),
-                            content: Text(
-                              'Блюдо «$title» будет удалено из «Моих блюд».',
+                              );
+                              if (confirmed != true || !context.mounted) return;
+                            }
+                            try {
+                              if (value == 'copy') {
+                                await notifier.duplicateDish(dish);
+                              }
+                              if (value == 'delete') {
+                                await notifier.deleteDish(dish.id);
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context)
+                                  ..hideCurrentSnackBar()
+                                  ..showSnackBar(
+                                    SnackBar(
+                                      content: Text('Удалено: $title'),
+                                      action: SnackBarAction(
+                                        label: 'Отменить',
+                                        onPressed: () {
+                                          notifier
+                                              .saveDish(dish)
+                                              .then<void>((_) {},
+                                                  onError: (Object _) {});
+                                        },
+                                      ),
+                                    ),
+                                  );
+                              }
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      friendlyErrorMessage(
+                                        e,
+                                        prefix: 'Не удалось выполнить действие',
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                          itemBuilder: (_) => const [
+                            PopupMenuItem(
+                              value: 'select',
+                              child: Text('Выбрать для меню / экспорта'),
                             ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctx, false),
-                                child: const Text('Отмена'),
-                              ),
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctx, true),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: p.danger,
-                                ),
-                                child: const Text('Удалить'),
-                              ),
-                            ],
-                          ),
-                        );
-                        if (confirmed != true || !context.mounted) return;
-                      }
-                      try {
-                        if (value == 'copy') await notifier.duplicateDish(dish);
-                        if (value == 'delete') {
-                          await notifier.deleteDish(dish.id);
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.of(context)
-                            ..hideCurrentSnackBar()
-                            ..showSnackBar(
-                              SnackBar(
-                                content: Text('Удалено: $title'),
-                                action: SnackBarAction(
-                                  label: 'Отменить',
-                                  onPressed: () {
-                                    notifier
-                                        .saveDish(dish)
-                                        .then<void>((_) {}, onError: (Object _) {});
-                                  },
-                                ),
-                              ),
-                            );
-                        }
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                friendlyErrorMessage(
-                                  e,
-                                  prefix: 'Не удалось выполнить действие',
-                                ),
-                              ),
+                            PopupMenuItem(
+                              value: 'share',
+                              child: Text('Поделиться рецептом'),
                             ),
-                          );
-                        }
-                      }
-                    },
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(
-                          value: 'select',
-                          child: Text('Выбрать для меню / экспорта'),
+                            PopupMenuItem(
+                              value: 'category',
+                              child: Text('Категория'),
+                            ),
+                            PopupMenuItem(
+                              value: 'copy',
+                              child: Text('Дублировать'),
+                            ),
+                            PopupMenuItem(
+                              value: 'delete',
+                              child: Text('Удалить'),
+                            ),
+                          ],
                         ),
-                        PopupMenuItem(
-                          value: 'share',
-                          child: Text('Поделиться рецептом'),
-                        ),
-                        PopupMenuItem(
-                          value: 'category',
-                          child: Text('Категория'),
-                        ),
-                        PopupMenuItem(
-                          value: 'copy',
-                          child: Text('Дублировать'),
-                        ),
-                        PopupMenuItem(
-                          value: 'delete',
-                          child: Text('Удалить'),
-                        ),
-                      ],
-                    ),
-                ],
-              ),
+                    ],
+                  ),
+                ),
+                if (!isLast && !isSelected)
+                  Container(
+                    height: 1,
+                    margin: const EdgeInsets.only(left: Space.x4),
+                    color: p.divider,
+                  ),
+              ],
             ),
           ),
         ),

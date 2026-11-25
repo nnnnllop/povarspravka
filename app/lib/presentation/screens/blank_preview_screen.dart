@@ -264,55 +264,60 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
               Expanded(
                 child: ColoredBox(
                   color: p.mountingTable,
-                  child: LayoutBuilder(
-                  builder: (context, viewerConstraints) {
-                    final viewportW = viewerConstraints.maxWidth;
-                    final nextFit = (calc != null &&
+                  child: CustomPaint(
+                    painter: _MountingDotGridPainter(dotColor: p.tableDot),
+                    child: LayoutBuilder(
+                      builder: (context, viewerConstraints) {
+                        final viewportW = viewerConstraints.maxWidth;
+                        final nextFit = (calc != null &&
+                                viewportW.isFinite &&
+                                viewportW > 0)
+                            ? (viewportW / docOuterWidth)
+                                .clamp(_minScale, 1.0)
+                            : 1.0;
+                        _fitScale = nextFit;
+                        if (!_initialFitApplied &&
+                            calc != null &&
                             viewportW.isFinite &&
-                            viewportW > 0)
-                        ? (viewportW / docOuterWidth).clamp(_minScale, 1.0)
-                        : 1.0;
-                    _fitScale = nextFit;
-                    if (!_initialFitApplied &&
-                        calc != null &&
-                        viewportW.isFinite &&
-                        viewportW > 0) {
-                      _initialFitApplied = true;
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (!mounted) return;
-                        _applyScale(_fitScale);
-                      });
-                    }
-                    return InteractiveViewer(
-                      transformationController: _transform,
-                      minScale: _minScale,
-                      maxScale: _maxScale,
-                      // Лист больше экрана — панорамируем свободно по обеим осям.
-                      constrained: false,
-                      boundaryMargin: const EdgeInsets.all(80),
-                      child: Container(
-                        padding: const EdgeInsets.all(Space.x4),
-                        child: inlineModeBanner
-                            ? Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  SizedBox(
-                                    width: (media.width - Space.x8)
-                                        .clamp(240.0, double.infinity),
-                                    child: modeBanner,
-                                  ),
-                                  const SizedBox(height: Space.x3),
-                                  previewDoc,
-                                ],
-                              )
-                            : previewDoc,
-                      ),
-                    );
-                  },
+                            viewportW > 0) {
+                          _initialFitApplied = true;
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (!mounted) return;
+                            _applyScale(_fitScale);
+                          });
+                        }
+                        return InteractiveViewer(
+                          transformationController: _transform,
+                          minScale: _minScale,
+                          maxScale: _maxScale,
+                          // Лист больше экрана — панорамируем свободно по обеим осям.
+                          constrained: false,
+                          boundaryMargin: const EdgeInsets.all(80),
+                          child: Container(
+                            padding: const EdgeInsets.all(Space.x4),
+                            child: inlineModeBanner
+                                ? Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      SizedBox(
+                                        width: (media.width - Space.x8)
+                                            .clamp(240.0, double.infinity),
+                                        child: modeBanner,
+                                      ),
+                                      const SizedBox(height: Space.x3),
+                                      previewDoc,
+                                    ],
+                                  )
+                                : previewDoc,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                 ),
               ),
-            ),
 
           // Панель масштаба: плоский нижний док с 1 px верхним разделителем.
           AppBottomBar(
@@ -1223,6 +1228,29 @@ class _FullBoxCrossPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _MountingDotGridPainter extends CustomPainter {
+  final Color dotColor;
+
+  const _MountingDotGridPainter({required this.dotColor});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = dotColor
+      ..style = PaintingStyle.fill;
+    const step = 16.0;
+    for (double y = step / 2; y < size.height; y += step) {
+      for (double x = step / 2; x < size.width; x += step) {
+        canvas.drawCircle(Offset(x, y), 0.9, paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _MountingDotGridPainter oldDelegate) =>
+      oldDelegate.dotColor != dotColor;
 }
 
 

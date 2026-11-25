@@ -42,9 +42,7 @@ class AppTheme {
         return p.ink;
       }),
       side: WidgetStatePropertyAll(BorderSide(color: p.borderStatic)),
-      shape: const WidgetStatePropertyAll(
-        RoundedRectangleBorder(borderRadius: Radii.fieldAll),
-      ),
+      shape: const WidgetStatePropertyAll(StadiumBorder()),
     );
   }
 
@@ -118,8 +116,9 @@ class AppTheme {
         actionsIconTheme: IconThemeData(color: p.ink, size: 24),
         titleTextStyle: AppTypography.title.copyWith(color: p.ink),
       ),
-      // Тональное разделение поверхностей без жёсткой сетки из 1px рамок:
-      // на тёплом canvas (#F4F3EF) белые карточки читаются сами собой.
+      // Тональное разделение поверхностей без лишних рамок:
+      // на тёплом холсте #F2F2EF сгруппированные белые поверхности (R=20)
+      // читаются за счёт тонового шага.
       cardTheme: CardTheme(
         color: p.surface,
         surfaceTintColor: Colors.transparent,
@@ -194,7 +193,7 @@ class AppTheme {
             horizontal: Space.x4,
             vertical: Space.x3,
           ),
-          shape: RoundedRectangleBorder(borderRadius: Radii.fieldAll),
+          shape: const StadiumBorder(),
           textStyle: AppTypography.label,
         ),
       ),
@@ -211,13 +210,13 @@ class AppTheme {
             horizontal: Space.x4,
             vertical: Space.x3,
           ),
-          shape: RoundedRectangleBorder(borderRadius: Radii.fieldAll),
+          shape: const StadiumBorder(),
           textStyle: AppTypography.label,
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          backgroundColor: p.isDark ? p.raised : p.sunken,
+          backgroundColor: p.isDark ? p.raised : p.surface,
           foregroundColor: p.ink,
           elevation: 0,
           minimumSize: const Size(0, kMinTapTarget),
@@ -226,9 +225,8 @@ class AppTheme {
             horizontal: Space.x4,
             vertical: Space.x3,
           ),
-          // Швейцарская тональная кнопка без тяжёлой проволочной рамки.
           side: BorderSide(color: p.borderStatic, width: 1),
-          shape: RoundedRectangleBorder(borderRadius: Radii.fieldAll),
+          shape: const StadiumBorder(),
           textStyle: AppTypography.label,
         ),
       ),
@@ -241,7 +239,7 @@ class AppTheme {
             horizontal: Space.x3,
             vertical: Space.x3,
           ),
-          shape: RoundedRectangleBorder(borderRadius: Radii.fieldAll),
+          shape: const StadiumBorder(),
           textStyle: AppTypography.label,
         ),
       ),
@@ -282,7 +280,7 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         modalBackgroundColor: p.surface,
         showDragHandle: true,
-        dragHandleColor: p.borderStatic,
+        dragHandleColor: p.sheetHandle,
         dragHandleSize: const Size(36, 4),
         shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
       ),

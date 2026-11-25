@@ -24,6 +24,7 @@ import '../widgets/calc_error_banner.dart';
 import '../widgets/custom_numpad.dart';
 import '../widgets/custom_product_form_sheet.dart';
 import '../widgets/ingredient_card.dart';
+import '../widgets/instrument_widgets.dart';
 import '../widgets/loss_clarity_hints.dart';
 import '../widgets/macro_summary_bar.dart';
 import '../widgets/persistence_error_banner.dart';
@@ -44,12 +45,24 @@ enum _ExitChoice { stay, discard, saveAndExit }
 class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
   final TextEditingController _titleCtrl = TextEditingController();
   final TextEditingController _yieldCtrl = TextEditingController();
+  final ScrollController _scrollCtrl = ScrollController();
 
   @override
   void initState() {
     super.initState();
     final dish = ref.read(dishProvider);
     _syncControllers(dish);
+    _scrollCtrl.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (!_scrollCtrl.hasClients) return;
+    final offset = _scrollCtrl.offset;
+    if (!_showCollapsedKcal && offset > 168) {
+      setState(() => _showCollapsedKcal = true);
+    } else if (_showCollapsedKcal && offset < 152) {
+      setState(() => _showCollapsedKcal = false);
+    }
   }
 
   void _syncControllers(Dish dish) {
@@ -66,6 +79,8 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
 
   @override
   void dispose() {
+    _scrollCtrl.removeListener(_onScroll);
+    _scrollCtrl.dispose();
     _titleCtrl.dispose();
     _yieldCtrl.dispose();
     super.dispose();
@@ -73,6 +88,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
 
   String? _yieldError;
   bool _yieldDetailsExpanded = false;
+  bool _showCollapsedKcal = false;
 
   @override
   Widget build(BuildContext context) {
@@ -140,10 +156,58 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(
-            dish.title.trim().isEmpty ? 'Расчёт блюда' : dish.title.trim(),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          title: AnimatedSwitcher(
+            duration: Motion.fast,
+            child: (_showCollapsedKcal && calc != null)
+                ? Row(
+                    key: const ValueKey('appbar-collapsed-kcal'),
+                    children: [
+                      Expanded(
+                        child: Text(
+                          dish.title.trim().isEmpty
+                              ? 'Техкарта'
+                              : dish.title.trim(),
+                          style: AppTypography.headline.copyWith(color: p.ink),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (media.width >= 340) ...[
+                        const SizedBox(width: Space.x2),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: Space.x2 + 2,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: p.slab,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            calc.hasYield
+                                ? '${CalculationEngine.formatKcal(calc.per100gKcal)} / 100 г'
+                                : '${CalculationEngine.formatKcal(calc.cookedKcal)} ккал',
+                            style: AppTypography.caption.copyWith(
+                              color: p.slabInk,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            maxLines: 1,
+                          ),
+                        ),
+                      ],
+                    ],
+                  )
+                : Align(
+                    key: const ValueKey('appbar-idle-title'),
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Техкарта',
+                      style: AppTypography.headline
+                          .copyWith(color: p.inkSecondary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
           ),
           titleSpacing: 0,
           actions: actions,
@@ -164,15 +228,34 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
               AppContentFrame(child: CalcErrorBanner(detail: calcError)),
             Expanded(
               child: ReorderableListView.builder(
+                scrollController: _scrollCtrl,
                 padding: EdgeInsets.fromLTRB(
-                    listHPad, Space.x2, listHPad, Space.x6),
+                    listHPad, Space.x1, listHPad, Space.x6),
+                proxyDecorator: (child, index, animation) {
+                  return AnimatedBuilder(
+                    animation: animation,
+                    builder: (context, child) {
+                      return Material(
+                        color: p.surface,
+                        elevation: 6,
+                        shadowColor: Colors.black.withOpacity(0.18),
+                        borderRadius: Radii.cardAll,
+                        child: child,
+                      );
+                    },
+                    child: child,
+                  );
+                },
                 header: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     TextField(
                       controller: _titleCtrl,
                       textCapitalization: TextCapitalization.sentences,
-                      style: AppTypography.title.copyWith(color: p.ink),
+                      style: AppTypography.title.copyWith(
+                        color: p.ink,
+                        fontSize: 22,
+                      ),
                       onChanged: (value) =>
                           ref.read(dishProvider.notifier).setTitle(value),
                       decoration: InputDecoration(
@@ -182,24 +265,30 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
                         hintText: 'Название блюда',
-                        hintStyle:
-                            AppTypography.title.copyWith(color: p.inkMuted),
+                        hintStyle: AppTypography.title.copyWith(
+                          color: p.inkMuted,
+                          fontSize: 22,
+                        ),
                         contentPadding:
-                            const EdgeInsets.symmetric(vertical: Space.x1),
+                            const EdgeInsets.symmetric(vertical: 2),
                       ),
                     ),
                     const SizedBox(height: Space.x2),
-                    if (calc != null) ...[
+                    if (calc != null)
                       MacroSummaryBar(
                         key: ValueKey(dish.id),
                         result: calc,
                         hero: true,
                         ingredients: dish.ingredients,
-                      ),
-                      const SizedBox(height: Space.x3),
-                    ],
-                    _buildParameters(dish, calc),
-                    const SizedBox(height: Space.x4),
+                        heroFooter: _buildParameters(
+                          dish,
+                          calc,
+                          embedded: true,
+                        ),
+                      )
+                    else
+                      _buildParameters(dish, calc, embedded: false),
+                    const SizedBox(height: Space.x3),
                     Builder(
                       builder: (context) {
                         final rawNet = _safeGrams(() => dish.totalRawNetGrams);
@@ -241,6 +330,10 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                     .reorderIngredients(a, b),
                 itemBuilder: (context, index) {
                   final ing = dish.ingredients[index];
+                  final totalKcal = calc?.cookedKcal ?? 0;
+                  final share = totalKcal > 0
+                      ? (ing.blankKcalInDish / totalKcal).clamp(0.0, 1.0)
+                      : null;
                   return Dismissible(
                     key: ValueKey(ing.id),
                     direction: DismissDirection.endToStart,
@@ -249,7 +342,14 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                       padding: const EdgeInsets.all(Space.x6),
                       decoration: BoxDecoration(
                         color: p.dangerSoft,
-                        borderRadius: Radii.cardAll,
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(index == 0 ? Radii.card : 0),
+                          bottom: Radius.circular(
+                            index == dish.ingredients.length - 1
+                                ? Radii.card
+                                : 0,
+                          ),
+                        ),
                       ),
                       child: Icon(Icons.delete_outline, color: p.danger),
                     ),
@@ -258,6 +358,9 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                       index: index + 1,
                       ingredient: ing,
                       dragHandleIndex: index,
+                      isFirst: index == 0,
+                      isLast: index == dish.ingredients.length - 1,
+                      kcalShare: share,
                       lossLabel: dish.process.isLegacy
                           ? null
                           : lossLabelFor(ing, dish.process),
@@ -703,7 +806,11 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
     }
   }
 
-  Widget _buildParameters(Dish dish, CalculationResult? calc) {
+  Widget _buildParameters(
+    Dish dish,
+    CalculationResult? calc, {
+    bool embedded = false,
+  }) {
     final p = Palette.of(context);
     final legacy = dish.process.isLegacy;
     final custom = dish.customYieldGrams != null;
@@ -714,47 +821,40 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
     final effYield = _safeGrams(() => dish.effectiveYieldGrams);
     final explanation = YieldExplanation(rawNet, effYield);
 
-    return Container(
-      padding: const EdgeInsets.all(Space.x3),
-      decoration: BoxDecoration(
-        color: p.surface,
-        borderRadius: Radii.cardAll,
-        border: Border.all(color: p.borderStatic),
-        boxShadow: p.cardShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          InkWell(
-            key: const ValueKey('heat-process-row'),
-            onTap: () => _showRetentionSettingsDialog(context, dish),
-            borderRadius: Radii.fieldAll,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: kMinTapTarget),
-              child: Row(
-                children: [
-                  Icon(Icons.local_fire_department_outlined,
-                      size: 18, color: p.accent),
-                  const SizedBox(width: Space.x2),
-                  Expanded(
-                    child: Text(
-                      DishCategories.labelOf(dish.category) == null
-                          ? 'Обработка: ${dish.process.label}'
-                          : 'Обработка: ${dish.process.label} · ${DishCategories.labelOf(dish.category)}',
-                      style: AppTypography.bodySm.copyWith(
-                        color: p.ink,
-                        fontWeight: FontWeight.w500,
-                      ),
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InkWell(
+          key: const ValueKey('heat-process-row'),
+          onTap: () => _showRetentionSettingsDialog(context, dish),
+          borderRadius: Radii.fieldAll,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: kMinTapTarget),
+            child: Row(
+              children: [
+                Icon(Icons.local_fire_department_outlined,
+                    size: 18, color: p.accent),
+                const SizedBox(width: Space.x2),
+                Expanded(
+                  child: Text(
+                    DishCategories.labelOf(dish.category) == null
+                        ? 'Обработка: ${dish.process.label}'
+                        : 'Обработка: ${dish.process.label} · ${DishCategories.labelOf(dish.category)}',
+                    style: AppTypography.bodySm.copyWith(
+                      color: p.ink,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                  Icon(Icons.chevron_right_rounded,
-                      size: 18, color: p.inkMuted),
-                ],
-              ),
+                ),
+                Icon(Icons.chevron_right_rounded, size: 18, color: p.inkMuted),
+              ],
             ),
           ),
-          Divider(color: p.divider, height: Space.x2),
-          Text(
+        ),
+        Divider(color: p.divider, height: Space.x1),
+        Padding(
+          padding: const EdgeInsets.only(top: Space.x1),
+          child: Text(
             legacy || dish.hasCustomYield
                 ? 'Выход готового блюда: ${CalculationEngine.formatGrams(effYield)} г'
                 : 'Вес готового блюда не указан',
@@ -765,135 +865,143 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                   : FontWeight.w400,
             ),
           ),
-          if (legacy)
-            SwitchListTile.adaptive(
-              contentPadding: EdgeInsets.zero,
-              materialTapTargetSize: MaterialTapTargetSize.padded,
-              title: const Text('Задать фактический выход'),
-              subtitle: Text(
-                custom
-                    ? 'Ручной выход • нетто сырья ${CalculationEngine.formatGrams(rawNet)} г'
-                    : 'Автоматически: сумма нетто ингредиентов',
-                style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
-              ),
-              value: custom,
-              onChanged: (enabled) {
-                if (enabled && rawNet <= 0) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('Сначала добавьте ингредиенты')));
-                  return;
-                }
-                ref
-                    .read(dishProvider.notifier)
-                    .setCustomYield(enabled ? effYield : null);
-                _yieldCtrl.text = enabled
-                    ? CalculationEngine.formatGrams(effYield)
-                    : '';
-                setState(() => _yieldError = null);
-              },
+        ),
+        if (legacy)
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            materialTapTargetSize: MaterialTapTargetSize.padded,
+            title: const Text('Задать фактический выход'),
+            subtitle: Text(
+              custom
+                  ? 'Ручной выход • нетто сырья ${CalculationEngine.formatGrams(rawNet)} г'
+                  : 'Автоматически: сумма нетто ингредиентов',
+              style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
             ),
-          if (showYieldField) ...[
-            const SizedBox(height: Space.x2),
-            TextField(
-              key: const ValueKey('actual-yield'),
-              controller: _yieldCtrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: AppTypography.num.copyWith(color: p.ink),
-              decoration: InputDecoration(
-                labelText: legacy
-                    ? 'Фактический выход готового блюда'
-                    : 'Вес готового блюда',
-                hintText: legacy ? null : 'Взвесьте готовое блюдо',
-                helperText: (legacy || dish.hasCustomYield)
-                    ? null
-                    : 'Нужен для расчёта на 100 г и на порцию',
-                helperMaxLines: 2,
-                suffixText: 'г',
-                suffixIcon: IconButton(
-                  key: const ValueKey('yield-numpad-btn'),
-                  tooltip: 'Ввести на цифровой клавиатуре',
-                  icon: Icon(Icons.dialpad_rounded,
-                      size: 20, color: p.inkSecondary),
-                  onPressed: () => _openYieldNumpad(dish),
-                ),
-                errorMaxLines: 3,
-                errorText: _yieldError,
+            value: custom,
+            onChanged: (enabled) {
+              if (enabled && rawNet <= 0) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text('Сначала добавьте ингредиенты')));
+                return;
+              }
+              ref
+                  .read(dishProvider.notifier)
+                  .setCustomYield(enabled ? effYield : null);
+              _yieldCtrl.text = enabled
+                  ? CalculationEngine.formatGrams(effYield)
+                  : '';
+              setState(() => _yieldError = null);
+            },
+          ),
+        if (showYieldField) ...[
+          const SizedBox(height: Space.x2),
+          TextField(
+            key: const ValueKey('actual-yield'),
+            controller: _yieldCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: AppTypography.num.copyWith(color: p.ink),
+            decoration: InputDecoration(
+              labelText: legacy
+                  ? 'Фактический выход готового блюда'
+                  : 'Вес готового блюда',
+              hintText: legacy ? null : 'Взвесьте готовое блюдо',
+              helperText: (legacy || dish.hasCustomYield)
+                  ? null
+                  : 'Нужен для расчёта на 100 г и на порцию',
+              helperMaxLines: 2,
+              suffixText: 'г',
+              suffixIcon: IconButton(
+                key: const ValueKey('yield-numpad-btn'),
+                tooltip: 'Ввести на цифровой клавиатуре',
+                icon: Icon(Icons.dialpad_rounded,
+                    size: 20, color: p.inkSecondary),
+                onPressed: () => _openYieldNumpad(dish),
               ),
-              onChanged: _onYieldChanged,
+              errorMaxLines: 3,
+              errorText: _yieldError,
             ),
-          ],
-          if (calc != null &&
-              CalculationValidation.warnsImpossiblePer100g(calc)) ...[
-            const SizedBox(height: Space.x2),
-            YieldDensityWarning(
-              key: const ValueKey('yield-density-warning'),
-              result: calc,
+            onChanged: _onYieldChanged,
+          ),
+        ],
+        if (calc != null &&
+            CalculationValidation.warnsImpossiblePer100g(calc)) ...[
+          const SizedBox(height: Space.x2),
+          YieldDensityWarning(
+            key: const ValueKey('yield-density-warning'),
+            result: calc,
+          ),
+        ],
+        if (showYieldField && (legacy || rawNet > 0)) ...[
+          const SizedBox(height: Space.x1),
+          Divider(color: p.divider, height: 1),
+          InkWell(
+            key: const ValueKey('yield-explanation'),
+            onTap: () => setState(
+              () => _yieldDetailsExpanded = !_yieldDetailsExpanded,
             ),
-          ],
-          if (showYieldField && (legacy || rawNet > 0)) ...[
-            const SizedBox(height: Space.x2),
-            Divider(color: p.divider, height: 1),
-            InkWell(
-              key: const ValueKey('yield-explanation'),
-              onTap: () => setState(
-                () => _yieldDetailsExpanded = !_yieldDetailsExpanded,
-              ),
-              borderRadius: Radii.fieldAll,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: kMinTapTarget),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: Space.x2),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              explanation.badge,
-                              style: AppTypography.label.copyWith(color: p.ink),
-                            ),
+            borderRadius: Radii.fieldAll,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: kMinTapTarget),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: Space.x1),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            explanation.badge,
+                            style: AppTypography.label.copyWith(color: p.ink),
                           ),
-                          Icon(
-                            _yieldDetailsExpanded
-                                ? Icons.expand_less_rounded
-                                : Icons.expand_more_rounded,
-                            size: 18,
-                            color: p.inkMuted,
-                          ),
-                        ],
-                      ),
-                      if (_yieldDetailsExpanded) ...[
-                        const SizedBox(height: Space.x1),
-                        Text(
-                          explanation.description,
-                          style: AppTypography.bodySm
-                              .copyWith(color: p.inkSecondary),
+                        ),
+                        Icon(
+                          _yieldDetailsExpanded
+                              ? Icons.expand_less_rounded
+                              : Icons.expand_more_rounded,
+                          size: 18,
+                          color: p.inkMuted,
                         ),
                       ],
+                    ),
+                    if (_yieldDetailsExpanded) ...[
+                      const SizedBox(height: Space.x1),
+                      Text(
+                        explanation.description,
+                        style: AppTypography.bodySm
+                            .copyWith(color: p.inkSecondary),
+                      ),
                     ],
-                  ),
+                  ],
                 ),
               ),
             ),
-          ],
+          ),
         ],
-      ),
+      ],
+    );
+
+    if (embedded) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(
+            Space.x3 + 2, Space.x2, Space.x3 + 2, Space.x2),
+        child: body,
+      );
+    }
+
+    return GroupedSurface(
+      padding: const EdgeInsets.all(Space.x3),
+      child: body,
     );
   }
 
   Widget _buildEmptyState(BuildContext context) {
     final p = Palette.of(context);
-    return Container(
+    return GroupedSurface(
       padding: const EdgeInsets.symmetric(
         horizontal: Space.x5,
         vertical: Space.x6,
-      ),
-      decoration: BoxDecoration(
-        color: p.surface,
-        borderRadius: Radii.cardAll,
-        border: Border.all(color: p.borderStatic),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -903,7 +1011,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
             height: 52,
             decoration: BoxDecoration(
               color: p.accentSoft,
-              borderRadius: Radii.cardAll,
+              borderRadius: BorderRadius.circular(Radii.card),
             ),
             child: Icon(
               Icons.restaurant_menu_rounded,

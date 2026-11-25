@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 
-/// Типографическая шкала приложения «Поварская справка».
+/// Типографическая шкала «Прибор» приложения «Поварская справка».
 ///
-/// Интерфейс использует встроенный офлайн-шрифт `Inter` с табличными цифрами
-/// (`tabularFigures`) и выразительным диапазоном размеров (`12–34 sp`).
+/// Интерфейс использует встроенный офлайн-шрифт `Inter` (400–700) с табличными
+/// цифрами (`tabularFigures`) и выразительным диапазоном размеров (`12–42 sp`),
+/// а также встроенный `JetBrainsMono` (500–600) для формул, потерь и калибровочных
+/// индексов (`kicker`, `formulaMono`).
 /// Шрифт `Arial` сохранён только для печатного и экранного бланка (`instrumentFont`),
 /// где требуется точное совпадение с типовым документом.
 class AppTypography {
   /// Интерфейсный шрифт (`Inter`, встроен в APK для стабильного рендера).
   static const String? fontName = 'Inter';
+
+  /// Приборный моноширинный шрифт (`JetBrainsMono`, встроен в APK).
+  static const String monoFont = 'JetBrainsMono';
 
   /// Шрифт бланка: обязан совпадать с печатным типовым бланком.
   static const instrumentFont = 'Arial';
@@ -17,7 +22,25 @@ class AppTypography {
     FontFeature.tabularFigures(),
   ];
 
-  // ─── Дисплей: главное число экрана ──────────────────────────────────────
+  // ─── Дисплей и крупные заголовки ────────────────────────────────────────
+  static const TextStyle largeTitle = TextStyle(
+    fontFamily: fontName,
+    fontSize: 28,
+    height: 1.12,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.6,
+    fontFeatures: _tnum,
+  );
+
+  static const TextStyle heroKcal = TextStyle(
+    fontFamily: fontName,
+    fontSize: 40,
+    height: 1.04,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.9,
+    fontFeatures: _tnum,
+  );
+
   static const TextStyle display = TextStyle(
     fontFamily: fontName,
     fontSize: 30,
@@ -75,13 +98,13 @@ class AppTypography {
     letterSpacing: 0.05,
   );
 
-  // ─── Числа: всегда tabular figures ──────────────────────────────────────
+  // ─── Числа и моноширинные приборные стили ───────────────────────────────
   static const TextStyle numLg = TextStyle(
     fontFamily: fontName,
-    fontSize: 34,
+    fontSize: 42,
     height: 1.04,
     fontWeight: FontWeight.w700,
-    letterSpacing: -0.7,
+    letterSpacing: -0.9,
     fontFeatures: _tnum,
   );
 
@@ -97,6 +120,23 @@ class AppTypography {
     fontFamily: fontName,
     fontSize: 13,
     height: 1.3,
+    fontWeight: FontWeight.w500,
+    fontFeatures: _tnum,
+  );
+
+  static const TextStyle kicker = TextStyle(
+    fontFamily: monoFont,
+    fontSize: 11.5,
+    height: 1.25,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0.65,
+    fontFeatures: _tnum,
+  );
+
+  static const TextStyle formulaMono = TextStyle(
+    fontFamily: monoFont,
+    fontSize: 12.5,
+    height: 1.35,
     fontWeight: FontWeight.w500,
     fontFeatures: _tnum,
   );
