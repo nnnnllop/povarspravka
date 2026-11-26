@@ -191,7 +191,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     }
-    final add = find.text('Добавить в блюдо');
+    final add = find.text('Добавить');
     await tester.ensureVisible(add);
     await tester.tap(add);
     await tester.pumpAndSettle();

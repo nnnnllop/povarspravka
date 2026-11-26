@@ -617,7 +617,7 @@ void _assertNumpadStrictLayout(
   final confirmInk = find.descendant(
     of: sheetScope,
     matching: find.ancestor(
-      of: find.text('Добавить в блюдо'),
+      of: find.text('Добавить'),
       matching: find.byType(InkWell),
     ),
   );
@@ -708,7 +708,7 @@ void main() {
             );
             _assertNoMastersUi(tester, fullTag);
             _assertSingleLineAppBar(tester, vpSize, fullTag);
-            expect(find.text('Продолжить расчёт'), findsOneWidget,
+            expect(find.text('Продолжить'), findsOneWidget,
                 reason: '[$fullTag] non-empty draft card must be shown');
             _assertInteractiveControls(tester, vpSize, fullTag);
             _assertRegionBoundsAndNoOverlap(

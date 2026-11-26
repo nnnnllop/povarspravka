@@ -461,10 +461,14 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(favRepo.items.length, 1);
-      expect(find.byKey(const ValueKey('favorites-filter-pill')), findsOneWidget);
       expect(find.text('Избранное'), findsOneWidget);
 
+      await tester.tap(find.byKey(const ValueKey('search-filters-btn')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('favorites-filter-pill')), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('favorites-filter-pill')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Показать результаты'));
       await tester.pumpAndSettle();
       expect(find.text(favRepo.items.first.name), findsOneWidget);
     });
@@ -510,6 +514,15 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.byTooltip('Инспектор расчёта'));
+      await tester.pumpAndSettle();
+
+      final contribAcc = find.byKey(const ValueKey('inspector-acc-contrib'));
+      await tester.scrollUntilVisible(
+        contribAcc,
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.tap(contribAcc);
       await tester.pumpAndSettle();
 
       final section = find.byKey(const ValueKey('inspector-contribution-section'));

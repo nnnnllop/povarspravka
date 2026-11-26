@@ -89,7 +89,7 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
       if (va == null || vb == null) return p.inkMuted;
       final diff = vb - va;
       if (diff.abs() < 0.005) return p.inkSecondary;
-      return diff > 0 ? p.accent : p.ink;
+      return p.ink;
     }
 
     double? pickMetric(CalculationResult? r, double Function(CalculationResult) whole,
@@ -155,7 +155,7 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
               ),
               const SizedBox(height: 2),
               Text(
-                'Разница (Δ) показана для второго блюда относительно первого.',
+                'Разница показана для второго блюда относительно первого.',
                 style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
               ),
               const SizedBox(height: Space.x2),
@@ -251,10 +251,10 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
                           Expanded(
                             flex: 2,
                             child: Text(
-                              'Δ',
+                              'Разница',
                               textAlign: TextAlign.right,
                               style: AppTypography.caption.copyWith(
-                                color: p.accent,
+                                color: p.inkSecondary,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -336,37 +336,67 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
                   ],
                 ),
               ),
-              if (a != null && a.cookedKcal > 0) ...[
-                const SizedBox(height: Space.x4),
-                Text(
-                  nameA,
-                  style: AppTypography.label.copyWith(color: p.ink),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: Space.x2),
-                MacroBalanceBar(
-                  balance: MacroBalance.fromMacros(
-                    protein: a.cookedProtein,
-                    fat: a.cookedFat,
-                    carbs: a.cookedCarbs,
-                  ),
-                ),
-              ],
-              if (b != null && b.cookedKcal > 0) ...[
+              if ((a != null && a.cookedKcal > 0) ||
+                  (b != null && b.cookedKcal > 0)) ...[
                 const SizedBox(height: Space.x3),
-                Text(
-                  nameB,
-                  style: AppTypography.label.copyWith(color: p.ink),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: Space.x2),
-                MacroBalanceBar(
-                  balance: MacroBalance.fromMacros(
-                    protein: b.cookedProtein,
-                    fat: b.cookedFat,
-                    carbs: b.cookedCarbs,
+                GroupedSurface(
+                  padding: EdgeInsets.zero,
+                  child: ExpansionTile(
+                    key: const ValueKey('compare-macro-balance-tile'),
+                    shape: const Border(),
+                    collapsedShape: const Border(),
+                    title: Text(
+                      'Баланс Б / Ж / У',
+                      style: AppTypography.label.copyWith(color: p.ink),
+                    ),
+                    childrenPadding: const EdgeInsets.fromLTRB(
+                      Space.x3,
+                      0,
+                      Space.x3,
+                      Space.x3,
+                    ),
+                    children: [
+                      if (a != null && a.cookedKcal > 0) ...[
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            nameA,
+                            style: AppTypography.label.copyWith(color: p.ink),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(height: Space.x2),
+                        MacroBalanceBar(
+                          balance: MacroBalance.fromMacros(
+                            protein: a.cookedProtein,
+                            fat: a.cookedFat,
+                            carbs: a.cookedCarbs,
+                          ),
+                        ),
+                      ],
+                      if (b != null && b.cookedKcal > 0) ...[
+                        if (a != null && a.cookedKcal > 0)
+                          const SizedBox(height: Space.x3),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            nameB,
+                            style: AppTypography.label.copyWith(color: p.ink),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(height: Space.x2),
+                        MacroBalanceBar(
+                          balance: MacroBalance.fromMacros(
+                            protein: b.cookedProtein,
+                            fat: b.cookedFat,
+                            carbs: b.cookedCarbs,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ],

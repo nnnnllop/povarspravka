@@ -162,7 +162,7 @@ void main() {
       // 2. Expand the row (combo-pick).
       await tester.tap(find.text('Картофель').first);
       await tester.pumpAndSettle();
-      expect(find.text('Добавить в блюдо'), findsOneWidget);
+      expect(find.text('Добавить'), findsOneWidget);
 
       // 3. Inline waste-% edit inside CustomNumpadSheet: open, type, cancel.
       final editWaste = find.byKey(const ValueKey('waste-edit-toggle'));

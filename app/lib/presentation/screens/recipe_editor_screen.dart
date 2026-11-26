@@ -89,6 +89,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
   String? _yieldError;
   bool _yieldDetailsExpanded = false;
   bool _showCollapsedKcal = false;
+  bool _isReordering = false;
 
   @override
   Widget build(BuildContext context) {
@@ -280,45 +281,59 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                         result: calc,
                         hero: true,
                         ingredients: dish.ingredients,
-                        heroFooter: _buildParameters(
-                          dish,
-                          calc,
-                          embedded: true,
-                        ),
-                      )
-                    else
-                      _buildParameters(dish, calc, embedded: false),
-                    const SizedBox(height: Space.x3),
-                    Builder(
-                      builder: (context) {
-                        final rawNet = _safeGrams(() => dish.totalRawNetGrams);
-                        final effYield =
-                            _safeGrams(() => dish.effectiveYieldGrams);
-                        final summary = (dish.process.isLegacy ||
-                                    dish.hasCustomYield) &&
-                                effYield > 0
-                            ? 'Сырьё нетто ${CalculationEngine.formatGrams(rawNet)} г · выход ${CalculationEngine.formatGrams(effYield)} г'
-                            : 'Сырьё нетто ${CalculationEngine.formatGrams(rawNet)} г';
-                        return Wrap(
-                          alignment: WrapAlignment.spaceBetween,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          spacing: Space.x2,
-                          runSpacing: Space.x1,
+                      ),
+                    if (calc != null) const SizedBox(height: Space.x4),
+                    _buildParameters(dish, calc),
+                    const SizedBox(height: Space.x4),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            Text(
-                              'Ингредиенты · ${dish.ingredients.length}',
-                              style:
-                                  AppTypography.headline.copyWith(color: p.ink),
+                            Expanded(
+                              child: Text(
+                                'Ингредиенты · ${dish.ingredients.length}',
+                                style:
+                                    AppTypography.headline.copyWith(color: p.ink),
+                              ),
                             ),
-                            if (rawNet > 0)
-                              Text(
-                                summary,
-                                style: AppTypography.caption
-                                    .copyWith(color: p.inkMuted),
+                            if (dish.ingredients.length > 1)
+                              TextButton.icon(
+                                key: const ValueKey('toggle-reorder-btn'),
+                                onPressed: () {
+                                  AppHaptics.toggle();
+                                  setState(
+                                      () => _isReordering = !_isReordering);
+                                },
+                                style: TextButton.styleFrom(
+                                  minimumSize: const Size(0, kMinTapTarget),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: Space.x2),
+                                ),
+                                icon: Icon(
+                                  _isReordering
+                                      ? Icons.check_rounded
+                                      : Icons.reorder_rounded,
+                                  size: 18,
+                                ),
+                                label: Text(
+                                  _isReordering ? 'Готово' : 'Порядок',
+                                ),
                               ),
                           ],
-                        );
-                      },
+                        ),
+                        if (!dish.process.isLegacy &&
+                            dish.ingredients.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              'КБЖУ в строках указано до готовки (по нетто сырья)',
+                              style: AppTypography.caption
+                                  .copyWith(color: p.inkMuted),
+                            ),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: Space.x2),
                     if (dish.ingredients.isEmpty) _buildEmptyState(context),
@@ -330,10 +345,17 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                     .reorderIngredients(a, b),
                 itemBuilder: (context, index) {
                   final ing = dish.ingredients[index];
-                  final totalKcal = calc?.cookedKcal ?? 0;
-                  final share = totalKcal > 0
-                      ? (ing.blankKcalInDish / totalKcal).clamp(0.0, 1.0)
-                      : null;
+                  String? inlineLossLabel;
+                  if (!dish.process.isLegacy) {
+                    final proc = ing.processIn(dish.process);
+                    final loss = LossTable.lossFor(ing.lossGroup, proc);
+                    final isCustomOrUnverified = ing.groupOverride != null ||
+                        ing.processOverride != null ||
+                        !loss.isVerified;
+                    if (isCustomOrUnverified) {
+                      inlineLossLabel = lossLabelFor(ing, dish.process);
+                    }
+                  }
                   return Dismissible(
                     key: ValueKey(ing.id),
                     direction: DismissDirection.endToStart,
@@ -357,13 +379,10 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                     child: IngredientCard(
                       index: index + 1,
                       ingredient: ing,
-                      dragHandleIndex: index,
+                      dragHandleIndex: _isReordering ? index : null,
                       isFirst: index == 0,
                       isLast: index == dish.ingredients.length - 1,
-                      kcalShare: share,
-                      lossLabel: dish.process.isLegacy
-                          ? null
-                          : lossLabelFor(ing, dish.process),
+                      lossLabel: inlineLossLabel,
                       onLossTap: dish.process.isLegacy
                           ? null
                           : () => _editIngredientLoss(context, ing.id),
@@ -537,17 +556,6 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
     final needsSave = (isDirty || !isSavedInLibrary) && hasContent;
 
     return [
-      if (calc != null)
-        IconButton(
-          key: const ValueKey('editor-inspector-btn'),
-          icon: Icon(Icons.analytics_outlined, color: p.accent),
-          tooltip: 'Инспектор расчёта',
-          onPressed: () => MacroSummaryBar.showInspector(
-            context,
-            result: calc,
-            ingredients: dish.ingredients,
-          ),
-        ),
       IconButton(
         key: const ValueKey('save-recipe-btn'),
         icon: Icon(
@@ -557,15 +565,15 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
         tooltip: 'Сохранить в мои блюда',
         onPressed: hasContent ? _saveToLibrary : null,
       ),
-      IconButton(
-        icon: const Icon(Icons.tune_rounded),
-        tooltip: 'Параметры',
-        onPressed: () => _showRetentionSettingsDialog(context, dish),
-      ),
       PopupMenuButton<String>(
         tooltip: 'Другие действия',
         onSelected: (value) {
-          if (value == 'scale') {
+          if (value == 'params') {
+            _showRetentionSettingsDialog(context, dish);
+          } else if (value == 'reorder') {
+            AppHaptics.toggle();
+            setState(() => _isReordering = !_isReordering);
+          } else if (value == 'scale') {
             _openScaleDialog(dish);
           } else if (value == 'semi') {
             _saveAsSemiFinished(dish);
@@ -580,6 +588,17 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
           }
         },
         itemBuilder: (_) => [
+          const PopupMenuItem(
+            value: 'params',
+            child: Text('Параметры обработки и бланка'),
+          ),
+          if (dish.ingredients.length > 1)
+            PopupMenuItem(
+              value: 'reorder',
+              child: Text(_isReordering
+                  ? 'Закончить сортировку'
+                  : 'Изменить порядок ингредиентов'),
+            ),
           PopupMenuItem(
             value: 'scale',
             enabled: dish.ingredients.isNotEmpty,
@@ -808,9 +827,8 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
 
   Widget _buildParameters(
     Dish dish,
-    CalculationResult? calc, {
-    bool embedded = false,
-  }) {
+    CalculationResult? calc,
+  ) {
     final p = Palette.of(context);
     final legacy = dish.process.isLegacy;
     final custom = dish.customYieldGrams != null;
@@ -820,6 +838,34 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
     final rawNet = _safeGrams(() => dish.totalRawNetGrams);
     final effYield = _safeGrams(() => dish.effectiveYieldGrams);
     final explanation = YieldExplanation(rawNet, effYield);
+    final media = MediaQuery.sizeOf(context);
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final stackYieldRow = media.width < 340 || textScale > 1.35;
+    final catLabel = DishCategories.labelOf(dish.category);
+
+    final yieldInput = TextField(
+      key: const ValueKey('actual-yield'),
+      controller: _yieldCtrl,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      textAlign: stackYieldRow ? TextAlign.start : TextAlign.end,
+      style: AppTypography.num.copyWith(color: p.ink),
+      decoration: InputDecoration(
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: Space.x3,
+          vertical: 9,
+        ),
+        hintText: '—',
+        suffixText: ' г',
+        suffixIcon: IconButton(
+          key: const ValueKey('yield-numpad-btn'),
+          tooltip: 'Ввести на цифровой клавиатуре',
+          icon: Icon(Icons.dialpad_rounded, size: 19, color: p.inkSecondary),
+          onPressed: () => _openYieldNumpad(dish),
+        ),
+      ),
+      onChanged: _onYieldChanged,
+    );
 
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -830,50 +876,50 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
           borderRadius: Radii.fieldAll,
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: kMinTapTarget),
-            child: Row(
-              children: [
-                Icon(Icons.local_fire_department_outlined,
-                    size: 18, color: p.accent),
-                const SizedBox(width: Space.x2),
-                Expanded(
-                  child: Text(
-                    DishCategories.labelOf(dish.category) == null
-                        ? 'Обработка: ${dish.process.label}'
-                        : 'Обработка: ${dish.process.label} · ${DishCategories.labelOf(dish.category)}',
-                    style: AppTypography.bodySm.copyWith(
-                      color: p.ink,
-                      fontWeight: FontWeight.w500,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                children: [
+                  Icon(Icons.local_fire_department_outlined,
+                      size: 18, color: p.accent),
+                  const SizedBox(width: Space.x2),
+                  Expanded(
+                    child: Text(
+                      catLabel == null
+                          ? 'Обработка: ${dish.process.label}'
+                          : 'Обработка: ${dish.process.label} · $catLabel',
+                      style: AppTypography.bodySm.copyWith(
+                        color: p.ink,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
+                  Icon(Icons.chevron_right_rounded, size: 18, color: p.inkMuted),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Divider(color: p.divider, height: Space.x2),
+        if (legacy) ...[
+          if (!custom)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: Space.x1),
+              child: Text(
+                'Выход готового блюда: ${CalculationEngine.formatGrams(effYield)} г',
+                style: AppTypography.bodySm.copyWith(
+                  color: p.inkSecondary,
+                  fontWeight: FontWeight.w600,
                 ),
-                Icon(Icons.chevron_right_rounded, size: 18, color: p.inkMuted),
-              ],
+              ),
             ),
-          ),
-        ),
-        Divider(color: p.divider, height: Space.x1),
-        Padding(
-          padding: const EdgeInsets.only(top: Space.x1),
-          child: Text(
-            legacy || dish.hasCustomYield
-                ? 'Выход готового блюда: ${CalculationEngine.formatGrams(effYield)} г'
-                : 'Вес готового блюда не указан',
-            style: AppTypography.bodySm.copyWith(
-              color: p.inkSecondary,
-              fontWeight: (legacy || dish.hasCustomYield)
-                  ? FontWeight.w600
-                  : FontWeight.w400,
-            ),
-          ),
-        ),
-        if (legacy)
           SwitchListTile.adaptive(
             contentPadding: EdgeInsets.zero,
             materialTapTargetSize: MaterialTapTargetSize.padded,
             title: const Text('Задать фактический выход'),
             subtitle: Text(
               custom
-                  ? 'Ручной выход • нетто сырья ${CalculationEngine.formatGrams(rawNet)} г'
+                  ? 'Ручной выход · нетто сырья ${CalculationEngine.formatGrams(rawNet)} г'
                   : 'Автоматически: сумма нетто ингредиентов',
               style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
             ),
@@ -893,51 +939,80 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
               setState(() => _yieldError = null);
             },
           ),
+        ],
         if (showYieldField) ...[
-          const SizedBox(height: Space.x1 + 2),
-          TextField(
-            key: const ValueKey('actual-yield'),
-            controller: _yieldCtrl,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: AppTypography.num.copyWith(color: p.ink),
-            decoration: InputDecoration(
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: Space.x3,
-                vertical: 9,
-              ),
-              labelText: legacy
-                  ? 'Фактический выход готового блюда'
-                  : 'Вес готового блюда',
-              hintText: legacy ? null : 'Взвесьте готовое блюдо',
-              helperText: (legacy || dish.hasCustomYield)
-                  ? null
-                  : 'Нужен для расчёта на 100 г и на порцию',
-              helperMaxLines: 2,
-              suffixText: 'г',
-              suffixIcon: IconButton(
-                key: const ValueKey('yield-numpad-btn'),
-                tooltip: 'Ввести на цифровой клавиатуре',
-                icon: Icon(Icons.dialpad_rounded,
-                    size: 19, color: p.inkSecondary),
-                onPressed: () => _openYieldNumpad(dish),
-              ),
-              errorMaxLines: 3,
-              errorText: _yieldError,
-            ),
-            onChanged: _onYieldChanged,
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: Space.x1),
+            child: stackYieldRow
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        legacy ? 'Фактический выход' : 'Вес готового блюда',
+                        style: AppTypography.bodySm.copyWith(
+                          color: p.ink,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: Space.x1),
+                      yieldInput,
+                    ],
+                  )
+                : Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              legacy
+                                  ? 'Фактический выход'
+                                  : 'Вес готового блюда',
+                              style: AppTypography.bodySm.copyWith(
+                                color: p.ink,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (!legacy && rawNet > 0)
+                              Text(
+                                'Сырьё нетто ${CalculationEngine.formatGrams(rawNet)} г',
+                                style: AppTypography.caption
+                                    .copyWith(color: p.inkMuted),
+                              )
+                            else if (!legacy && !dish.hasCustomYield)
+                              Text(
+                                'Для расчёта на 100 г и на порцию',
+                                style: AppTypography.caption
+                                    .copyWith(color: p.inkMuted),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: Space.x2),
+                      SizedBox(width: 148, child: yieldInput),
+                    ],
+                  ),
           ),
+          if (_yieldError != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 2, bottom: Space.x1),
+              child: Text(
+                _yieldError!,
+                style: AppTypography.caption.copyWith(color: p.danger),
+              ),
+            ),
         ],
         if (calc != null &&
             CalculationValidation.warnsImpossiblePer100g(calc)) ...[
-          const SizedBox(height: Space.x1 + 2),
+          const SizedBox(height: Space.x1),
           YieldDensityWarning(
             key: const ValueKey('yield-density-warning'),
             result: calc,
           ),
         ],
         if (showYieldField && (legacy || rawNet > 0)) ...[
-          const SizedBox(height: 2),
+          const SizedBox(height: Space.x1),
           Divider(color: p.divider, height: 1),
           InkWell(
             key: const ValueKey('yield-explanation'),
@@ -986,13 +1061,6 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
         ],
       ],
     );
-
-    if (embedded) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(14, 4, 14, 6),
-        child: body,
-      );
-    }
 
     return GroupedSurface(
       padding: const EdgeInsets.all(Space.x3),
@@ -1112,6 +1180,12 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                 isGross: isGross,
               );
         },
+        onEditLoss: ref.read(dishProvider).process.isLegacy
+            ? null
+            : () {
+                Navigator.pop(context);
+                _editIngredientLoss(context, ing.id);
+              },
         onReplaceProduct: () => _replaceIngredientProduct(ing),
         onDelete: () => _removeIngredient(ing, index),
       ),

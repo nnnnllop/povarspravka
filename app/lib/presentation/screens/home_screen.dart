@@ -19,9 +19,7 @@ import '../widgets/batch_export_sheet.dart';
 import '../widgets/dish_comparison_sheet.dart';
 import '../widgets/instrument_widgets.dart';
 import '../widgets/loss_clarity_hints.dart';
-import '../widgets/macro_balance_bar.dart';
 import '../widgets/menu_builder_sheet.dart';
-import '../../core/calculation/macro_balance.dart';
 import '../widgets/persistence_error_banner.dart';
 import '../widgets/share_recipe_sheet.dart';
 import 'recipe_editor_screen.dart';
@@ -37,7 +35,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 enum _LibrarySort {
-  newest('Сначала новые'),
+  newest('Недавно изменённые'),
   title('По названию (А–Я)'),
   kcalPer100g('По ккал на 100 г');
 
@@ -51,21 +49,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   String _libraryQuery = '';
   String? _selectedCategory;
   _LibrarySort _librarySort = _LibrarySort.newest;
+  bool _selectionMode = false;
   final Set<String> _selectedDishIds = <String>{};
 
   void _toggleDishSelection(String dishId) {
     AppHaptics.toggle();
     setState(() {
+      _selectionMode = true;
       if (!_selectedDishIds.add(dishId)) {
         _selectedDishIds.remove(dishId);
       }
     });
   }
 
+  void _enterSelectionMode() {
+    AppHaptics.toggle();
+    setState(() {
+      _selectionMode = true;
+      _selectedDishIds.clear();
+    });
+  }
+
   void _startSelection(String dishId) {
     AppHaptics.toggle();
     setState(() {
+      _selectionMode = true;
       _selectedDishIds.add(dishId);
+    });
+  }
+
+  void _exitSelectionMode() {
+    setState(() {
+      _selectionMode = false;
+      _selectedDishIds.clear();
     });
   }
 
@@ -155,7 +171,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       for (final d in savedDishes)
         if (_selectedDishIds.contains(d.id)) d,
     ];
-    final isSelecting = selectedDishes.isNotEmpty;
+    final isSelecting = _selectionMode || selectedDishes.isNotEmpty;
     final visibleIds = {for (final d in filteredDishes) d.id};
     final allVisibleSelected = visibleIds.isNotEmpty &&
         visibleIds.every(_selectedDishIds.contains);
@@ -172,12 +188,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 key: const ValueKey('selection-close-btn'),
                 tooltip: 'Отменить выбор',
                 icon: Icon(Icons.close_rounded, color: p.ink),
-                onPressed: () => setState(_selectedDishIds.clear),
+                onPressed: _exitSelectionMode,
               ),
               title: Text(
                 'Выбрано: ${selectedDishes.length}',
                 style: AppTypography.headline.copyWith(
-                  color: p.accent,
+                  color: p.ink,
                   fontWeight: FontWeight.w700,
                 ),
                 overflow: TextOverflow.ellipsis,
@@ -229,12 +245,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     key: const ValueKey('home-select-mode-btn'),
                     tooltip: 'Выбрать блюда',
                     icon: Icon(Icons.checklist_rounded, color: p.inkSecondary),
-                    onPressed: () {
-                      final target = filteredDishes.isNotEmpty
-                          ? filteredDishes.first.id
-                          : savedDishes.first.id;
-                      _startSelection(target);
-                    },
+                    onPressed: _enterSelectionMode,
                   ),
                 IconButton(
                   tooltip: 'Как считается',
@@ -491,14 +502,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         second: selectedDishes[1],
                       )
                   : null,
-              onMenu: () => MenuBuilderSheet.show(
-                context,
-                dishes: selectedDishes,
-              ),
-              onExport: () => BatchExportSheet.show(
-                context,
-                dishes: selectedDishes,
-              ),
+              onMenu: selectedDishes.isNotEmpty
+                  ? () => MenuBuilderSheet.show(
+                        context,
+                        dishes: selectedDishes,
+                      )
+                  : null,
+              onExport: selectedDishes.isNotEmpty
+                  ? () => BatchExportSheet.show(
+                        context,
+                        dishes: selectedDishes,
+                      )
+                  : null,
             )
           : _HomeDock(
               onNewCalculation: () => _newCalculation(context, ref),
@@ -1477,41 +1492,26 @@ class _ActiveDraftCard extends StatelessWidget {
           children: [
             SizedBox(
               width: double.infinity,
-              child: Wrap(
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: Space.x2,
-                runSpacing: Space.x1,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SignalDot(
-                        size: 6,
-                        color: hasDraft ? p.signal : p.slabSecondary,
+                  Expanded(
+                    child: Text(
+                      hasDraft ? 'Открытый расчёт' : 'Новый расчёт',
+                      style: AppTypography.caption.copyWith(
+                        color: p.slabSecondary,
+                        fontWeight: FontWeight.w600,
                       ),
-                      const SizedBox(width: Space.x2),
-                      Flexible(
-                        child: Text(
-                          hasDraft ? 'Открытый расчёт' : 'Новый расчёт',
-                          style: AppTypography.caption.copyWith(
-                            color: p.slabSecondary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Flexible(
-                        child: Text(
-                          hasDraft ? 'Продолжить расчёт' : 'Новый расчёт',
-                          style: AppTypography.caption.copyWith(
-                            color: p.slabInk,
-                            fontWeight: FontWeight.w600,
-                          ),
+                      Text(
+                        hasDraft ? 'Продолжить' : 'Открыть',
+                        style: AppTypography.caption.copyWith(
+                          color: p.slabInk,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       const SizedBox(width: 4),
@@ -1537,7 +1537,7 @@ class _ActiveDraftCard extends StatelessWidget {
             ),
             if (hasIngredients) ...[
               SizedBox(height: compactDraft ? 4 : 6),
-              if (calc != null) ...[
+              if (calc != null)
                 Wrap(
                   spacing: Space.x2,
                   runSpacing: 2,
@@ -1545,8 +1545,8 @@ class _ActiveDraftCard extends StatelessWidget {
                   children: [
                     Text(
                       calc.hasYield
-                          ? '${CalculationEngine.formatKcal(calc.per100gKcal)} ккал/100 г'
-                          : '${CalculationEngine.formatKcal(calc.cookedKcal)} ккал',
+                          ? '${CalculationEngine.formatKcal(calc.per100gKcal)} ккал / 100 г'
+                          : '${CalculationEngine.formatKcal(calc.cookedKcal)} ккал всего',
                       style: AppTypography.headline.copyWith(
                         color: p.slabInk,
                         fontWeight: FontWeight.w700,
@@ -1559,21 +1559,8 @@ class _ActiveDraftCard extends StatelessWidget {
                           .copyWith(color: p.slabSecondary),
                     ),
                   ],
-                ),
-                if (calc.cookedKcal > 0 && !compactDraft) ...[
-                  const SizedBox(height: 6),
-                  MacroBalanceBar(
-                    balance: MacroBalance.fromMacros(
-                      protein: calc.cookedProtein,
-                      fat: calc.cookedFat,
-                      carbs: calc.cookedCarbs,
-                    ),
-                    barOnly: true,
-                    barHeight: 3.5,
-                    onDarkSlab: true,
-                  ),
-                ],
-              ] else
+                )
+              else
                 Text(
                   '${pluralIngredients(dish.ingredients.length)} · выход — г · — ккал',
                   style: AppTypography.numSm.copyWith(color: p.slabSecondary),
@@ -1723,199 +1710,151 @@ class _SavedDishCard extends ConsumerWidget {
     final textScale = MediaQuery.textScalerOf(context).scale(1.0);
     final showRightKcal =
         calc != null && media.width >= 340 && textScale <= 1.35;
-    final bal = (calc != null && calc.cookedKcal > 0)
-        ? MacroBalance.fromMacros(
-            protein: calc.cookedProtein,
-            fat: calc.cookedFat,
-            carbs: calc.cookedCarbs,
-          )
-        : null;
 
     final rowRadius = BorderRadius.vertical(
       top: Radius.circular(isFirst ? Radii.card : 0),
       bottom: Radius.circular(isLast ? Radii.card : 0),
     );
+    final prefixParts = <String>[
+      if (categoryLabel != null) categoryLabel,
+      pluralIngredients(dish.ingredients.length),
+    ].join(' · ');
 
-    return TactilePress(
-      child: Container(
-        margin: EdgeInsets.only(bottom: isLast ? Space.x2 : 0),
-        decoration: BoxDecoration(
-          color: isSelected ? p.accentSoft : p.surface,
-          borderRadius: rowRadius,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onLongPress: isSelecting ? onToggleSelect : onStartSelect,
-            onTap: () async {
-              if (isSelecting) {
-                onToggleSelect?.call();
-                return;
-              }
-              final notifier = ref.read(dishProvider.notifier);
-              if (notifier.isDirty) {
-                final ok = await _confirmReplaceDirtyDraft(context, ref);
-                if (!ok || !context.mounted) return;
-              }
-              notifier.loadDish(dish);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const RecipeEditorScreen()),
-              );
-            },
-            child: Stack(
-              children: [
-                if (isSelected)
-                  Positioned(
-                    left: 0,
-                    top: 6,
-                    bottom: 6,
-                    width: 3,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: p.accent,
-                        borderRadius: const BorderRadius.horizontal(
-                          right: Radius.circular(3),
-                        ),
-                      ),
+    return Semantics(
+      selected: isSelected,
+      child: TactilePress(
+        child: Container(
+          margin: EdgeInsets.only(bottom: isLast ? Space.x2 : 0),
+          decoration: BoxDecoration(
+            color: isSelected ? p.accentSoft : p.surface,
+            borderRadius: rowRadius,
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onLongPress: isSelecting ? onToggleSelect : onStartSelect,
+              onTap: () async {
+                if (isSelecting) {
+                  onToggleSelect?.call();
+                  return;
+                }
+                final notifier = ref.read(dishProvider.notifier);
+                if (notifier.isDirty) {
+                  final ok = await _confirmReplaceDirtyDraft(context, ref);
+                  if (!ok || !context.mounted) return;
+                }
+                notifier.loadDish(dish);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const RecipeEditorScreen()),
+                );
+              },
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      Space.x3 + 2,
+                      10,
+                      isSelecting ? Space.x3 : Space.x1,
+                      10,
                     ),
-                  ),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        isSelecting ? Space.x3 : Space.x3 + 2,
-                        9,
-                        isSelecting ? Space.x3 + 2 : Space.x1,
-                        9,
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          if (isSelecting) ...[
-                            Container(
-                              width: 22,
-                              height: 22,
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? p.accent
-                                    : Colors.transparent,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: isSelected ? p.accent : p.border,
-                                  width: 1.5,
-                                ),
-                              ),
-                              child: isSelected
-                                  ? Icon(
-                                      Icons.check_rounded,
-                                      size: 14,
-                                      color: p.onAccent,
-                                    )
-                                  : null,
-                            ),
-                            const SizedBox(width: Space.x3),
-                          ],
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          if (categoryLabel != null) ...[
-                                            Text(
-                                              categoryLabel.toUpperCase(),
-                                              style: AppTypography.kicker
-                                                  .copyWith(
-                                                color: p.accent,
-                                                fontSize: 10.5,
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                            const SizedBox(height: 1),
-                                          ],
-                                          Text(
-                                            title,
-                                            style: AppTypography.headline
-                                                .copyWith(color: p.ink),
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ],
-                                      ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      title,
+                                      style: AppTypography.headline
+                                          .copyWith(color: p.ink),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                    if (showRightKcal) ...[
-                                      const SizedBox(width: Space.x2),
-                                      Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.end,
-                                        children: [
-                                          Text(
-                                            CalculationEngine.formatKcal(
-                                              calc.hasYield
-                                                  ? calc.per100gKcal
-                                                  : calc.cookedKcal,
-                                            ),
-                                            style: AppTypography.headline
-                                                .copyWith(
-                                              color: p.ink,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                          Text(
-                                            calc.hasYield
-                                                ? 'ккал/100 г'
-                                                : 'ккал',
-                                            style:
-                                                AppTypography.caption.copyWith(
-                                              color: p.inkMuted,
-                                              fontSize: 10.5,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                                if (bal != null) ...[
-                                  const SizedBox(height: Space.x1),
-                                  MacroBalanceBar(
-                                    balance: bal,
-                                    barOnly: true,
-                                    barHeight: 3,
                                   ),
+                                  if (showRightKcal) ...[
+                                    const SizedBox(width: Space.x2),
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
+                                      children: [
+                                        Text(
+                                          CalculationEngine.formatKcal(
+                                            calc.hasYield
+                                                ? calc.per100gKcal
+                                                : calc.cookedKcal,
+                                          ),
+                                          style:
+                                              AppTypography.headline.copyWith(
+                                            color: p.ink,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        Text(
+                                          calc.hasYield
+                                              ? 'ккал / 100 г'
+                                              : 'ккал всего',
+                                          style: AppTypography.caption.copyWith(
+                                            color: p.inkMuted,
+                                            fontSize: 10.5,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                 ],
-                                const SizedBox(height: Space.x1),
-                                Text(
-                                  calc == null
-                                      ? '${pluralIngredients(dish.ingredients.length)} · выход — г · — ккал'
-                                      : showRightKcal
-                                          ? '${pluralIngredients(dish.ingredients.length)} · '
-                                              '${calc.usesLossTable && !calc.hasYield ? 'вес готового блюда не указан' : 'выход ${CalculationEngine.formatGrams(calc.yieldGrams)} г'} · '
-                                              'Б ${CalculationEngine.formatMacro(calc.hasYield ? calc.per100gProtein : calc.cookedProtein)} · '
-                                              'Ж ${CalculationEngine.formatMacro(calc.hasYield ? calc.per100gFat : calc.cookedFat)} · '
-                                              'У ${CalculationEngine.formatMacro(calc.hasYield ? calc.per100gCarbs : calc.cookedCarbs)}'
-                                          : '${pluralIngredients(dish.ingredients.length)} · '
-                                              '${calc.usesLossTable && !calc.hasYield ? 'вес не указан' : '${CalculationEngine.formatGrams(calc.yieldGrams)} г'} · '
-                                              '${CalculationEngine.formatKcal(calc.hasYield ? calc.per100gKcal : calc.cookedKcal)} '
-                                              '${calc.hasYield ? 'ккал/100 г' : 'ккал'}',
-                                  style: AppTypography.numSm
-                                      .copyWith(color: p.inkSecondary),
-                                ),
-                              ],
-                            ),
+                              ),
+                              const SizedBox(height: Space.x1),
+                              Text(
+                                calc == null
+                                    ? '$prefixParts · выход — г · — ккал'
+                                    : showRightKcal
+                                        ? '$prefixParts · '
+                                            '${calc.usesLossTable && !calc.hasYield ? 'вес не указан' : '${CalculationEngine.formatGrams(calc.yieldGrams)} г'} · '
+                                            'Б ${CalculationEngine.formatMacro(calc.hasYield ? calc.per100gProtein : calc.cookedProtein)} · '
+                                            'Ж ${CalculationEngine.formatMacro(calc.hasYield ? calc.per100gFat : calc.cookedFat)} · '
+                                            'У ${CalculationEngine.formatMacro(calc.hasYield ? calc.per100gCarbs : calc.cookedCarbs)}'
+                                        : '$prefixParts · '
+                                            '${calc.usesLossTable && !calc.hasYield ? 'вес не указан' : '${CalculationEngine.formatGrams(calc.yieldGrams)} г'} · '
+                                            '${CalculationEngine.formatKcal(calc.hasYield ? calc.per100gKcal : calc.cookedKcal)} '
+                                            '${calc.hasYield ? 'ккал / 100 г' : 'ккал всего'}',
+                                style: AppTypography.numSm
+                                    .copyWith(color: p.inkSecondary),
+                              ),
+                            ],
                           ),
-                          if (!isSelecting)
-                            PopupMenuButton<String>(
+                        ),
+                        if (isSelecting) ...[
+                          const SizedBox(width: Space.x2),
+                          Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color:
+                                  isSelected ? p.accent : Colors.transparent,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isSelected ? p.accent : p.border,
+                                width: 1.5,
+                              ),
+                            ),
+                            child: isSelected
+                                ? Icon(
+                                    Icons.check_rounded,
+                                    size: 15,
+                                    color: p.onAccent,
+                                  )
+                                : null,
+                          ),
+                        ] else
+                          PopupMenuButton<String>(
                               tooltip: 'Действия с блюдом',
                               icon: Icon(Icons.more_vert_rounded,
                                   color: p.inkMuted),
@@ -2067,16 +2006,13 @@ class _SavedDishCard extends ConsumerWidget {
                     if (!isLast)
                       Container(
                         height: 1,
-                        margin: EdgeInsets.only(
-                          left: isSelecting ? Space.x3 : Space.x3 + 2,
-                        ),
+                        margin: const EdgeInsets.only(left: Space.x3 + 2),
                         color: isSelected
                             ? p.accent.withOpacity(0.18)
                             : p.divider,
                       ),
                   ],
                 ),
-              ],
             ),
           ),
         ),
@@ -2137,8 +2073,8 @@ Future<String?> _pickDishCategory(BuildContext context, Dish dish) {
 class _SelectionDock extends StatelessWidget {
   final int selectedCount;
   final VoidCallback? onCompare;
-  final VoidCallback onMenu;
-  final VoidCallback onExport;
+  final VoidCallback? onMenu;
+  final VoidCallback? onExport;
 
   const _SelectionDock({
     required this.selectedCount,
@@ -2156,6 +2092,7 @@ class _SelectionDock extends StatelessWidget {
     final compactDock = (width < 360 && textScale > 1.35) || size.height < 640;
 
     final String hint = switch (selectedCount) {
+      0 => 'Выберите блюда из списка',
       1 => 'Выберите ещё 1 блюдо для сравнения или соберите меню',
       2 => 'Можно сравнить 2 блюда, собрать меню или выгрузить',
       _ => 'Соберите меню или выгрузите сборник бланков',
@@ -2202,14 +2139,17 @@ class _SelectionDock extends StatelessWidget {
                     children: [
                       Icon(icon, size: 19, color: fg),
                       const SizedBox(height: 2),
-                      Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: AppTypography.caption.copyWith(
-                          color: fg,
-                          fontWeight: FontWeight.w600,
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          softWrap: false,
+                          textAlign: TextAlign.center,
+                          style: AppTypography.caption.copyWith(
+                            color: fg,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],

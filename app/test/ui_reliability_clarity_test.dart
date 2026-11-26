@@ -555,8 +555,8 @@ void main() {
       find.byKey(const ValueKey('inspector-yield-density-warning')),
       findsOneWidget,
     );
-    await tester.ensureVisible(find.text('Понятно'));
-    await tester.tap(find.text('Понятно'));
+    await tester.ensureVisible(find.text('Закрыть'));
+    await tester.tap(find.text('Закрыть'));
     await tester.pumpAndSettle();
 
     // Non-compact MacroSummaryBar renders portion-stage warning as well.
@@ -618,7 +618,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // 1. Process dialog dynamic hints
-    await tester.tap(find.byTooltip('Параметры'));
+    await tester.tap(find.byKey(const ValueKey('heat-process-row')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('process-clarity-hint')), findsNothing);
 
@@ -644,9 +644,9 @@ void main() {
     await tester.tap(find.text('Применить'));
     await tester.pumpAndSettle();
 
-    // 2. Ingredient loss dialog hints (vegetable + boil)
+    // 2. Ingredient loss dialog hints (tap ingredient -> numpad-edit-loss)
     await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('loss-ing-veg')),
+      find.text('Морковь'),
       200,
       scrollable: find
           .descendant(
@@ -656,7 +656,9 @@ void main() {
           .first,
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('loss-ing-veg')));
+    await tester.tap(find.text('Морковь'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('numpad-edit-loss')));
     await tester.pumpAndSettle();
 
     expect(
@@ -674,12 +676,19 @@ void main() {
         .setIngredientProcess('ing-oil', HeatProcess.fry);
     await tester.pumpAndSettle();
 
+    await tester.drag(find.byType(ReorderableListView), const Offset(0, 600));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byTooltip('Инспектор расчёта'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Инспектор расчёта'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('inspector-loss-clarity-hints')),
-      200,
+      120,
       scrollable: find.byType(Scrollable).last,
+    );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('inspector-loss-clarity-hints')),
     );
     expect(
       find.byKey(const ValueKey('inspector-loss-clarity-hints')),

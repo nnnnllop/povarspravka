@@ -219,7 +219,7 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Продолжить расчёт'));
+      await tester.tap(find.text('Продолжить'));
       await tester.pumpAndSettle();
       expect(find.byType(RecipeEditorScreen), findsOneWidget);
 

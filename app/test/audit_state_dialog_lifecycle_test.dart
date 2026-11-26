@@ -166,7 +166,7 @@ void main() {
       expect(find.byKey(const ValueKey('waste-edit-cancel')), findsNothing);
       expect(tester.takeException(), isNull,
           reason: 'inline waste edit cancels cleanly without controller errors');
-      await tester.tap(find.text('Добавить в блюдо'));
+      await tester.tap(find.text('Добавить'));
       await tester.pump();
       expect(confirmed, 200.0);
       expect(tester.takeException(), isNull);
@@ -211,7 +211,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('40 %'), findsWidgets);
 
-      final add = find.text('Добавить в блюдо');
+      final add = find.text('Добавить');
       await tester.ensureVisible(add);
       await tester.pumpAndSettle();
       await tester.tap(add);
@@ -267,7 +267,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(updated, isNull,
           reason: 'the new % is only handed over at CONFIRM time');
-      final confirm = find.text('Сохранить изменения');
+      final confirm = find.text('Сохранить');
       await tester.ensureVisible(confirm);
       await tester.pumpAndSettle();
       await tester.tap(confirm);
@@ -316,8 +316,8 @@ void main() {
           .widget<AnimatedSwitcher>(find.byType(AnimatedSwitcher).first)
           .child as Text;
       expect(readout.data, '200');
-      await tester.ensureVisible(find.text('Добавить в блюдо'));
-      await tester.tap(find.text('Добавить в блюдо'));
+      await tester.ensureVisible(find.text('Добавить'));
+      await tester.tap(find.text('Добавить'));
       await tester.pump();
       expect(confirmed, 200.0);
     });

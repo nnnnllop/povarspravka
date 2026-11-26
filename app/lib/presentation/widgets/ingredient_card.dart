@@ -82,15 +82,10 @@ class IngredientCard extends StatelessWidget {
     final p = Palette.of(context);
     final ing = ingredient;
 
-    final indexLabel = '${index < 10 ? '0$index' : '$index'}.';
-    // MATH-04: при больших отходах печатаем больше знаков, иначе обратный
-    // пересчёт брутто теряет десятки граммов.
-    // Сохранённый документ может содержать отход 100 % — тогда нетто не
-    // вычисляется; карточка показывает «—», а не роняет экран.
     final netGramsStr = _orDash(() => CalculationEngine.formatNetGrams(
         ing.netGramsRounded, ing.product.wastePct));
     final grossGramsStr = CalculationEngine.formatGrams(ing.weightGrams);
-    final showGross = ing.product.wastePct > 0;
+    final showGross = ing.isGross && ing.product.wastePct > 0;
     final cleanLossLabel =
         lossLabel?.replaceFirst(RegExp(r'^Потери:\s*'), '').trim();
 
@@ -99,8 +94,8 @@ class IngredientCard extends StatelessWidget {
     final inlineWeightReadout = media.width >= 360 && textScale <= 1.2;
 
     final weightReadout = Text(
-      '$netGramsStr г',
-      style: AppTypography.num.copyWith(
+      'Нетто $netGramsStr г',
+      style: AppTypography.numSm.copyWith(
         color: p.ink,
         fontWeight: FontWeight.w700,
       ),
@@ -110,10 +105,6 @@ class IngredientCard extends StatelessWidget {
       top: Radius.circular(isFirst ? Radii.card : 0),
       bottom: Radius.circular(isLast ? Radii.card : 0),
     );
-
-    final share = kcalShare != null && kcalShare! > 0.01
-        ? kcalShare!.clamp(0.02, 1.0)
-        : null;
 
     return Semantics(
       customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
@@ -136,9 +127,9 @@ class IngredientCard extends StatelessWidget {
                 Padding(
                   padding: EdgeInsets.fromLTRB(
                     Space.x3,
-                    Space.x2,
+                    Space.x2 + 2,
                     dragHandleIndex != null ? Space.x1 : Space.x3,
-                    cleanLossLabel != null ? 2 : Space.x2,
+                    cleanLossLabel != null ? Space.x1 : Space.x2 + 2,
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -147,31 +138,14 @@ class IngredientCard extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.baseline,
-                              textBaseline: TextBaseline.alphabetic,
-                              children: [
-                                SizedBox(
-                                  width: 22,
-                                  child: Text(
-                                    indexLabel,
-                                    style: AppTypography.kicker.copyWith(
-                                      color: p.inkMuted,
-                                    ),
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Text(
-                                    ing.product.name,
-                                    style: AppTypography.body.copyWith(
-                                      color: p.ink,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
+                            Text(
+                              ing.product.name,
+                              style: AppTypography.body.copyWith(
+                                color: p.ink,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             if (!inlineWeightReadout) ...[
                               const SizedBox(height: Space.x1),
@@ -180,7 +154,7 @@ class IngredientCard extends StatelessWidget {
                             if (showGross) ...[
                               const SizedBox(height: 2),
                               Text(
-                                'Брутто $grossGramsStr г · −${CalculationEngine.formatWastePercent(ing.product.wastePct)} %',
+                                'Введено брутто $grossGramsStr г · отходы ${CalculationEngine.formatWastePercent(ing.product.wastePct)} %',
                                 style: AppTypography.caption
                                     .copyWith(color: p.inkMuted),
                               ),
@@ -286,29 +260,6 @@ class IngredientCard extends StatelessWidget {
                               color: p.inkMuted,
                             ),
                           ],
-                        ),
-                      ),
-                    ),
-                  ),
-                if (share != null)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      Space.x3,
-                      0,
-                      Space.x3,
-                      Space.x1,
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(2),
-                      child: Container(
-                        height: 2,
-                        color: p.sunken.withOpacity(0.65),
-                        alignment: Alignment.centerLeft,
-                        child: FractionallySizedBox(
-                          widthFactor: share,
-                          child: Container(
-                            color: p.accent.withOpacity(0.45),
-                          ),
                         ),
                       ),
                     ),

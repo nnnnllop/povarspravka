@@ -621,7 +621,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.textContaining('Сырьё нетто 120 г · выход 150 г'),
+        find.textContaining('Сырьё нетто 120 г'),
         findsOneWidget,
       );
 
@@ -769,9 +769,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await tester.tap(find.byKey(const ValueKey('search-filters-btn')));
+      await tester.pumpAndSettle();
       final customPill = find.byKey(const ValueKey('custom-source-pill'));
       expect(customPill, findsOneWidget);
       await tester.tap(customPill);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Показать результаты'));
       await tester.pumpAndSettle();
       expect(find.text('Фирменный соус'), findsOneWidget);
 
@@ -791,8 +795,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(customRepo.items, isEmpty);
 
-      // Reset source pill and open searchable category picker (>=8 groups).
-      await tester.tap(customPill);
+      // Reset source pill to Все базы and open searchable category picker (>=8 groups).
+      await tester.tap(find.byKey(const ValueKey('search-filters-btn')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Все базы'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('group-filter-pill')));
       await tester.pumpAndSettle();

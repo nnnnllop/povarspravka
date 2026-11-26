@@ -412,8 +412,8 @@ void main() {
     await tester.ensureVisible(find.byKey(const ValueKey('measure-inc')));
     await tester.tap(find.byKey(const ValueKey('measure-inc')));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Добавить в блюдо'));
-    await tester.tap(find.text('Добавить в блюдо'));
+    await tester.ensureVisible(find.text('Добавить'));
+    await tester.tap(find.text('Добавить'));
     await tester.pumpAndSettle();
     expect(saved, 94);
     expect(tester.takeException(), isNull);
@@ -440,8 +440,8 @@ void main() {
     await tester.ensureVisible(toggle);
     await tester.tap(find.text('Брутто'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Добавить в блюдо'));
-    await tester.tap(find.text('Добавить в блюдо'));
+    await tester.ensureVisible(find.text('Добавить'));
+    await tester.tap(find.text('Добавить'));
     await tester.pumpAndSettle();
     expect(saved, 100);
     expect(gross, isTrue);
@@ -457,8 +457,8 @@ void main() {
                 initialGrams: .15,
                 isEditing: true,
                 onConfirm: (g, _) => saved = g))));
-    await tester.ensureVisible(find.text('Сохранить изменения'));
-    await tester.tap(find.text('Сохранить изменения'));
+    await tester.ensureVisible(find.text('Сохранить'));
+    await tester.tap(find.text('Сохранить'));
     await tester.pumpAndSettle();
     expect(saved, .15);
     expect(tester.takeException(), isNull);
@@ -471,7 +471,7 @@ void main() {
     await tester.pumpWidget(ProviderScope(
         overrides: [dishProvider.overrideWith((ref) => n)],
         child: const MaterialApp(home: RecipeEditorScreen())));
-    await tester.tap(find.byTooltip('Параметры'));
+    await tester.tap(find.byKey(const ValueKey('heat-process-row')));
     await tester.pumpAndSettle();
     expect(n.state.process, HeatProcess.cold);
     expect(find.widgetWithText(TextField, 'Белки %'), findsNothing,
@@ -493,7 +493,7 @@ void main() {
     await tester.pumpWidget(ProviderScope(
         overrides: [dishProvider.overrideWith((ref) => n)],
         child: const MaterialApp(home: RecipeEditorScreen())));
-    await tester.tap(find.byTooltip('Параметры'));
+    await tester.tap(find.byKey(const ValueKey('heat-process-row')));
     await tester.pumpAndSettle();
     final p = find.widgetWithText(TextField, 'Белки %');
     expect(tester.widget<TextField>(p).controller!.text, '94,56');

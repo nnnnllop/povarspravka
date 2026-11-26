@@ -305,9 +305,9 @@ void main() {
       expect(find.text('Открытый расчёт'), findsOneWidget);
       expect(find.text('Название без продуктов'), findsOneWidget);
       expect(find.text('Ингредиенты ещё не добавлены'), findsOneWidget);
-      expect(find.text('Продолжить расчёт'), findsOneWidget);
+      expect(find.text('Продолжить'), findsOneWidget);
 
-      await tester.tap(find.text('Продолжить расчёт'));
+      await tester.tap(find.text('Продолжить'));
       await tester.pumpAndSettle();
       expect(find.byType(RecipeEditorScreen), findsOneWidget);
       expect(container.read(dishProvider).title, 'Название без продуктов');
@@ -374,8 +374,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(CustomNumpadSheet), findsOneWidget);
 
-      await tester.ensureVisible(find.text('Добавить в блюдо'));
-      await tester.tap(find.text('Добавить в блюдо'));
+      await tester.ensureVisible(find.text('Добавить'));
+      await tester.tap(find.text('Добавить'));
       await tester.pumpAndSettle();
 
       expect(find.byType(SearchProductModal), findsNothing);
@@ -422,7 +422,7 @@ void main() {
       );
       expect(container.read(dishProvider).process, HeatProcess.cold);
 
-      await tester.tap(find.byTooltip('Параметры'));
+      await tester.tap(find.byKey(const ValueKey('heat-process-row')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('heat-process')));
       await tester.pumpAndSettle();
@@ -433,7 +433,7 @@ void main() {
       expect(container.read(dishProvider).process, HeatProcess.cold,
           reason: 'Cancel must discard buffered HeatProcess change');
 
-      await tester.tap(find.byTooltip('Параметры'));
+      await tester.tap(find.byKey(const ValueKey('heat-process-row')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('heat-process')));
       await tester.pumpAndSettle();
@@ -490,7 +490,7 @@ void main() {
 
       await tester.pumpWidget(_wrapWithHost(const HomeScreen(), storage: storage, repo: repo));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Продолжить расчёт'));
+      await tester.tap(find.text('Продолжить'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Добавить продукт'));
@@ -499,18 +499,21 @@ void main() {
       // Badge shows product already in dish.
       expect(find.text('в блюде · 100 г'), findsOneWidget);
 
-      // Source filter: Skurikhin -> hides chicken, then "Все источники" shows both.
-      await tester.tap(find.byTooltip('Источник справочника'));
+      // Source filter: Skurikhin -> hides chicken, then "Все базы" shows both.
+      await tester.tap(find.byKey(const ValueKey('search-filters-btn')));
       await tester.pumpAndSettle();
       await tester.tap(find.textContaining('Скурихин').last);
       await tester.pumpAndSettle();
+      await tester.tap(find.text('Показать результаты'));
+      await tester.pumpAndSettle();
       expect(find.text('Курица (грудка)'), findsNothing);
 
-      await tester.tap(find.byTooltip('Источник справочника'));
+      await tester.tap(find.byKey(const ValueKey('search-filters-btn')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Все источники').last);
+      await tester.tap(find.text('Все базы').last);
       await tester.pumpAndSettle();
-      expect(find.text('Все базы'), findsOneWidget);
+      await tester.tap(find.text('Показать результаты'));
+      await tester.pumpAndSettle();
       expect(find.text('Курица (грудка)'), findsOneWidget);
 
       // Type a query and verify Картофель row opens edit numpad with numpad-delete.
@@ -519,7 +522,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Картофель').first);
       await tester.pumpAndSettle();
-      expect(find.text('Сохранить изменения'), findsOneWidget);
+      expect(find.text('Сохранить'), findsOneWidget);
       await tester.ensureVisible(find.byKey(const ValueKey('numpad-delete')));
       await tester.tap(find.byKey(const ValueKey('numpad-delete')));
       await tester.pumpAndSettle();
@@ -531,9 +534,11 @@ void main() {
       expect(container.read(dishProvider).ingredients, isEmpty);
 
       // Re-select source filter before popping via Android/Nav back; PopScope resets filters.
-      await tester.tap(find.byTooltip('Источник справочника'));
+      await tester.tap(find.byKey(const ValueKey('search-filters-btn')));
       await tester.pumpAndSettle();
       await tester.tap(find.textContaining('BLS').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Показать результаты'));
       await tester.pumpAndSettle();
       expect(container.read(searchProvider).selectedSource, 'bls');
       expect(container.read(searchProvider).query, 'Карт');
@@ -570,11 +575,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Initial 100g of _potato (77 kcal, P 2.0) -> live macros show 77 ккал.
+      // Initial 100g of _potato (P 2.0, F 0.4, C 16.3) -> 76,8 ккал by CalculationMath.energy.
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('numpad-live-macros')),
-          matching: find.textContaining('77'),
+          matching: find.textContaining('76,8'),
         ),
         findsOneWidget,
       );
@@ -585,11 +590,11 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('key-0')));
       await tester.pump();
 
-      // 200g -> 154 ккал.
+      // 200g -> 153,6 ккал.
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('numpad-live-macros')),
-          matching: find.textContaining('154'),
+          matching: find.textContaining('153,6'),
         ),
         findsOneWidget,
       );
@@ -746,7 +751,10 @@ void main() {
         tester.element(find.byType(RecipeEditorScreen)),
       );
       expect(container.read(dishProvider).customYieldGrams, 350.0);
-      expect(find.textContaining('/ 100 г'), findsOneWidget);
+      expect(find.text('На 100 г'), findsOneWidget);
+      await tester.tap(find.text('На 100 г'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('ккал / 100 г'), findsOneWidget);
 
       // Open Инспектор расчёта -> verify Step 5 portion calculator works live.
       await tester.tap(find.byTooltip('Инспектор расчёта'));
@@ -791,23 +799,31 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Продолжить расчёт'));
+      await tester.tap(find.text('Продолжить'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Добавить продукт'));
       await tester.pumpAndSettle();
 
       // Category filter: Овощи hides Курица.
+      await tester.tap(find.byKey(const ValueKey('search-filters-btn')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('group-filter-pill')));
       await tester.pumpAndSettle();
       expect(find.text('Категория продуктов'), findsOneWidget);
       await tester.tap(find.text('Овощи').last);
       await tester.pumpAndSettle();
+      await tester.tap(find.text('Показать результаты'));
+      await tester.pumpAndSettle();
       expect(find.text('Курица (грудка)'), findsNothing);
 
       // Reset category filter back to all.
+      await tester.tap(find.byKey(const ValueKey('search-filters-btn')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('group-filter-pill')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Все категории').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Показать результаты'));
       await tester.pumpAndSettle();
       expect(find.text('Курица (грудка)'), findsOneWidget);
 
@@ -840,7 +856,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(CustomNumpadSheet), findsOneWidget);
-      await tester.tap(find.text('Добавить в блюдо'));
+      await tester.tap(find.text('Добавить'));
       await tester.pumpAndSettle();
 
       final container = ProviderScope.containerOf(

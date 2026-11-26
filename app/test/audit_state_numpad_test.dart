@@ -164,7 +164,7 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
       expect(tester.binding.transientCallbackCount, 0);
 
-      await _gestureUp(tester, find.text('Добавить в блюдо'), pointer++);
+      await _gestureUp(tester, find.text('Добавить'), pointer++);
       await tester.pump();
       // ignore: avoid_print
       print('STATE-08 confirmed = $confirmed after 30 presses');
@@ -191,7 +191,7 @@ void main() {
       print('STATE-08 "1234,56" + "7" -> readout "$shown"');
       expect(shown, '1234,56',
           reason: 'OBSERVED: the 8th character is dropped silently');
-      await _gestureUp(tester, find.text('Добавить в блюдо'), pointer++);
+      await _gestureUp(tester, find.text('Добавить'), pointer++);
       await tester.pump();
       expect(confirmed, 1234.56);
     });
@@ -276,7 +276,7 @@ void main() {
       }
       expect(readout(tester), '510',
           reason: '+10+50+100+250 = 410 on top of the initial 100');
-      await _gestureUp(tester, find.text('Добавить в блюдо'), pointer++);
+      await _gestureUp(tester, find.text('Добавить'), pointer++);
       await tester.pump();
       expect(confirmed, 510.0);
     });
@@ -297,7 +297,7 @@ void main() {
       }
       final shown = readout(tester);
       expect(shown, '250,5');
-      await _gestureUp(tester, find.text('Добавить в блюдо'), pointer++);
+      await _gestureUp(tester, find.text('Добавить'), pointer++);
       await tester.pump();
       expect(CalculationEngine.parseInputDouble(shown), confirmed);
       expect(confirmed, 250.5);

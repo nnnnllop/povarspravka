@@ -43,14 +43,16 @@ class _BatchExportSheetState extends State<BatchExportSheet> {
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     final validDishes = <Dish>[];
-    var skippedCount = 0;
+    final skippedNames = <String>[];
     for (final d in widget.dishes) {
       if (CalculationEngine.tryCalculate(d) != null) {
         validDishes.add(d);
       } else {
-        skippedCount++;
+        final t = d.title.trim();
+        skippedNames.add(t.isEmpty ? 'Блюдо без названия' : t);
       }
     }
+    final skippedCount = skippedNames.length;
     final canExport = validDishes.isNotEmpty && !_busy;
 
     return SafeArea(
@@ -82,8 +84,8 @@ class _BatchExportSheetState extends State<BatchExportSheet> {
                 ),
                 child: Text(
                   validDishes.isEmpty
-                      ? 'Ни одно из выбранных блюд не может быть рассчитано — проверьте параметры перед экспортом.'
-                      : 'Пропущено блюд с ошибкой расчёта: $skippedCount из ${widget.dishes.length}.',
+                      ? 'Ни одно из выбранных блюд не может быть рассчитано (${skippedNames.join(', ')}) — проверьте параметры перед экспортом.'
+                      : 'Пропущено блюд с ошибкой расчёта ($skippedCount из ${widget.dishes.length}): ${skippedNames.join(', ')}.',
                   style: AppTypography.caption.copyWith(color: p.danger),
                 ),
               ),
@@ -101,7 +103,7 @@ class _BatchExportSheetState extends State<BatchExportSheet> {
               label: Text(
                 _busy
                     ? 'Формирование файла…'
-                    : 'PDF-сборник (сводка + бланки)',
+                    : 'PDF — сводка и бланки',
                 textAlign: TextAlign.center,
               ),
             ),
@@ -116,7 +118,7 @@ class _BatchExportSheetState extends State<BatchExportSheet> {
                   : null,
               icon: const Icon(Icons.table_chart_outlined, size: 18),
               label: const Text(
-                'Excel-книга (.xlsx, листы по блюдам)',
+                'Excel (.xlsx) — лист на блюдо',
                 textAlign: TextAlign.center,
               ),
             ),

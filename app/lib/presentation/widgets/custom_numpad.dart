@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import '../../core/calculation/calculation_engine.dart';
+import '../../core/calculation/calculation_math.dart';
 import '../../core/calculation/models/product.dart';
 import '../../core/calculation/models/ingredient.dart';
 import '../../core/calculation/models/source_label.dart';
@@ -43,6 +44,9 @@ class CustomNumpadSheet extends StatefulWidget {
   /// Колбэк замены продукта в строке рецепта без потери веса (в режиме правки).
   final VoidCallback? onReplaceProduct;
 
+  /// Колбэк настройки группы потерь и способа обработки (доступен в режиме правки).
+  final VoidCallback? onEditLoss;
+
   const CustomNumpadSheet({
     super.key,
     required this.product,
@@ -53,6 +57,7 @@ class CustomNumpadSheet extends StatefulWidget {
     this.onProductUpdated,
     this.onDelete,
     this.onReplaceProduct,
+    this.onEditLoss,
   });
 
   @override
@@ -72,6 +77,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
 
   ProductMeasure? _selectedMeasure;
   int _measureCount = 1;
+  bool _showExtrasExpanded = false;
 
   /// Дельта-подпись, показываемая 2 с после смены единицы или параметра.
   String? _deltaNote;
@@ -495,31 +501,73 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     bool hasWaste, {
     bool compactPane = false,
   }) {
+    final media = MediaQuery.sizeOf(context);
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final tightPortrait =
+        !compactPane && media.height < 640 && textScale > 1.3;
+    final hasExtras = seasonalPresets.isNotEmpty ||
+        widget.product.calculationMeasures.isNotEmpty;
+    final showExtras = !tightPortrait || _showExtrasExpanded;
+    final gap = tightPortrait ? Space.x2 : Space.x3;
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(Space.x4, Space.x1, Space.x4, Space.x2),
+      padding: EdgeInsets.fromLTRB(
+        Space.x4,
+        tightPortrait ? 0 : Space.x1,
+        Space.x4,
+        tightPortrait ? 2 : Space.x2,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildHeader(p),
-          const SizedBox(height: Space.x3),
-          _buildModeSelector(p, compact: compactPane),
+          _buildHeader(p, compact: tightPortrait),
+          SizedBox(height: tightPortrait ? Space.x1 : gap),
+          _buildModeSelector(p, compact: compactPane || tightPortrait),
           if (_deltaNote != null && !_isEditingWaste) ...[
-            const SizedBox(height: Space.x2),
+            SizedBox(height: tightPortrait ? Space.x1 : Space.x2),
             _buildDeltaNote(p),
           ],
-          const SizedBox(height: Space.x3),
-          _buildReadout(p, net, hasWaste),
-          const SizedBox(height: Space.x3),
-          if (seasonalPresets.isNotEmpty) ...[
-            _buildSectionLabel(p, 'Отходы по сезону'),
-            const SizedBox(height: Space.x2),
-            _buildWasteChips(p, seasonalPresets),
-            const SizedBox(height: Space.x3),
+          SizedBox(height: tightPortrait ? Space.x1 : gap),
+          _buildReadout(p, net, hasWaste, tight: tightPortrait),
+          if (hasExtras && tightPortrait) ...[
+            const SizedBox(height: 2),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: const ValueKey('numpad-extras-toggle'),
+                onPressed: () {
+                  AppHaptics.toggle();
+                  setState(() => _showExtrasExpanded = !_showExtrasExpanded);
+                },
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: Space.x1),
+                ),
+                icon: Icon(
+                  _showExtrasExpanded
+                      ? Icons.expand_less_rounded
+                      : Icons.tune_rounded,
+                  size: 16,
+                ),
+                label: Text(
+                  _showExtrasExpanded ? 'Скрыть меры и сезон' : 'Меры и сезон',
+                ),
+              ),
+            ),
           ],
-          if (widget.product.calculationMeasures.isNotEmpty) ...[
-            _buildSectionLabel(p, 'Бытовые меры'),
-            const SizedBox(height: Space.x2),
-            _buildMeasures(p),
+          if (showExtras) ...[
+            SizedBox(height: gap),
+            if (seasonalPresets.isNotEmpty) ...[
+              _buildSectionLabel(p, 'Отходы по сезону'),
+              const SizedBox(height: Space.x2),
+              _buildWasteChips(p, seasonalPresets),
+              const SizedBox(height: Space.x3),
+            ],
+            if (widget.product.calculationMeasures.isNotEmpty) ...[
+              _buildSectionLabel(p, 'Бытовые меры'),
+              const SizedBox(height: Space.x2),
+              _buildMeasures(p),
+            ],
           ],
         ],
       ),
@@ -549,14 +597,15 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
           ];
     final confirmLabel = _isEditingWaste
         ? 'Готово'
-        : (widget.isEditing ? 'Сохранить изменения' : 'Добавить в блюдо');
+        : (widget.isEditing ? 'Сохранить' : 'Добавить');
 
     return _NumpadKeypadBlock(
       quickItems: quickItems,
       confirmLabel: confirmLabel,
       canConfirm: canConfirm,
-      confirmMaterialKey:
-          _isEditingWaste ? const ValueKey('waste-edit-done') : null,
+      confirmMaterialKey: _isEditingWaste
+          ? const ValueKey('waste-edit-done')
+          : const ValueKey('numpad-confirm'),
       compactLandscape: compactLandscape,
       onKey: _onKey,
       onBackspace: _onBackspace,
@@ -566,7 +615,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     );
   }
 
-  Widget _buildHeader(Palette p) {
+  Widget _buildHeader(Palette p, {bool compact = false}) {
     final canPop = Navigator.canPop(context);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -578,19 +627,37 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
               Text(
                 widget.product.name,
                 style: AppTypography.title.copyWith(color: p.ink),
-                maxLines: 2,
+                maxLines: compact ? 1 : 2,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 2),
-              Text(
-                '${CalculationEngine.formatKcal(widget.product.kcal)} ккал / 100 г · ${SourceLabel.of(widget.product.source, fallback: widget.product.source)}',
-                style: AppTypography.caption.copyWith(color: p.inkMuted),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+              if (!compact) ...[
+                const SizedBox(height: 2),
+                Text(
+                  '${CalculationEngine.formatKcal(widget.product.kcal)} ккал / 100 г · ${SourceLabel.of(widget.product.source, fallback: widget.product.source)}',
+                  style: AppTypography.caption.copyWith(color: p.inkMuted),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ],
           ),
         ),
+        if (widget.isEditing && widget.onEditLoss != null) ...[
+          const SizedBox(width: Space.x1),
+          IconButton(
+            key: const ValueKey('numpad-edit-loss'),
+            onPressed: () {
+              AppHaptics.toggle();
+              widget.onEditLoss!();
+            },
+            tooltip: 'Группа и обработка',
+            constraints: const BoxConstraints(
+              minWidth: kMinTapTarget,
+              minHeight: kMinTapTarget,
+            ),
+            icon: Icon(Icons.tune_rounded, size: 22, color: p.accent),
+          ),
+        ],
         if (widget.isEditing && widget.onReplaceProduct != null) ...[
           const SizedBox(width: Space.x1),
           IconButton(
@@ -689,7 +756,12 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     );
   }
 
-  Widget _buildReadout(Palette p, double net, bool hasWaste) {
+  Widget _buildReadout(
+    Palette p,
+    double net,
+    bool hasWaste, {
+    bool tight = false,
+  }) {
     final displayText = _isEditingWaste ? _wasteInput : _currentInput;
     final isFresh = _isEditingWaste ? _isFreshWasteInput : _isFreshInput;
     final unit = _isEditingWaste ? '%' : 'г';
@@ -697,9 +769,9 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
 
     return InstrumentSlab(
       borderRadius: Radii.cardAll,
-      padding: const EdgeInsets.symmetric(
+      padding: EdgeInsets.symmetric(
         horizontal: Space.x3,
-        vertical: 9,
+        vertical: tight ? 6 : 9,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -735,16 +807,35 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                   ),
                   child: AnimatedSwitcher(
                     duration: Duration.zero,
-                    child: Text(
-                      displayText,
-                      key: ValueKey<String>(displayText),
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.numLg.copyWith(
-                        color: isFresh ? AppColors.accentDark : p.slabInk,
-                      ),
-                    ),
+                    child: tight
+                        ? ConstrainedBox(
+                            key: ValueKey<String>(displayText),
+                            constraints: const BoxConstraints(maxHeight: 40),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                displayText,
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                style: AppTypography.numLg.copyWith(
+                                  color: isFresh
+                                      ? AppColors.accentDark
+                                      : p.slabInk,
+                                ),
+                              ),
+                            ),
+                          )
+                        : Text(
+                            displayText,
+                            key: ValueKey<String>(displayText),
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.numLg.copyWith(
+                              color:
+                                  isFresh ? AppColors.accentDark : p.slabInk,
+                            ),
+                          ),
                   ),
                 ),
               ),
@@ -755,7 +846,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
               ),
             ],
           ),
-          if (isFresh && !_isEditingWaste) ...[
+          if (isFresh && !_isEditingWaste && !tight) ...[
             const SizedBox(height: 2),
             Text(
               'цифра заменит значение · +г прибавит',
@@ -849,10 +940,26 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
   }
 
   Widget _buildLiveMacrosRow(Palette p, double safeNet) {
-    final kcal = widget.product.kcal * safeNet / 100.0;
-    final protein = widget.product.protein * safeNet / 100.0;
-    final fat = widget.product.fat * safeNet / 100.0;
-    final carbs = widget.product.carbs * safeNet / 100.0;
+    final roundedNet = safeNet > 0 ? CalculationMath.round1(safeNet) : 0.0;
+    final protein = CalculationMath.productRounded(
+      widget.product.protein,
+      roundedNet,
+      2,
+      divideBy100: true,
+    );
+    final fat = CalculationMath.productRounded(
+      widget.product.fat,
+      roundedNet,
+      2,
+      divideBy100: true,
+    );
+    final carbs = CalculationMath.productRounded(
+      widget.product.carbs,
+      roundedNet,
+      2,
+      divideBy100: true,
+    );
+    final kcal = CalculationMath.energy(protein, fat, carbs);
     final cells = <Widget>[
       InlineMacroCell(
         type: NutrientType.protein,
@@ -1099,21 +1206,27 @@ class _NumpadKeypadBlock extends StatelessWidget {
                     borderRadius: BorderRadius.circular(14),
                     clipBehavior: Clip.antiAlias,
                     child: InkWell(
-                      onTapDown: (_) => item.$2(),
+                      onTap: item.$2,
                       borderRadius: BorderRadius.circular(14),
-                      child: Container(
-                        height: kMinTapTarget,
-                        alignment: Alignment.center,
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: Space.x1),
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            item.$1,
-                            maxLines: 1,
-                            style: AppTypography.numSm.copyWith(
-                              color: p.accent,
-                              fontWeight: FontWeight.w700,
+                      child: Semantics(
+                        button: true,
+                        label: 'Прибавить ${item.$1}',
+                        child: ExcludeSemantics(
+                          child: Container(
+                            height: kMinTapTarget,
+                            alignment: Alignment.center,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: Space.x1),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                item.$1,
+                                maxLines: 1,
+                                style: AppTypography.numSm.copyWith(
+                                  color: p.accent,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -1136,8 +1249,9 @@ class _NumpadKeypadBlock extends StatelessWidget {
       ['⌫', '0', ','],
     ];
     final scaler = MediaQuery.textScalerOf(context).scale(1);
-    final shortHeight =
-        compactLandscape || MediaQuery.sizeOf(context).height < 520;
+    final shortHeight = compactLandscape ||
+        MediaQuery.sizeOf(context).height < 520 ||
+        (MediaQuery.sizeOf(context).height < 640 && scaler > 1.3);
     final keyGap = compactLandscape ? 2.0 : Space.x1;
     final double keyHeight = shortHeight
         ? kMinTapTarget
@@ -1206,30 +1320,34 @@ class _NumpadKeypadBlock extends StatelessWidget {
       key: ValueKey('key-$k'),
       height: height,
       child: TactilePress(
-        child: Semantics(
-          button: true,
-          label: isBackspace
-              ? 'Удалить символ. Долгое нажатие — сброс'
-              : (k == ',' ? 'запятая' : k),
-          child: Material(
-            color: p.isDark ? p.raised : p.sunken,
-            borderRadius: Radii.fieldAll,
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTapDown: (_) => isBackspace ? onBackspace() : onKey(k),
-              onLongPress: isBackspace ? onClear : null,
+        child: MergeSemantics(
+          child: Semantics(
+            button: true,
+            label: isBackspace
+                ? 'Удалить символ. Долгое нажатие — сброс'
+                : (k == ',' ? 'запятая' : k),
+            child: Material(
+              color: p.isDark ? p.raised : p.sunken,
               borderRadius: Radii.fieldAll,
-              child: Center(
-                child: isBackspace
-                    ? Icon(Icons.backspace_outlined, size: 22, color: p.ink)
-                    : FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          k,
-                          maxLines: 1,
-                          style: AppTypography.title.copyWith(color: p.ink),
-                        ),
-                      ),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: isBackspace ? onBackspace : () => onKey(k),
+                onLongPress: isBackspace ? onClear : null,
+                borderRadius: Radii.fieldAll,
+                child: ExcludeSemantics(
+                  child: Center(
+                    child: isBackspace
+                        ? Icon(Icons.backspace_outlined, size: 22, color: p.ink)
+                        : FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              k,
+                              maxLines: 1,
+                              style: AppTypography.title.copyWith(color: p.ink),
+                            ),
+                          ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -1243,23 +1361,27 @@ class _NumpadKeypadBlock extends StatelessWidget {
       key: const ValueKey('key-C'),
       height: height,
       child: TactilePress(
-        child: Semantics(
-          button: true,
-          label: 'Сбросить значение',
-          child: Material(
-            color: p.isDark ? p.raised : p.sunken,
-            borderRadius: Radii.fieldAll,
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTapDown: (_) => onClear(),
+        child: MergeSemantics(
+          child: Semantics(
+            button: true,
+            label: 'Сбросить значение',
+            child: Material(
+              color: p.isDark ? p.raised : p.sunken,
               borderRadius: Radii.fieldAll,
-              child: Center(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    'C',
-                    maxLines: 1,
-                    style: AppTypography.title.copyWith(color: p.danger),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: onClear,
+                borderRadius: Radii.fieldAll,
+                child: ExcludeSemantics(
+                  child: Center(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'C',
+                        maxLines: 1,
+                        style: AppTypography.title.copyWith(color: p.danger),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -1288,13 +1410,16 @@ class _NumpadKeypadBlock extends StatelessWidget {
               height: height,
               alignment: Alignment.center,
               padding: const EdgeInsets.symmetric(horizontal: Space.x2),
-              child: Text(
-                confirmLabel,
-                textAlign: TextAlign.center,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.label.copyWith(
-                  color: canConfirm ? p.onAccent : p.inkMuted,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  confirmLabel,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  softWrap: false,
+                  style: AppTypography.label.copyWith(
+                    color: canConfirm ? p.onAccent : p.inkMuted,
+                  ),
                 ),
               ),
             ),

@@ -136,6 +136,14 @@ void main() {
     await tester.tap(find.text('Инспектор расчёта'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
+    final stepsAcc = find.byKey(const ValueKey('inspector-acc-steps'));
+    await tester.scrollUntilVisible(
+      stepsAcc,
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(stepsAcc);
+    await tester.pumpAndSettle();
     expect(find.text('Белки: 1,50 × 94% = 1,41 г'), findsOneWidget);
     expect(find.text('1,41 × 4 + 0,09 × 9 + 8,01 × 4 = 38,5 ккал'),
         findsOneWidget);
@@ -283,7 +291,7 @@ void main() {
     final c = ProviderScope.containerOf(
         tester.element(find.byType(RecipeEditorScreen)));
     expect(c.read(dishProvider).process, HeatProcess.cold);
-    expect(find.text('Вес готового блюда не указан'), findsOneWidget);
+    expect(find.text('Вес готового блюда'), findsOneWidget);
     expect(find.text('Задать фактический выход'), findsNothing);
     final input = find.byKey(const ValueKey('actual-yield'));
     expect(input, findsOneWidget);
@@ -302,13 +310,13 @@ void main() {
     await tester.enterText(input, '80');
     await tester.pumpAndSettle();
     expect(c.read(dishProvider).effectiveYieldGrams, 80);
-    expect(find.text('Выход готового блюда: 80 г'), findsOneWidget);
+    expect(find.textContaining('20% уварка'), findsOneWidget);
     await tester.enterText(input, '');
     await tester.pumpAndSettle();
     expect(c.read(dishProvider).customYieldGrams, isNull);
     expect(c.read(dishProvider).effectiveYieldGrams, 0,
         reason: 'пустое поле — вес не указан, сумма нетто не подставляется');
-    expect(find.text('Вес готового блюда не указан'), findsOneWidget);
+    expect(find.text('Укажите вес готового блюда'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
   testWidgets('New dish (boil): table losses per group, label and weight',

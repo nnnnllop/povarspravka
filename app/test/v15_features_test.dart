@@ -349,6 +349,15 @@ void main() {
       await tester.tap(find.byTooltip('Инспектор расчёта'));
       await tester.pumpAndSettle();
 
+      final contribAcc = find.byKey(const ValueKey('inspector-acc-contrib'));
+      await tester.scrollUntilVisible(
+        contribAcc,
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.tap(contribAcc);
+      await tester.pumpAndSettle();
+
       final bal = find.byKey(const ValueKey('inspector-macro-balance'));
       await tester.scrollUntilVisible(
         bal,

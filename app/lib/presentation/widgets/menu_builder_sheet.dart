@@ -11,6 +11,7 @@ import '../../core/calculation/models/dish.dart';
 import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
+import 'custom_numpad.dart';
 import 'instrument_widgets.dart';
 import 'macro_balance_bar.dart';
 import 'nutrient_chip.dart';
@@ -164,8 +165,6 @@ class MenuBuilderSheet extends StatefulWidget {
 }
 
 class _MenuBuilderSheetState extends State<MenuBuilderSheet> {
-  static const List<int> _portionPresets = [100, 150, 200, 250, 300];
-
   late final List<MenuItemDraft> _items;
   int _invalidCount = 0;
 
@@ -381,12 +380,56 @@ class _MenuBuilderSheetState extends State<MenuBuilderSheet> {
                                   ),
                                 ),
                                 Expanded(
-                                  child: Text(
-                                    '${g(item.portionGrams)} г',
-                                    textAlign: TextAlign.center,
-                                    style: AppTypography.num.copyWith(
-                                      color: p.ink,
-                                      fontWeight: FontWeight.w700,
+                                  child: InkWell(
+                                    key: ValueKey('menu-portion-${item.dish.id}'),
+                                    borderRadius: Radii.fieldAll,
+                                    onTap: () {
+                                      FocusManager.instance.primaryFocus
+                                          ?.unfocus();
+                                      showModalBottomSheet<void>(
+                                        context: context,
+                                        isScrollControlled: true,
+                                        useSafeArea: true,
+                                        showDragHandle:
+                                            MediaQuery.sizeOf(context).height >=
+                                                460,
+                                        backgroundColor: p.surface,
+                                        shape: const RoundedRectangleBorder(
+                                          borderRadius: Radii.sheetTop,
+                                        ),
+                                        builder: (_) => SimpleGramsNumpadSheet(
+                                          title: title,
+                                          subtitle:
+                                              'Порция (выход блюда ${g(yieldRounded)} г)',
+                                          initialGrams: item.portionGrams,
+                                          minGrams: 1.0,
+                                          maxGrams: 9999999.0,
+                                          onConfirm: (grams) =>
+                                              _setPortion(i, grams),
+                                        ),
+                                      );
+                                    },
+                                    child: Container(
+                                      constraints: const BoxConstraints(
+                                        minHeight: kMinTapTarget,
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: Space.x2,
+                                        vertical: Space.x1,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: p.sunken,
+                                        borderRadius: Radii.fieldAll,
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        'Порция · ${g(item.portionGrams)} г',
+                                        textAlign: TextAlign.center,
+                                        style: AppTypography.numSm.copyWith(
+                                          color: p.ink,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -399,34 +442,6 @@ class _MenuBuilderSheetState extends State<MenuBuilderSheet> {
                                     Icons.add_circle_outline_rounded,
                                     color: p.accent,
                                   ),
-                                ),
-                              ],
-                            ),
-                            Wrap(
-                              spacing: Space.x2,
-                              runSpacing: Space.x1,
-                              children: [
-                                for (final preset in _portionPresets)
-                                  ChoiceChip(
-                                    label: Text('$preset г'),
-                                    selected: (item.portionGrams - preset).abs() <
-                                        0.05,
-                                    showCheckmark: false,
-                                    materialTapTargetSize:
-                                        MaterialTapTargetSize.padded,
-                                    onSelected: (_) =>
-                                        _setPortion(i, preset.toDouble()),
-                                  ),
-                                ChoiceChip(
-                                  label: Text('Всё (${g(yieldRounded)} г)'),
-                                  selected:
-                                      (item.portionGrams - yieldRounded).abs() <
-                                          0.05,
-                                  showCheckmark: false,
-                                  materialTapTargetSize:
-                                      MaterialTapTargetSize.padded,
-                                  onSelected: (_) =>
-                                      _setPortion(i, yieldRounded),
                                 ),
                               ],
                             ),

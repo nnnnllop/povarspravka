@@ -149,7 +149,7 @@ void main() {
     expect(find.byType(SegmentedButton<String?>), findsNothing);
     expect(find.text('Продукты'), findsOneWidget);
     expect(find.text('Готовые'), findsOneWidget);
-    expect(find.text('Все базы'), findsOneWidget);
+    expect(find.byKey(const ValueKey('search-filters-btn')), findsOneWidget);
 
     // Секция «Недавние и частые» видна сразу при пустом запросе и уважает
     // фильтр «Продукты» (isDish == false): _carrot попадает, _readyDish — нет.
@@ -173,18 +173,18 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(CustomNumpadSheet), findsOneWidget);
-    await tester.tap(find.text('Добавить в блюдо'));
+    await tester.tap(find.text('Добавить'));
     await tester.pumpAndSettle();
 
     // После добавления numpad закрылся, а модалка поиска осталась открытой
-    // с обновлённым футером «Добавлено» и кнопкой «Готово (1)».
+    // с обновлённым футером «Добавлено» и кнопкой «Готово · 1».
     expect(find.byType(CustomNumpadSheet), findsNothing);
     expect(find.byType(SearchProductModal), findsOneWidget);
     expect(find.textContaining('Добавлено: Картофель'), findsOneWidget);
-    expect(find.text('Готово (1)'), findsOneWidget);
+    expect(find.text('Готово · 1'), findsOneWidget);
 
-    // Возврат к редактору по «Готово (1)».
-    await tester.tap(find.text('Готово (1)'));
+    // Возврат к редактору по «Готово · 1».
+    await tester.tap(find.text('Готово · 1'));
     await tester.pumpAndSettle();
 
     expect(find.byType(SearchProductModal), findsNothing);

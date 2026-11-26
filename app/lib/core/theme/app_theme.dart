@@ -41,7 +41,7 @@ class AppTheme {
         if (states.contains(WidgetState.selected)) return p.onAccent;
         return p.ink;
       }),
-      side: WidgetStatePropertyAll(BorderSide(color: p.borderStatic)),
+      side: WidgetStatePropertyAll(BorderSide(color: p.border)),
       shape: const WidgetStatePropertyAll(StadiumBorder()),
     );
   }
@@ -146,9 +146,9 @@ class AppTheme {
           borderRadius: Radii.fieldAll,
           borderSide: BorderSide.none,
         ),
-        enabledBorder: const OutlineInputBorder(
+        enabledBorder: OutlineInputBorder(
           borderRadius: Radii.fieldAll,
-          borderSide: BorderSide.none,
+          borderSide: BorderSide(color: p.border, width: 1),
         ),
         disabledBorder: const OutlineInputBorder(
           borderRadius: Radii.fieldAll,
@@ -171,7 +171,7 @@ class AppTheme {
         backgroundColor: p.surface,
         selectedColor: p.accentSoft,
         disabledColor: p.sunken,
-        side: BorderSide(color: p.borderStatic),
+        side: BorderSide(color: p.border),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
         labelStyle: AppTypography.label.copyWith(color: p.ink),
         padding: const EdgeInsets.symmetric(

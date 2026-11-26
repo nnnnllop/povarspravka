@@ -80,7 +80,7 @@ void main() {
         overrides: [dishProvider.overrideWith((ref) => n)],
         child: MaterialApp(theme: AppTheme.light, home: const RecipeEditorScreen())));
     await tester.pumpAndSettle();
-    expect(find.text('Вес готового блюда не указан'), findsOneWidget,
+    expect(find.text('Укажите вес готового блюда'), findsOneWidget,
         reason: 'новый расчёт не подставляет сумму нетто вместо веса готового блюда');
     for (var i = 0; i < 5; i++) {
       final card = find.byType(Dismissible).first;
@@ -99,12 +99,12 @@ void main() {
     }
     expect(n.state.ingredients, isEmpty);
     expect(n.state.effectiveYieldGrams, 0);
-    final noWeight = find.text('Вес готового блюда не указан');
+    final noWeight = find.byKey(const ValueKey('actual-yield'));
     if (noWeight.evaluate().isEmpty) {
       await tester.scrollUntilVisible(noWeight, -200,
           scrollable: find.byType(Scrollable).first);
     }
-    expect(noWeight, findsOneWidget);
+    expect(tester.widget<TextField>(noWeight).controller!.text, isEmpty);
     await n.flushPendingSaves();
   });
 }

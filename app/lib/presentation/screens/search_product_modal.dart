@@ -238,6 +238,18 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                       ),
                     if (!shortLandscape) _buildFilterStrip(context, p, isCatalog),
                     Divider(height: 1, color: p.divider),
+                    Container(
+                      width: double.infinity,
+                      color: p.sunken,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: Space.x4,
+                        vertical: 4,
+                      ),
+                      child: Text(
+                        'КБЖУ в списке указано на 100 г продукта',
+                        style: AppTypography.caption.copyWith(color: p.inkMuted),
+                      ),
+                    ),
                     if (shortLandscape)
                       Expanded(
                         child: CustomScrollView(
@@ -339,43 +351,17 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
 
   Widget _buildFilterStrip(BuildContext context, Palette p, bool isCatalog) {
     final searchState = ref.watch(searchProvider);
-    final counts = ref.watch(sourceCountsProvider).maybeWhen(
-          data: (value) => value,
-          orElse: () => const SourceCounts(),
-        );
-    final groups = ref.watch(foodGroupsProvider).maybeWhen(
-          data: (value) => value,
-          orElse: () => const <FoodGroup>[],
-        );
     final selectedIsDish = searchState.selectedIsDish;
-    final selectedSource = searchState.selectedSource;
-    final selectedGroupId = searchState.selectedGroupId;
-    final favoritesCount = ref.watch(favoriteProductsProvider).length;
+    final activeExtraCount = (searchState.selectedSource != null ? 1 : 0) +
+        (searchState.selectedGroupId != null ? 1 : 0) +
+        (_onlyFavorites ? 1 : 0);
 
-    FoodGroup? selectedGroup;
-    if (selectedGroupId != null) {
-      for (final g in groups) {
-        if (g.id == selectedGroupId) {
-          selectedGroup = g;
-          break;
-        }
-      }
-    }
-
-    final sourceButtonLabel =
-        selectedSource != null ? SourceLabel.of(selectedSource) : 'Все базы';
-
-    String menuLabel(String name, int count) =>
-        count > 0 ? '$name · ${_spaced(count)}' : name;
-
-    return Padding(
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x1),
-      child: Wrap(
-        spacing: Space.x2,
-        runSpacing: 0,
-        crossAxisAlignment: WrapCrossAlignment.center,
+      child: Row(
         children: [
-          if (isCatalog)
+          if (isCatalog) ...[
             _FilterPill(
               label: 'Все',
               selected: selectedIsDish == null,
@@ -385,6 +371,8 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                 ref.read(searchProvider.notifier).setIsDishFilter(null);
               },
             ),
+            const SizedBox(width: Space.x2),
+          ],
           _FilterPill(
             label: 'Продукты',
             selected: selectedIsDish == false,
@@ -394,6 +382,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
               ref.read(searchProvider.notifier).setIsDishFilter(false);
             },
           ),
+          const SizedBox(width: Space.x2),
           _FilterPill(
             label: 'Готовые',
             selected: selectedIsDish == true,
@@ -403,121 +392,193 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
               ref.read(searchProvider.notifier).setIsDishFilter(true);
             },
           ),
-          PopupMenuButton<String>(
-            tooltip: 'Источник справочника',
-            padding: EdgeInsets.zero,
-            onSelected: (value) {
-              AppHaptics.toggle();
-              final notifier = ref.read(searchProvider.notifier);
-              if (value == _allSourcesValue) {
-                if (selectedSource != null) {
-                  notifier.setSourceFilter(_allSourcesValue);
-                }
-              } else if (selectedSource != value) {
-                notifier.setSourceFilter(value);
+          const SizedBox(width: Space.x2),
+          _FilterPill(
+            key: const ValueKey('search-filters-btn'),
+            label: activeExtraCount > 0
+                ? 'Фильтры · $activeExtraCount'
+                : 'Фильтры',
+            trailingIcon: Icons.tune_rounded,
+            selected: activeExtraCount > 0,
+            palette: p,
+            onTap: () => _openFiltersSheet(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openFiltersSheet(BuildContext context) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final p = Palette.of(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      backgroundColor: p.surface,
+      shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
+      builder: (sheetCtx) => Consumer(
+        builder: (sheetCtx, sheetRef, _) {
+          final st = sheetRef.watch(searchProvider);
+          final counts = sheetRef.watch(sourceCountsProvider).maybeWhen(
+                data: (value) => value,
+                orElse: () => const SourceCounts(),
+              );
+          final groups = sheetRef.watch(foodGroupsProvider).maybeWhen(
+                data: (value) => value,
+                orElse: () => const <FoodGroup>[],
+              );
+          final favCount = sheetRef.watch(favoriteProductsProvider).length;
+          FoodGroup? selectedGroup;
+          if (st.selectedGroupId != null) {
+            for (final g in groups) {
+              if (g.id == st.selectedGroupId) {
+                selectedGroup = g;
+                break;
               }
-            },
-            itemBuilder: (_) => [
-              PopupMenuItem<String>(
-                value: _allSourcesValue,
-                child: Row(
-                  children: [
-                    const Expanded(child: Text('Все источники')),
-                    if (selectedSource == null)
-                      Icon(Icons.check_rounded, size: 18, color: p.accent),
-                  ],
-                ),
-              ),
-              for (final (code, count) in [
-                ('skurikhin', counts.skurikhin),
-                ('bls', counts.bls),
-                if (counts.supplement > 0) ('supplement', counts.supplement),
-                if (counts.custom > 0) ('custom', counts.custom),
-              ])
-                PopupMenuItem<String>(
-                  value: code,
-                  child: Row(
+            }
+          }
+          final hasExtra = st.selectedSource != null ||
+              st.selectedGroupId != null ||
+              _onlyFavorites;
+
+          return SafeArea(
+            top: false,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x4),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
                     children: [
                       Expanded(
-                        child: Text(menuLabel(SourceLabel.of(code), count)),
-                      ),
-                      if (selectedSource == code)
-                        Icon(Icons.check_rounded, size: 18, color: p.accent),
-                    ],
-                  ),
-                ),
-            ],
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                minWidth: kMinTapTarget,
-                minHeight: kMinTapTarget,
-              ),
-              child: Center(
-                widthFactor: 1,
-                child: Container(
-                  height: 34,
-                  padding: const EdgeInsets.symmetric(horizontal: Space.x3),
-                  decoration: BoxDecoration(
-                    color: selectedSource != null ? p.accentSoft : p.sunken,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        sourceButtonLabel,
-                        style: AppTypography.label.copyWith(
-                          color: selectedSource != null
-                              ? p.accent
-                              : p.inkSecondary,
+                        child: Text(
+                          'Фильтры справочника',
+                          style: AppTypography.title.copyWith(color: p.ink),
                         ),
                       ),
-                      const SizedBox(width: 2),
-                      Icon(
-                        Icons.expand_more_rounded,
-                        size: 16,
-                        color:
-                            selectedSource != null ? p.accent : p.inkSecondary,
-                      ),
+                      if (hasExtra)
+                        TextButton(
+                          onPressed: () {
+                            AppHaptics.toggle();
+                            setState(() => _onlyFavorites = false);
+                            sheetRef.read(searchProvider.notifier).resetFilters(
+                                  clearQuery: false,
+                                  clearSource: true,
+                                  clearGroup: true,
+                                  clearIsDish: false,
+                                );
+                          },
+                          child: const Text('Сбросить'),
+                        ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: Space.x3),
+                  Text(
+                    'Источник',
+                    style: AppTypography.label.copyWith(color: p.inkSecondary),
+                  ),
+                  const SizedBox(height: Space.x2),
+                  Wrap(
+                    spacing: Space.x2,
+                    runSpacing: Space.x1,
+                    children: [
+                      _FilterPill(
+                        label: 'Все базы',
+                        selected: st.selectedSource == null,
+                        palette: p,
+                        onTap: () {
+                          AppHaptics.toggle();
+                          sheetRef
+                              .read(searchProvider.notifier)
+                              .setSourceFilter(_allSourcesValue);
+                        },
+                      ),
+                      for (final (code, count) in [
+                        ('skurikhin', counts.skurikhin),
+                        ('bls', counts.bls),
+                        if (counts.supplement > 0)
+                          ('supplement', counts.supplement),
+                      ])
+                        _FilterPill(
+                          label: count > 0
+                              ? '${SourceLabel.of(code)} · ${_spaced(count)}'
+                              : SourceLabel.of(code),
+                          selected: st.selectedSource == code,
+                          palette: p,
+                          onTap: () {
+                            AppHaptics.toggle();
+                            sheetRef.read(searchProvider.notifier).setSourceFilter(
+                                  st.selectedSource == code
+                                      ? _allSourcesValue
+                                      : code,
+                                );
+                          },
+                        ),
+                      if (counts.custom > 0)
+                        _FilterPill(
+                          key: const ValueKey('custom-source-pill'),
+                          label: 'Свои · ${counts.custom}',
+                          selected: st.selectedSource == 'custom',
+                          palette: p,
+                          onTap: () {
+                            AppHaptics.toggle();
+                            sheetRef.read(searchProvider.notifier).setSourceFilter(
+                                  st.selectedSource == 'custom'
+                                      ? _allSourcesValue
+                                      : 'custom',
+                                );
+                          },
+                        ),
+                    ],
+                  ),
+                  if (favCount > 0 || groups.isNotEmpty) ...[
+                    const SizedBox(height: Space.x3),
+                    Text(
+                      'Подборка и категория',
+                      style: AppTypography.label.copyWith(color: p.inkSecondary),
+                    ),
+                    const SizedBox(height: Space.x2),
+                    Wrap(
+                      spacing: Space.x2,
+                      runSpacing: Space.x1,
+                      children: [
+                        if (favCount > 0)
+                          _FilterPill(
+                            key: const ValueKey('favorites-filter-pill'),
+                            label: '★ Избранное · $favCount',
+                            selected: _onlyFavorites,
+                            palette: p,
+                            onTap: () {
+                              AppHaptics.toggle();
+                              setState(() => _onlyFavorites = !_onlyFavorites);
+                            },
+                          ),
+                        if (groups.isNotEmpty)
+                          _FilterPill(
+                            key: const ValueKey('group-filter-pill'),
+                            label: selectedGroup?.name ?? 'Категория',
+                            trailingIcon: Icons.expand_more_rounded,
+                            selected: st.selectedGroupId != null,
+                            palette: p,
+                            onTap: () =>
+                                _openGroupPicker(groups, st.selectedGroupId),
+                          ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: Space.x4),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(sheetCtx),
+                    child: const Text('Показать результаты'),
+                  ),
+                ],
               ),
             ),
-          ),
-          if (favoritesCount > 0)
-            _FilterPill(
-              key: const ValueKey('favorites-filter-pill'),
-              label: '★ Избранное · $favoritesCount',
-              selected: _onlyFavorites,
-              palette: p,
-              onTap: () {
-                AppHaptics.toggle();
-                setState(() => _onlyFavorites = !_onlyFavorites);
-              },
-            ),
-          if (counts.custom > 0)
-            _FilterPill(
-              key: const ValueKey('custom-source-pill'),
-              label: 'Свои · ${counts.custom}',
-              selected: selectedSource == 'custom',
-              palette: p,
-              onTap: () {
-                AppHaptics.toggle();
-                ref.read(searchProvider.notifier).setSourceFilter(
-                    selectedSource == 'custom' ? _allSourcesValue : 'custom');
-              },
-            ),
-          if (groups.isNotEmpty)
-            _FilterPill(
-              key: const ValueKey('group-filter-pill'),
-              label: selectedGroup?.name ?? 'Категория',
-              trailingIcon: Icons.expand_more_rounded,
-              selected: selectedGroupId != null,
-              palette: p,
-              onTap: () => _openGroupPicker(groups, selectedGroupId),
-            ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -899,7 +960,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                             style: AppTypography.caption.copyWith(
                               color: valid ? p.inkMuted : p.danger,
                             ),
-                            maxLines: 1,
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
@@ -970,9 +1031,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
       BuildContext context, Palette p, int ingredientCount) {
     final statusText = _lastAddedSummary != null
         ? _lastAddedSummary!
-        : ingredientCount > 0
-            ? 'В блюде продуктов: $ingredientCount'
-            : 'Нажмите на продукт, чтобы указать вес';
+        : 'Нажмите на продукт, чтобы указать вес';
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -1005,7 +1064,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
             FilledButton(
               onPressed: _closeModal,
               child: Text(
-                  ingredientCount > 0 ? 'Готово ($ingredientCount)' : 'Готово'),
+                  ingredientCount > 0 ? 'Готово · $ingredientCount' : 'Готово'),
             ),
           ],
         ),

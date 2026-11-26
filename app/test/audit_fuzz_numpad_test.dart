@@ -37,9 +37,9 @@ class Harness {
   }
 
   bool get canConfirm {
-    // The confirm key is the InkWell that owns the "Добавить в блюдо" label.
+    // The confirm key is the InkWell that owns the "Добавить" label.
     final of = find.ancestor(
-        of: find.text('Добавить в блюдо'), matching: find.byType(InkWell)).first;
+        of: find.text('Добавить'), matching: find.byType(InkWell)).first;
     return tester.widget<InkWell>(of).onTap != null;
   }
 
@@ -62,7 +62,7 @@ class Harness {
   }
 
   Future<void> pressConfirm(WidgetTester t) async {
-    await t.tap(find.text('Добавить в блюдо'));
+    await t.tap(find.text('Добавить'));
     await t.pumpAndSettle();
   }
 }
@@ -118,7 +118,7 @@ void main() {
     // "0," parses to 0.0 -> below the 0.1 gate -> Enter is DISABLED. Good.
     expect(CalculationEngine.parseInputDouble('0,'), 0.0);
     expect(h.canConfirm, isFalse);
-    expect(find.text('Добавить в блюдо'), findsOneWidget);
+    expect(find.text('Добавить'), findsOneWidget);
     // Typing a digit completes the fraction.
     await h.tapSequence(tester, ['7']);
     expect(h.readout, '0,7');
