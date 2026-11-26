@@ -29,7 +29,7 @@ class AppTheme {
       padding: WidgetStatePropertyAll(
         EdgeInsets.symmetric(
           horizontal: compact ? Space.x2 : Space.x3,
-          vertical: Space.x2,
+          vertical: Space.x1,
         ),
       ),
       textStyle: const WidgetStatePropertyAll(AppTypography.label),
@@ -42,7 +42,9 @@ class AppTheme {
         return p.ink;
       }),
       side: WidgetStatePropertyAll(BorderSide(color: p.border)),
-      shape: const WidgetStatePropertyAll(StadiumBorder()),
+      shape: const WidgetStatePropertyAll(
+        RoundedRectangleBorder(borderRadius: Radii.fieldAll),
+      ),
     );
   }
 
@@ -117,7 +119,7 @@ class AppTheme {
         titleTextStyle: AppTypography.title.copyWith(color: p.ink),
       ),
       // Тональное разделение поверхностей без лишних рамок:
-      // на тёплом холсте #F2F2EF сгруппированные белые поверхности (R=20)
+      // на тёплом холсте #F2F2EF сгруппированные белые поверхности (R=16)
       // читаются за счёт тонового шага.
       cardTheme: CardTheme(
         color: p.surface,
@@ -138,7 +140,7 @@ class AppTheme {
         fillColor: p.sunken,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: Space.x3,
-          vertical: 10,
+          vertical: Space.x3,
         ),
         hintStyle: AppTypography.bodySm.copyWith(color: p.inkMuted),
         labelStyle: AppTypography.bodySm.copyWith(color: p.inkSecondary),
@@ -172,7 +174,7 @@ class AppTheme {
         selectedColor: p.accentSoft,
         disabledColor: p.sunken,
         side: BorderSide(color: p.border),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+        shape: const RoundedRectangleBorder(borderRadius: Radii.chipAll),
         labelStyle: AppTypography.label.copyWith(color: p.ink),
         padding: const EdgeInsets.symmetric(
           horizontal: Space.x3,
@@ -190,10 +192,10 @@ class AppTheme {
           minimumSize: const Size(0, kMinTapTarget),
           tapTargetSize: MaterialTapTargetSize.padded,
           padding: const EdgeInsets.symmetric(
-            horizontal: 14,
-            vertical: 10,
+            horizontal: Space.x4,
+            vertical: Space.x3,
           ),
-          shape: const StadiumBorder(),
+          shape: const RoundedRectangleBorder(borderRadius: Radii.fieldAll),
           textStyle: AppTypography.label,
         ),
       ),
@@ -207,10 +209,10 @@ class AppTheme {
           minimumSize: const Size(0, kMinTapTarget),
           tapTargetSize: MaterialTapTargetSize.padded,
           padding: const EdgeInsets.symmetric(
-            horizontal: 14,
-            vertical: 10,
+            horizontal: Space.x4,
+            vertical: Space.x3,
           ),
-          shape: const StadiumBorder(),
+          shape: const RoundedRectangleBorder(borderRadius: Radii.fieldAll),
           textStyle: AppTypography.label,
         ),
       ),
@@ -222,11 +224,11 @@ class AppTheme {
           minimumSize: const Size(0, kMinTapTarget),
           tapTargetSize: MaterialTapTargetSize.padded,
           padding: const EdgeInsets.symmetric(
-            horizontal: 14,
-            vertical: 10,
+            horizontal: Space.x4,
+            vertical: Space.x3,
           ),
           side: BorderSide(color: p.borderStatic, width: 1),
-          shape: const StadiumBorder(),
+          shape: const RoundedRectangleBorder(borderRadius: Radii.fieldAll),
           textStyle: AppTypography.label,
         ),
       ),
@@ -236,10 +238,10 @@ class AppTheme {
           minimumSize: const Size(0, kMinTapTarget),
           tapTargetSize: MaterialTapTargetSize.padded,
           padding: const EdgeInsets.symmetric(
-            horizontal: 10,
+            horizontal: Space.x3,
             vertical: Space.x2,
           ),
-          shape: const StadiumBorder(),
+          shape: const RoundedRectangleBorder(borderRadius: Radii.fieldAll),
           textStyle: AppTypography.label,
         ),
       ),
@@ -287,9 +289,7 @@ class AppTheme {
       dialogTheme: DialogTheme(
         backgroundColor: p.surface,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(Radii.dialog),
-        ),
+        shape: const RoundedRectangleBorder(borderRadius: Radii.dialogAll),
         titleTextStyle: AppTypography.title.copyWith(color: p.ink),
         contentTextStyle: AppTypography.body.copyWith(color: p.ink),
       ),

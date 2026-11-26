@@ -407,7 +407,12 @@ void main() {
                 product: beet.copyWith(name: 'Яйцо куриное'),
                 initialGrams: 100,
                 onConfirm: (g, _) => saved = g))));
-    await tester.tap(find.textContaining('1 шт. (1 категория'));
+    await tester.tap(find.byKey(const ValueKey('numpad-extras-toggle')));
+    await tester.pumpAndSettle();
+    final eggChip = find.textContaining('1 шт. (1 категория');
+    await tester.ensureVisible(eggChip);
+    await tester.pumpAndSettle();
+    await tester.tap(eggChip);
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.byKey(const ValueKey('measure-inc')));
     await tester.tap(find.byKey(const ValueKey('measure-inc')));

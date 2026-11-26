@@ -494,7 +494,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byTooltip('Как считается'));
+      await tester.tap(find.byTooltip('Настройки и справка'));
       await tester.pumpAndSettle();
 
       expect(
@@ -775,21 +775,25 @@ void main() {
       expect(customPill, findsOneWidget);
       await tester.tap(customPill);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Показать результаты'));
+      await tester.tap(find.byKey(const ValueKey('filters-apply-btn')));
       await tester.pumpAndSettle();
       expect(find.text('Фирменный соус'), findsOneWidget);
 
       // Confirmation dialog prevents accidental custom product deletion.
       await tester.tap(find.byTooltip('Сведения о продукте').first);
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Удалить продукт'));
+      await tester.tap(find.byKey(const ValueKey('product-info-more-btn')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Удалить продукт'));
       await tester.pumpAndSettle();
       expect(find.text('Удалить свой продукт?'), findsOneWidget);
       await tester.tap(find.text('Отмена'));
       await tester.pumpAndSettle();
       expect(customRepo.items.length, 1);
 
-      await tester.tap(find.byTooltip('Удалить продукт'));
+      await tester.tap(find.byKey(const ValueKey('product-info-more-btn')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Удалить продукт'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Удалить').last);
       await tester.pumpAndSettle();

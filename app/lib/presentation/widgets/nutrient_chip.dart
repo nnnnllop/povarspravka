@@ -180,7 +180,7 @@ class InlineMacroCell extends StatelessWidget {
         ? Container(
             width: dotSize,
             height: dotSize,
-            margin: const EdgeInsets.only(right: 4),
+            margin: const EdgeInsets.only(right: Space.x1),
             decoration: BoxDecoration(
               color: resolvedTint,
               shape: BoxShape.circle,
@@ -222,7 +222,13 @@ class InlineMacroCell extends StatelessWidget {
                   fontWeight: FontWeight.w500,
                 ),
               ),
-              valueText,
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: valueText,
+                ),
+              ),
             ],
           );
 

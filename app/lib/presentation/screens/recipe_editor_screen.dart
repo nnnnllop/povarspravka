@@ -89,6 +89,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
   String? _yieldError;
   bool _yieldDetailsExpanded = false;
   bool _showCollapsedKcal = false;
+  bool _heroShowPer100g = false;
   bool _isReordering = false;
 
   @override
@@ -105,7 +106,10 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
     ref.listen<Dish>(dishProvider, (previous, next) {
       if (previous?.id != next.id) {
         _syncControllers(next);
-        setState(() => _yieldError = null);
+        setState(() {
+          _yieldError = null;
+          _heroShowPer100g = false;
+        });
       } else {
         if (previous?.title != next.title && _titleCtrl.text != next.title) {
           _titleCtrl.text = next.title;
@@ -175,25 +179,30 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                       ),
                       if (media.width >= 340) ...[
                         const SizedBox(width: Space.x2),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: Space.x2 + 2,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: p.slab,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            calc.hasYield
-                                ? '${CalculationEngine.formatKcal(calc.per100gKcal)} / 100 г'
-                                : '${CalculationEngine.formatKcal(calc.cookedKcal)} ккал',
-                            style: AppTypography.caption.copyWith(
-                              color: p.slabInk,
-                              fontWeight: FontWeight.w700,
-                            ),
-                            maxLines: 1,
-                          ),
+                        Builder(
+                          builder: (_) {
+                            final per100 = calc.hasYield && _heroShowPer100g;
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: Space.x3,
+                                vertical: Space.x1,
+                              ),
+                              decoration: BoxDecoration(
+                                color: p.slab,
+                                borderRadius: Radii.chipAll,
+                              ),
+                              child: Text(
+                                per100
+                                    ? '${CalculationEngine.formatKcal(calc.per100gKcal)} / 100 г'
+                                    : '${CalculationEngine.formatKcal(calc.cookedKcal)} ккал',
+                                style: AppTypography.caption.copyWith(
+                                  color: p.slabInk,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                maxLines: 1,
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ],
@@ -253,10 +262,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                     TextField(
                       controller: _titleCtrl,
                       textCapitalization: TextCapitalization.sentences,
-                      style: AppTypography.title.copyWith(
-                        color: p.ink,
-                        fontSize: 19,
-                      ),
+                      style: AppTypography.title.copyWith(color: p.ink),
                       onChanged: (value) =>
                           ref.read(dishProvider.notifier).setTitle(value),
                       decoration: InputDecoration(
@@ -266,21 +272,22 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
                         hintText: 'Название блюда',
-                        hintStyle: AppTypography.title.copyWith(
-                          color: p.inkMuted,
-                          fontSize: 19,
-                        ),
+                        hintStyle:
+                            AppTypography.title.copyWith(color: p.inkMuted),
                         contentPadding:
-                            const EdgeInsets.symmetric(vertical: 2),
+                            const EdgeInsets.symmetric(vertical: Space.x1),
                       ),
                     ),
-                    const SizedBox(height: Space.x1 + 2),
+                    const SizedBox(height: Space.x2),
                     if (calc != null)
                       MacroSummaryBar(
                         key: ValueKey(dish.id),
                         result: calc,
                         hero: true,
                         ingredients: dish.ingredients,
+                        showPer100g: _heroShowPer100g,
+                        onModeChanged: (v) =>
+                            setState(() => _heroShowPer100g = v),
                       ),
                     if (calc != null) const SizedBox(height: Space.x4),
                     _buildParameters(dish, calc),
@@ -326,7 +333,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
                         if (!dish.process.isLegacy &&
                             dish.ingredients.isNotEmpty)
                           Padding(
-                            padding: const EdgeInsets.only(top: 2),
+                            padding: const EdgeInsets.only(top: Space.x1),
                             child: Text(
                               'КБЖУ в строках указано до готовки (по нетто сырья)',
                               style: AppTypography.caption
@@ -406,12 +413,9 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
     final media = MediaQuery.sizeOf(context);
     final textScale = MediaQuery.textScalerOf(context).scale(1.0);
     final stackActions =
-        (media.width < 380 && textScale > 1.3) || media.width < 300;
+        AppLayout.shouldStackActions(media.width, textScale);
     final shortLandscape = media.height < 460 && media.width >= 560;
     final compactDock = shortLandscape || (stackActions && media.height < 640);
-    final pillShape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(stackActions ? Radii.field : 999),
-    );
 
     final compactPad = compactDock
         ? const EdgeInsets.symmetric(
@@ -422,15 +426,12 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
 
     final blankBtn = OutlinedButton(
       onPressed: _openBlank,
-      style: OutlinedButton.styleFrom(
-        padding: compactPad,
-        shape: pillShape,
-      ),
+      style: OutlinedButton.styleFrom(padding: compactPad),
       child: const Row(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.description_outlined, size: 18),
+          Icon(Icons.description_outlined, size: 20),
           SizedBox(width: Space.x2),
           Flexible(
             child: Text(
@@ -451,10 +452,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
           mode: SearchMode.pickForRecipe,
         );
       },
-      style: FilledButton.styleFrom(
-        padding: compactPad,
-        shape: pillShape,
-      ),
+      style: FilledButton.styleFrom(padding: compactPad),
       child: const Row(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
@@ -877,7 +875,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: kMinTapTarget),
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
+              padding: const EdgeInsets.symmetric(vertical: Space.x1),
               child: Row(
                 children: [
                   Icon(Icons.local_fire_department_outlined,
@@ -996,7 +994,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
           ),
           if (_yieldError != null)
             Padding(
-              padding: const EdgeInsets.only(top: 2, bottom: Space.x1),
+              padding: const EdgeInsets.only(top: Space.x1, bottom: Space.x1),
               child: Text(
                 _yieldError!,
                 style: AppTypography.caption.copyWith(color: p.danger),
@@ -1023,7 +1021,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: kMinTapTarget),
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
+                padding: const EdgeInsets.symmetric(vertical: Space.x1),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1063,7 +1061,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
     );
 
     return GroupedSurface(
-      padding: const EdgeInsets.all(Space.x3),
+      padding: const EdgeInsets.all(Space.x4),
       child: body,
     );
   }
@@ -1083,7 +1081,7 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
             height: 52,
             decoration: BoxDecoration(
               color: p.accentSoft,
-              borderRadius: BorderRadius.circular(Radii.card),
+              borderRadius: Radii.cardAll,
             ),
             child: Icon(
               Icons.restaurant_menu_rounded,
@@ -2049,16 +2047,18 @@ class _ScaleRecipeSheetState extends State<_ScaleRecipeSheet> {
                   segments: const [
                     ButtonSegment<bool>(
                       value: false,
-                      label: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text('Множитель'),
+                      label: Text(
+                        'Множитель',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     ButtonSegment<bool>(
                       value: true,
-                      label: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text('Целевой вес'),
+                      label: Text(
+                        'Целевой вес',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -2216,7 +2216,7 @@ class _ScaleRecipeSheetState extends State<_ScaleRecipeSheet> {
                       children: [
                         if (_byTargetWeight)
                           Padding(
-                            padding: const EdgeInsets.only(bottom: 2),
+                            padding: const EdgeInsets.only(bottom: Space.x1),
                             child: Text(
                               'Коэффициент: ×${CalculationEngine.formatMacro(effectiveFactor)}',
                               key: const ValueKey('scale-computed-factor'),
@@ -2233,7 +2233,7 @@ class _ScaleRecipeSheetState extends State<_ScaleRecipeSheet> {
                         ),
                         if (hasCustomYield && applyScaleYield)
                           Padding(
-                            padding: const EdgeInsets.only(top: 2),
+                            padding: const EdgeInsets.only(top: Space.x1),
                             child: Text(
                               'Выход блюда: ${CalculationEngine.formatGrams(currentYield)} г → '
                               '${CalculationEngine.formatGrams(CalculationMath.round1(currentYield * effectiveFactor))} г',

@@ -8,6 +8,7 @@ import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
 import '../providers/search_provider.dart';
 import 'app_buttons.dart';
+import 'app_sheet.dart';
 
 /// Шторка создания/редактирования своего продукта или сохранения готового
 /// блюда в виде полуфабриката на 100 г.
@@ -51,14 +52,12 @@ class CustomProductFormSheet extends ConsumerStatefulWidget {
     String? sheetSubtitle,
   }) {
     FocusManager.instance.primaryFocus?.unfocus();
-    final p = Palette.of(context);
     return showModalBottomSheet<Product>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      showDragHandle: true,
-      backgroundColor: p.surface,
-      shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
+      showDragHandle: false,
+      backgroundColor: Colors.transparent,
       builder: (_) => CustomProductFormSheet(
         initial: initial,
         initialName: initialName,
@@ -232,7 +231,7 @@ class _CustomProductFormSheetState
     final p = Palette.of(context);
     final size = MediaQuery.sizeOf(context);
     final textScale = MediaQuery.textScalerOf(context).scale(1.0);
-    final stackMacros = size.width < 360 || textScale > 1.35;
+    final stackMacros = AppLayout.shouldStackActions(size.width, textScale);
 
     Widget numField({
       required Key fieldKey,
@@ -281,157 +280,152 @@ class _CustomProductFormSheetState
     final subtitle = widget.sheetSubtitle ??
         'Удобно для продуктов с этикетки или авторских заготовок.';
 
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxHeight: size.height * 0.9),
-      child: Padding(
-        padding:
-            EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-        child: SafeArea(
-          top: false,
-          child: SingleChildScrollView(
-            padding:
-                const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x4),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+    final footerWidget = stackMacros
+        ? Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              FilledButton(
+                key: const ValueKey('custom-save-btn'),
+                onPressed: _saving ? null : _submit,
+                child: const Text(
+                  'Сохранить продукт',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: Space.x1),
+              TextButton(
+                onPressed: _saving ? null : () => Navigator.pop(context),
+                child: const Text('Отмена'),
+              ),
+            ],
+          )
+        : IntrinsicHeight(
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(title, style: AppTypography.title.copyWith(color: p.ink)),
-                const SizedBox(height: Space.x1),
-                Text(
-                  subtitle,
-                  style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
+                TextButton(
+                  onPressed: _saving ? null : () => Navigator.pop(context),
+                  child: const Text('Отмена'),
                 ),
-                const SizedBox(height: Space.x3),
-                TextField(
-                  key: const ValueKey('custom-name'),
-                  controller: _nameCtrl,
-                  textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(
-                    labelText: 'Название продукта',
-                    hintText: 'Например, соус терияки',
+                const SizedBox(width: Space.x2),
+                Expanded(
+                  child: FilledButton(
+                    key: const ValueKey('custom-save-btn'),
+                    onPressed: _saving ? null : _submit,
+                    child: const Text(
+                      'Сохранить продукт',
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 ),
-                const SizedBox(height: Space.x3),
-                if (stackMacros)
-                  Column(
-                    children: [
-                      macroFields[0],
-                      const SizedBox(height: Space.x2),
-                      macroFields[1],
-                      const SizedBox(height: Space.x2),
-                      macroFields[2],
-                    ],
-                  )
-                else
-                  Row(
-                    children: [
-                      Expanded(child: macroFields[0]),
-                      const SizedBox(width: Space.x2),
-                      Expanded(child: macroFields[1]),
-                      const SizedBox(width: Space.x2),
-                      Expanded(child: macroFields[2]),
-                    ],
-                  ),
+              ],
+            ),
+          );
+
+    return AppSheetScaffold(
+      title: title,
+      subtitle: subtitle,
+      showHandle: true,
+      maxHeightFactor: 0.9,
+      bodyPadding:
+          const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, Space.x4),
+      footer: footerWidget,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            key: const ValueKey('custom-name'),
+            controller: _nameCtrl,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(
+              labelText: 'Название продукта',
+              hintText: 'Например, соус терияки',
+            ),
+          ),
+          const SizedBox(height: Space.x3),
+          if (stackMacros)
+            Column(
+              children: [
+                macroFields[0],
                 const SizedBox(height: Space.x2),
-                if (stackMacros) ...[
-                  numField(
+                macroFields[1],
+                const SizedBox(height: Space.x2),
+                macroFields[2],
+              ],
+            )
+          else
+            Row(
+              children: [
+                Expanded(child: macroFields[0]),
+                const SizedBox(width: Space.x2),
+                Expanded(child: macroFields[1]),
+                const SizedBox(width: Space.x2),
+                Expanded(child: macroFields[2]),
+              ],
+            ),
+          const SizedBox(height: Space.x2),
+          if (stackMacros) ...[
+            numField(
+              fieldKey: const ValueKey('custom-kcal'),
+              ctrl: _kcalCtrl,
+              label: _kcalManual ? 'Ккал / 100 г' : 'Ккал (авто)',
+              onChanged: (_) => setState(() => _kcalManual = true),
+            ),
+            const SizedBox(height: Space.x2),
+            numField(
+              fieldKey: const ValueKey('custom-waste'),
+              ctrl: _wasteCtrl,
+              label: 'Отходы, %',
+            ),
+          ] else
+            Row(
+              children: [
+                Expanded(
+                  child: numField(
                     fieldKey: const ValueKey('custom-kcal'),
                     ctrl: _kcalCtrl,
                     label: _kcalManual ? 'Ккал / 100 г' : 'Ккал (авто)',
                     onChanged: (_) => setState(() => _kcalManual = true),
                   ),
-                  const SizedBox(height: Space.x2),
-                  numField(
+                ),
+                const SizedBox(width: Space.x2),
+                Expanded(
+                  child: numField(
                     fieldKey: const ValueKey('custom-waste'),
                     ctrl: _wasteCtrl,
                     label: 'Отходы, %',
                   ),
-                ] else
-                  Row(
-                    children: [
-                      Expanded(
-                        child: numField(
-                          fieldKey: const ValueKey('custom-kcal'),
-                          ctrl: _kcalCtrl,
-                          label: _kcalManual ? 'Ккал / 100 г' : 'Ккал (авто)',
-                          onChanged: (_) => setState(() => _kcalManual = true),
-                        ),
-                      ),
-                      const SizedBox(width: Space.x2),
-                      Expanded(
-                        child: numField(
-                          fieldKey: const ValueKey('custom-waste'),
-                          ctrl: _wasteCtrl,
-                          label: 'Отходы, %',
-                        ),
-                      ),
-                    ],
-                  ),
-                const SizedBox(height: Space.x2),
-                SwitchListTile.adaptive(
-                  contentPadding: EdgeInsets.zero,
-                  materialTapTargetSize: MaterialTapTargetSize.padded,
-                  title: Text(
-                    'Готовое блюдо',
-                    style: AppTypography.bodySm.copyWith(color: p.ink),
-                  ),
-                  value: _isDish,
-                  onChanged: (v) => setState(() => _isDish = v),
                 ),
-                if (_error != null) ...[
-                  const SizedBox(height: Space.x2),
-                  Container(
-                    padding: const EdgeInsets.all(Space.x3),
-                    decoration: BoxDecoration(
-                      color: p.dangerSoft,
-                      borderRadius: Radii.fieldAll,
-                    ),
-                    child: Text(
-                      _error!,
-                      style: AppTypography.caption.copyWith(color: p.danger),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: Space.x3),
-                if (stackMacros) ...[
-                  FilledButton(
-                    key: const ValueKey('custom-save-btn'),
-                    onPressed: _saving ? null : _submit,
-                    child: const Text('Сохранить продукт',
-                        textAlign: TextAlign.center),
-                  ),
-                  const SizedBox(height: Space.x1),
-                  TextButton(
-                    onPressed:
-                        _saving ? null : () => Navigator.pop(context),
-                    child: const Text('Отмена'),
-                  ),
-                ] else
-                  IntrinsicHeight(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        TextButton(
-                          onPressed:
-                              _saving ? null : () => Navigator.pop(context),
-                          child: const Text('Отмена'),
-                        ),
-                        const SizedBox(width: Space.x2),
-                        Expanded(
-                          child: FilledButton(
-                            key: const ValueKey('custom-save-btn'),
-                            onPressed: _saving ? null : _submit,
-                            child: const Text('Сохранить продукт',
-                                textAlign: TextAlign.center),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
               ],
             ),
+          const SizedBox(height: Space.x2),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            materialTapTargetSize: MaterialTapTargetSize.padded,
+            title: Text(
+              'Готовое блюдо',
+              style: AppTypography.bodySm.copyWith(color: p.ink),
+            ),
+            value: _isDish,
+            onChanged: (v) => setState(() => _isDish = v),
           ),
-        ),
+          if (_error != null) ...[
+            const SizedBox(height: Space.x2),
+            Container(
+              padding: const EdgeInsets.all(Space.x3),
+              decoration: BoxDecoration(
+                color: p.dangerSoft,
+                borderRadius: Radii.fieldAll,
+              ),
+              child: Text(
+                _error!,
+                style: AppTypography.caption.copyWith(color: p.danger),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

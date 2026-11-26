@@ -266,7 +266,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('home-select-mode-btn')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Выбрано: 0'), findsOneWidget);
+    expect(find.text('Выбрано 0'), findsOneWidget);
     expect(find.text('Сравнить'), findsOneWidget);
     expect(find.text('Меню'), findsOneWidget);
     expect(find.text('Экспорт'), findsOneWidget);

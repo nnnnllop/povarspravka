@@ -182,6 +182,8 @@ void main() {
           reason: 'no exception after toggling and cancelling inline waste edit');
 
       // 4. Inline measure stepper inside CustomNumpadSheet (no AlertDialog).
+      await tester.tap(find.byKey(const ValueKey('numpad-extras-toggle')));
+      await tester.pumpAndSettle();
       final chip = find.byKey(const ValueKey('measure-клубень'));
       expect(chip, findsOneWidget);
       await tester.ensureVisible(chip);

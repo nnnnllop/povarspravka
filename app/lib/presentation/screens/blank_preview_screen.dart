@@ -109,10 +109,11 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
         // формула `64 * scale(14)/14` = `64·s` давала двойное масштабирование
         // и при s=2.0 толкала панель до 128 dp (аудит P2-8).
         toolbarHeight: kToolbarHeight,
-        title: const Text('Бланк расчёта КБЖУ',
-            softWrap: true,
-            maxLines: 3,
-            overflow: TextOverflow.visible),
+        title: const Text(
+          'Бланк',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.ios_share_rounded),
@@ -133,10 +134,11 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
           final media = MediaQuery.sizeOf(context);
           final textScale = MediaQuery.textScalerOf(context).scale(1.0);
           final inlineModeBanner =
-              (media.height < 680 && textScale > 1.3) ||
+              (media.height < 680 && AppLayout.isLargeText(textScale)) ||
               (textScale > 1.5 && media.height < 900) ||
               media.height < 420;
-          final stackModeBanner = textScale > 1.15 || media.width < 420;
+          final stackModeBanner =
+              textScale > 1.15 || AppLayout.isCompact(media.width);
           final modeIcon = Icon(
             dish.blankMode == BlankMode.photoCross
                 ? Icons.grid_on_rounded
@@ -157,7 +159,7 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Padding(
-                        padding: const EdgeInsets.only(top: 3),
+                        padding: const EdgeInsets.only(top: Space.x1),
                         child: modeIcon,
                       ),
                       const SizedBox(width: Space.x2),
@@ -181,7 +183,7 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
                       ),
                       if (!inlineModeBanner)
                         Padding(
-                          padding: const EdgeInsets.only(top: 2, left: Space.x2),
+                          padding: const EdgeInsets.only(left: Space.x2),
                           child: Icon(Icons.tune_rounded,
                               size: 18, color: p.accent),
                         ),
@@ -326,18 +328,21 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final textScale = MediaQuery.textScalerOf(context).scale(1.0);
-                final twoRows = constraints.maxWidth < 380 ||
+                final twoRows = AppLayout.isCompact(constraints.maxWidth) ||
                     (textScale > 1.2 && constraints.maxWidth < 520);
 
                 final zoomOutBtn = IconButton(
                   tooltip: 'Уменьшить',
                   icon: const Icon(Icons.zoom_out_rounded),
-                  onPressed: () => _zoomBy(1 / 1.25),
+                  onPressed: _scale <= _minScale + 0.01
+                      ? null
+                      : () => _zoomBy(1 / 1.25),
                 );
                 final zoomInBtn = IconButton(
                   tooltip: 'Увеличить',
                   icon: const Icon(Icons.zoom_in_rounded),
-                  onPressed: () => _zoomBy(1.25),
+                  onPressed:
+                      _scale >= _maxScale - 0.01 ? null : () => _zoomBy(1.25),
                 );
                 final scaleLabel = Text(
                   'Масштаб ${(_scale * 100).round()} %',

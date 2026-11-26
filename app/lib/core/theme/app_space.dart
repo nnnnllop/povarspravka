@@ -20,26 +20,54 @@ class Space {
   static const double maxWidth = 640;
 
   static const EdgeInsets screenH = EdgeInsets.symmetric(horizontal: x4);
-  static const EdgeInsets card = EdgeInsets.all(x3);
+  static const EdgeInsets card = EdgeInsets.all(x4);
   static const EdgeInsets sheet = EdgeInsets.fromLTRB(x4, x3, x4, x4);
 
-  /// Горизонтальный отступ экрана: 16 (узкий) → 20 (≥400 dp).
-  static double gutter(double width) => width >= 400 ? x5 : x4;
+  /// Единый горизонтальный отступ экрана: 16 dp.
+  static double gutter(double width) => x4;
 }
 
-/// Скругления в стиле Material 3 / iOS (дизайн «Прибор»).
+/// Единая политика адаптивных порогов для всего интерфейса.
+class AppLayout {
+  /// Очень узкий экран (<360 dp, например 320 dp).
+  static bool isNarrow(double width) => width < 360;
+
+  /// Компактный телефонный экран (<480 dp).
+  static bool isCompact(double width) => width < 480;
+
+  /// Крупный пользовательский масштаб текста.
+  static bool isLargeText(double textScale) => textScale >= 1.3;
+
+  /// Складывать ли парные кнопки действий в столбец вместо строки.
+  static bool shouldStackActions(double width, double textScale) =>
+      width < 360 || textScale >= 1.45;
+
+  /// Разрешена ли 2-колоночная компоновка нумпада (ввод + клавиатура рядом).
+  static bool canSideBySideNumpad(
+    double width,
+    double height,
+    double textScale,
+  ) =>
+      width >= 540 && height >= 260 && height < 460;
+}
+
+/// Скругления в стиле Material 3 / iOS (дизайн «Прибор», шаг 4 dp).
 class Radii {
   static const double chip = 8;
   static const double field = 12;
   static const double card = 16;
-  static const double slab = 18;
+  static const double dock = 20;
+  static const double slab = 20;
   static const double sheet = 24;
-  static const double dialog = 20;
+  static const double dialog = 24;
 
   static const BorderRadius chipAll = BorderRadius.all(Radius.circular(chip));
   static const BorderRadius fieldAll = BorderRadius.all(Radius.circular(field));
   static const BorderRadius cardAll = BorderRadius.all(Radius.circular(card));
+  static const BorderRadius dockAll = BorderRadius.all(Radius.circular(dock));
   static const BorderRadius slabAll = BorderRadius.all(Radius.circular(slab));
+  static const BorderRadius dialogAll =
+      BorderRadius.all(Radius.circular(dialog));
   static const BorderRadius sheetTop = BorderRadius.vertical(
     top: Radius.circular(sheet),
   );

@@ -8,6 +8,7 @@ import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
 import 'app_buttons.dart';
+import 'app_sheet.dart';
 import 'instrument_widgets.dart';
 import 'macro_balance_bar.dart';
 
@@ -28,14 +29,12 @@ class DishComparisonSheet extends StatefulWidget {
     required Dish second,
   }) {
     FocusManager.instance.primaryFocus?.unfocus();
-    final p = Palette.of(context);
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      showDragHandle: true,
-      backgroundColor: p.surface,
-      shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
+      showDragHandle: false,
+      backgroundColor: Colors.transparent,
       builder: (_) => DishComparisonSheet(first: first, second: second),
     );
   }
@@ -68,7 +67,8 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
     final p = Palette.of(context);
     final size = MediaQuery.sizeOf(context);
     final textScale = MediaQuery.textScalerOf(context).scale(1.0);
-    final stackRows = size.width < 360 || textScale > 1.35;
+    final stackRows =
+        AppLayout.isNarrow(size.width) || AppLayout.isLargeText(textScale);
     final nameA = _dishName(widget.first, 'Блюдо 1');
     final nameB = _dishName(widget.second, 'Блюдо 2');
     final a = _calcA;
@@ -106,12 +106,6 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
       String Function(double) fmt,
     )>[
       (
-        'Энергия, ккал',
-        pickMetric(a, (r) => r.cookedKcal, (r) => r.per100gKcal),
-        pickMetric(b, (r) => r.cookedKcal, (r) => r.per100gKcal),
-        CalculationEngine.formatKcal,
-      ),
-      (
         'Белки, г',
         pickMetric(a, (r) => r.cookedProtein, (r) => r.per100gProtein),
         pickMetric(b, (r) => r.cookedProtein, (r) => r.per100gProtein),
@@ -130,6 +124,12 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
         CalculationEngine.formatMacro,
       ),
       (
+        'Энергия, ккал',
+        pickMetric(a, (r) => r.cookedKcal, (r) => r.per100gKcal),
+        pickMetric(b, (r) => r.cookedKcal, (r) => r.per100gKcal),
+        CalculationEngine.formatKcal,
+      ),
+      (
         'Выход, г',
         (a != null && a.hasYield) ? a.yieldGrams : null,
         (b != null && b.hasYield) ? b.yieldGrams : null,
@@ -140,74 +140,62 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
     final missingYieldInPer100 =
         !_wholeDish && (!(a?.hasYield ?? true) || !(b?.hasYield ?? true));
 
-    return SizedBox(
-      height: size.height * 0.88,
-      child: SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x5),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Сравнение блюд',
-                style: AppTypography.title.copyWith(color: p.ink),
+    return AppSheetScaffold(
+      title: 'Сравнение блюд',
+      subtitle: 'Разница показана для второго блюда относительно первого.',
+      showHandle: true,
+      maxHeightFactor: 0.88,
+      bodyPadding:
+          const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, Space.x4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SegmentedButton<bool>(
+            key: const ValueKey('compare-mode-segmented'),
+            showSelectedIcon: false,
+            style: AppSegmentedStyle.of(p, compact: true),
+            segments: const [
+              ButtonSegment<bool>(
+                value: false,
+                label: Text('На 100 г'),
               ),
-              const SizedBox(height: 2),
-              Text(
-                'Разница показана для второго блюда относительно первого.',
-                style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
+              ButtonSegment<bool>(
+                value: true,
+                label: Text('На всё блюдо'),
               ),
-              const SizedBox(height: Space.x2),
-              SegmentedButton<bool>(
-                key: const ValueKey('compare-mode-segmented'),
-                showSelectedIcon: false,
-                style: AppSegmentedStyle.of(p, compact: true),
-                segments: const [
-                  ButtonSegment<bool>(
-                    value: false,
-                    label: FittedBox(fit: BoxFit.scaleDown, child: Text('На 100 г')),
-                  ),
-                  ButtonSegment<bool>(
-                    value: true,
-                    label: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text('На всё блюдо'),
-                    ),
-                  ),
-                ],
-                selected: {_wholeDish},
-                onSelectionChanged: (sel) {
-                  if (sel.isEmpty) return;
-                  AppHaptics.toggle();
-                  setState(() => _wholeDish = sel.first);
-                },
+            ],
+            selected: {_wholeDish},
+            onSelectionChanged: (sel) {
+              if (sel.isEmpty) return;
+              AppHaptics.toggle();
+              setState(() => _wholeDish = sel.first);
+            },
+          ),
+          if (a == null || b == null) ...[
+            const SizedBox(height: Space.x3),
+            Container(
+              padding: const EdgeInsets.all(Space.x3),
+              decoration: BoxDecoration(
+                color: p.dangerSoft,
+                borderRadius: Radii.fieldAll,
               ),
-              if (a == null || b == null) ...[
-                const SizedBox(height: Space.x3),
-                Container(
-                  padding: const EdgeInsets.all(Space.x3),
-                  decoration: BoxDecoration(
-                    color: p.dangerSoft,
-                    borderRadius: Radii.fieldAll,
-                  ),
-                  child: Text(
-                    'Одно из блюд содержит ошибку расчёта — значения отмечены прочерком.',
-                    style: AppTypography.caption.copyWith(color: p.danger),
-                  ),
-                ),
-              ],
-              if (missingYieldInPer100) ...[
-                const SizedBox(height: Space.x2),
-                Text(
-                  'Для блюда без указанного выхода значения на 100 г отмечены «—».',
-                  style: AppTypography.caption.copyWith(color: p.inkSecondary),
-                ),
-              ],
-              const SizedBox(height: Space.x3),
-              GroupedSurface(
-                color: p.sunken,
-                padding: const EdgeInsets.all(Space.x3 + 2),
+              child: Text(
+                'Одно из блюд содержит ошибку расчёта — значения отмечены прочерком.',
+                style: AppTypography.caption.copyWith(color: p.danger),
+              ),
+            ),
+          ],
+          if (missingYieldInPer100) ...[
+            const SizedBox(height: Space.x2),
+            Text(
+              'Для блюда без указанного выхода значения на 100 г отмечены «—».',
+              style: AppTypography.caption.copyWith(color: p.inkSecondary),
+            ),
+          ],
+          const SizedBox(height: Space.x3),
+          GroupedSurface(
+            color: p.sunken,
+            padding: const EdgeInsets.all(Space.x4),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -273,7 +261,7 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
                               rows[i].$1,
                               style: AppTypography.label.copyWith(color: p.ink),
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: Space.x1),
                             Text(
                               '$nameA: ${fmtVal(rows[i].$2, rows[i].$4)}',
                               style: AppTypography.numSm
@@ -402,8 +390,6 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
               ],
             ],
           ),
-        ),
-      ),
-    );
+        );
   }
 }

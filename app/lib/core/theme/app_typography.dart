@@ -22,20 +22,20 @@ class AppTypography {
     FontFeature.tabularFigures(),
   ];
 
-  // ─── Дисплей и крупные заголовки ────────────────────────────────────────
+  // ─── Дисплей и крупные заголовки (шаг сетки 4 dp) ───────────────────────
   static const TextStyle largeTitle = TextStyle(
     fontFamily: fontName,
     fontSize: 24,
-    height: 1.15,
+    height: 28 / 24,
     fontWeight: FontWeight.w700,
-    letterSpacing: -0.5,
+    letterSpacing: -0.4,
     fontFeatures: _tnum,
   );
 
   static const TextStyle heroKcal = TextStyle(
     fontFamily: fontName,
     fontSize: 32,
-    height: 1.05,
+    height: 36 / 32,
     fontWeight: FontWeight.w700,
     letterSpacing: -0.75,
     fontFeatures: _tnum,
@@ -43,26 +43,26 @@ class AppTypography {
 
   static const TextStyle display = TextStyle(
     fontFamily: fontName,
-    fontSize: 26,
-    height: 1.1,
+    fontSize: 24,
+    height: 28 / 24,
     fontWeight: FontWeight.w700,
-    letterSpacing: -0.5,
+    letterSpacing: -0.4,
     fontFeatures: _tnum,
   );
 
   static const TextStyle title = TextStyle(
     fontFamily: fontName,
-    fontSize: 18.5,
-    height: 1.2,
-    fontWeight: FontWeight.w700,
+    fontSize: 20,
+    height: 24 / 20,
+    fontWeight: FontWeight.w600,
     letterSpacing: -0.3,
     fontFeatures: _tnum,
   );
 
   static const TextStyle headline = TextStyle(
     fontFamily: fontName,
-    fontSize: 15,
-    height: 1.26,
+    fontSize: 16,
+    height: 24 / 16,
     fontWeight: FontWeight.w600,
     letterSpacing: -0.15,
     fontFeatures: _tnum,
@@ -70,30 +70,30 @@ class AppTypography {
 
   static const TextStyle body = TextStyle(
     fontFamily: fontName,
-    fontSize: 14,
-    height: 1.38,
+    fontSize: 15,
+    height: 20 / 15,
     fontWeight: FontWeight.w400,
   );
 
   static const TextStyle bodySm = TextStyle(
     fontFamily: fontName,
-    fontSize: 13,
-    height: 1.36,
+    fontSize: 14,
+    height: 20 / 14,
     fontWeight: FontWeight.w400,
   );
 
   static const TextStyle label = TextStyle(
     fontFamily: fontName,
-    fontSize: 13,
-    height: 1.24,
+    fontSize: 14,
+    height: 20 / 14,
     fontWeight: FontWeight.w600,
     letterSpacing: 0,
   );
 
   static const TextStyle caption = TextStyle(
     fontFamily: fontName,
-    fontSize: 11.5,
-    height: 1.28,
+    fontSize: 12,
+    height: 16 / 12,
     fontWeight: FontWeight.w500,
     letterSpacing: 0.05,
   );
@@ -101,42 +101,42 @@ class AppTypography {
   // ─── Числа и моноширинные приборные стили ───────────────────────────────
   static const TextStyle numLg = TextStyle(
     fontFamily: fontName,
-    fontSize: 34,
-    height: 1.05,
-    fontWeight: FontWeight.w700,
+    fontSize: 40,
+    height: 44 / 40,
+    fontWeight: FontWeight.w600,
     letterSpacing: -0.75,
     fontFeatures: _tnum,
   );
 
   static const TextStyle num = TextStyle(
     fontFamily: fontName,
-    fontSize: 14,
-    height: 1.28,
+    fontSize: 15,
+    height: 20 / 15,
     fontWeight: FontWeight.w600,
     fontFeatures: _tnum,
   );
 
   static const TextStyle numSm = TextStyle(
     fontFamily: fontName,
-    fontSize: 12.5,
-    height: 1.28,
+    fontSize: 14,
+    height: 20 / 14,
     fontWeight: FontWeight.w500,
     fontFeatures: _tnum,
   );
 
   static const TextStyle kicker = TextStyle(
     fontFamily: monoFont,
-    fontSize: 11,
-    height: 1.25,
+    fontSize: 12,
+    height: 16 / 12,
     fontWeight: FontWeight.w600,
-    letterSpacing: 0.55,
+    letterSpacing: 0.5,
     fontFeatures: _tnum,
   );
 
   static const TextStyle formulaMono = TextStyle(
     fontFamily: monoFont,
     fontSize: 12,
-    height: 1.35,
+    height: 16 / 12,
     fontWeight: FontWeight.w500,
     fontFeatures: _tnum,
   );

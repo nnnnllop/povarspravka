@@ -91,7 +91,8 @@ class IngredientCard extends StatelessWidget {
 
     final media = MediaQuery.sizeOf(context);
     final textScale = MediaQuery.textScalerOf(context).scale(1.0);
-    final inlineWeightReadout = media.width >= 360 && textScale <= 1.2;
+    final inlineWeightReadout =
+        !AppLayout.isNarrow(media.width) && !AppLayout.isLargeText(textScale);
 
     final weightReadout = Text(
       'Нетто $netGramsStr г',
@@ -126,10 +127,10 @@ class IngredientCard extends StatelessWidget {
               children: [
                 Padding(
                   padding: EdgeInsets.fromLTRB(
+                    Space.x4,
                     Space.x3,
-                    Space.x2 + 2,
-                    dragHandleIndex != null ? Space.x1 : Space.x3,
-                    cleanLossLabel != null ? Space.x1 : Space.x2 + 2,
+                    dragHandleIndex != null ? Space.x1 : Space.x4,
+                    cleanLossLabel != null ? Space.x1 : Space.x3,
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -152,7 +153,7 @@ class IngredientCard extends StatelessWidget {
                               weightReadout,
                             ],
                             if (showGross) ...[
-                              const SizedBox(height: 2),
+                              const SizedBox(height: Space.x1),
                               Text(
                                 'Введено брутто $grossGramsStr г · отходы ${CalculationEngine.formatWastePercent(ing.product.wastePct)} %',
                                 style: AppTypography.caption
@@ -162,8 +163,8 @@ class IngredientCard extends StatelessWidget {
                             const SizedBox(height: Space.x1),
                             // Полное КБЖУ с гармоничными разноцветными точками (Б/Ж/У + ккал).
                             Wrap(
-                              spacing: Space.x2 + 2,
-                              runSpacing: 2,
+                              spacing: Space.x2,
+                              runSpacing: Space.x1,
                               children: [
                                 InlineMacroCell(
                                   type: NutrientType.protein,
@@ -171,7 +172,6 @@ class IngredientCard extends StatelessWidget {
                                       CalculationEngine.formatMacro(
                                           ing.proteinInDish)),
                                   compact: true,
-                                  dotSize: 5.5,
                                 ),
                                 InlineMacroCell(
                                   type: NutrientType.fat,
@@ -179,7 +179,6 @@ class IngredientCard extends StatelessWidget {
                                       CalculationEngine.formatMacro(
                                           ing.fatInDish)),
                                   compact: true,
-                                  dotSize: 5.5,
                                 ),
                                 InlineMacroCell(
                                   type: NutrientType.carbs,
@@ -187,7 +186,6 @@ class IngredientCard extends StatelessWidget {
                                       CalculationEngine.formatMacro(
                                           ing.carbsInDish)),
                                   compact: true,
-                                  dotSize: 5.5,
                                 ),
                                 InlineMacroCell(
                                   type: NutrientType.kcal,
@@ -230,19 +228,19 @@ class IngredientCard extends StatelessWidget {
                           const BoxConstraints(minHeight: kMinTapTarget),
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(
-                          Space.x3,
-                          2,
-                          Space.x3,
-                          Space.x1 + 2,
+                          Space.x4,
+                          Space.x1,
+                          Space.x4,
+                          Space.x2,
                         ),
                         child: Row(
                           children: [
                             Icon(
                               Icons.local_fire_department_outlined,
-                              size: 13,
+                              size: 16,
                               color: p.accent,
                             ),
-                            const SizedBox(width: 5),
+                            const SizedBox(width: Space.x1),
                             Expanded(
                               child: Text(
                                 cleanLossLabel,
@@ -253,10 +251,10 @@ class IngredientCard extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            const SizedBox(width: 4),
+                            const SizedBox(width: Space.x1),
                             Icon(
                               Icons.chevron_right_rounded,
-                              size: 15,
+                              size: 16,
                               color: p.inkMuted,
                             ),
                           ],
@@ -267,7 +265,7 @@ class IngredientCard extends StatelessWidget {
                 if (!isLast)
                   Container(
                     height: 1,
-                    margin: const EdgeInsets.only(left: Space.x3),
+                    margin: const EdgeInsets.only(left: Space.x4),
                     color: p.divider,
                   ),
               ],

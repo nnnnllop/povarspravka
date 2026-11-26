@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/calculation/calculation_engine.dart';
 import '../../core/calculation/calculation_math.dart';
+import '../../core/calculation/calculation_validation.dart';
 import '../../core/calculation/models/product.dart';
 import '../../core/calculation/models/ingredient.dart';
 import '../../core/calculation/models/source_label.dart';
@@ -174,7 +175,8 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
   void _onAdd(double delta) {
     AppHaptics.key();
     final val = CalculationEngine.parseInputDouble(_currentInput) ?? 0.0;
-    final newVal = (val + delta).clamp(1.0, 99999.0);
+    final newVal =
+        (val + delta).clamp(1.0, CalculationValidation.maxCustomYieldGrams);
     setState(() {
       _currentInput = CalculationEngine.formatGrams(newVal);
       _isFreshInput = false;
@@ -429,21 +431,26 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
             parsedWaste < 100)
         : (parsedGrams >= .1 && parsedGrams <= 9999999);
     final media = MediaQuery.sizeOf(context);
-    final sideBySide = media.width >= 520 && media.height < 460;
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final sideBySide = AppLayout.canSideBySideNumpad(
+      media.width,
+      media.height,
+      textScale,
+    );
 
     return Container(
       decoration: BoxDecoration(
         color: p.surface,
-        borderRadius:
-            const BorderRadius.vertical(top: Radius.circular(Radii.sheet)),
+        borderRadius: Radii.sheetTop,
       ),
       child: SafeArea(
         top: false,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            if (sideBySide && constraints.maxWidth >= 520) {
+            if (sideBySide && constraints.maxWidth >= 540) {
               final rightWidth =
                   (constraints.maxWidth * 0.52).clamp(260.0, 340.0).toDouble();
+              final quickItems = _quickItemsForCurrentMode();
               final intro = _buildIntro(
                 p,
                 seasonalPresets,
@@ -451,17 +458,38 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                 hasWaste,
                 compactPane: true,
               );
+              final leftPane = constraints.hasBoundedHeight
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(child: intro),
+                        const SizedBox(height: Space.x1),
+                        _NumpadQuickRow(quickItems: quickItems, compact: true),
+                        const SizedBox(height: Space.x1),
+                      ],
+                    )
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        intro,
+                        const SizedBox(height: Space.x1),
+                        _NumpadQuickRow(quickItems: quickItems, compact: true),
+                        const SizedBox(height: Space.x1),
+                      ],
+                    );
               final keypad = _buildKeypadBlock(
                 p,
                 canConfirm,
                 parsedGrams,
                 compactLandscape: true,
+                showQuickRow: false,
               );
               if (constraints.hasBoundedHeight) {
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(child: intro),
+                    Expanded(child: leftPane),
                     Container(width: 1, color: p.divider),
                     SizedBox(
                       width: rightWidth,
@@ -476,7 +504,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(child: intro),
+                  Expanded(child: leftPane),
                   Container(width: 1, color: p.divider),
                   SizedBox(width: rightWidth, child: keypad),
                 ],
@@ -503,34 +531,36 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
   }) {
     final media = MediaQuery.sizeOf(context);
     final textScale = MediaQuery.textScalerOf(context).scale(1.0);
-    final tightPortrait =
-        !compactPane && media.height < 640 && textScale > 1.3;
+    final tightPortrait = !compactPane &&
+        (media.height < 640 || AppLayout.isLargeText(textScale));
+    final tightContent = compactPane || tightPortrait;
     final hasExtras = seasonalPresets.isNotEmpty ||
         widget.product.calculationMeasures.isNotEmpty;
-    final showExtras = !tightPortrait || _showExtrasExpanded;
-    final gap = tightPortrait ? Space.x2 : Space.x3;
+    final showExtras = hasExtras && _showExtrasExpanded;
+    final gap = tightPortrait ? Space.x1 : Space.x3;
+    final horizontalPad = tightPortrait ? Space.x3 : Space.x4;
 
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
-        Space.x4,
+        horizontalPad,
         tightPortrait ? 0 : Space.x1,
-        Space.x4,
-        tightPortrait ? 2 : Space.x2,
+        horizontalPad,
+        tightPortrait ? Space.x1 : Space.x2,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildHeader(p, compact: tightPortrait),
+          _buildHeader(p, compact: tightContent),
           SizedBox(height: tightPortrait ? Space.x1 : gap),
-          _buildModeSelector(p, compact: compactPane || tightPortrait),
+          _buildModeSelector(p, compact: tightContent),
           if (_deltaNote != null && !_isEditingWaste) ...[
             SizedBox(height: tightPortrait ? Space.x1 : Space.x2),
             _buildDeltaNote(p),
           ],
           SizedBox(height: tightPortrait ? Space.x1 : gap),
-          _buildReadout(p, net, hasWaste, tight: tightPortrait),
-          if (hasExtras && tightPortrait) ...[
-            const SizedBox(height: 2),
+          _buildReadout(p, net, hasWaste, tight: tightContent),
+          if (hasExtras) ...[
+            const SizedBox(height: Space.x1),
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
@@ -541,7 +571,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                 },
                 style: TextButton.styleFrom(
                   visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.symmetric(horizontal: Space.x1),
+                  padding: const EdgeInsets.symmetric(horizontal: Space.x2),
                 ),
                 icon: Icon(
                   _showExtrasExpanded
@@ -556,7 +586,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
             ),
           ],
           if (showExtras) ...[
-            SizedBox(height: gap),
+            SizedBox(height: Space.x2),
             if (seasonalPresets.isNotEmpty) ...[
               _buildSectionLabel(p, 'Отходы по сезону'),
               const SizedBox(height: Space.x2),
@@ -574,15 +604,8 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     );
   }
 
-  /// Нижний блок: ряд прибавок + кейпад с клавишами сброса и подтверждения.
-  /// Прижат к нижней кромке — под большой палец.
-  Widget _buildKeypadBlock(
-    Palette p,
-    bool canConfirm,
-    double parsedGrams, {
-    bool compactLandscape = false,
-  }) {
-    final quickItems = _isEditingWaste
+  List<(String, VoidCallback)> _quickItemsForCurrentMode() {
+    return _isEditingWaste
         ? <(String, VoidCallback)>[
             ('0%', () => _applyWastePreset('0')),
             ('15%', () => _applyWastePreset('15')),
@@ -595,6 +618,18 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
             ('+100 г', () => _onAdd(100)),
             ('+250 г', () => _onAdd(250)),
           ];
+  }
+
+  /// Нижний блок: ряд прибавок + кейпад с клавишами сброса и подтверждения.
+  /// Прижат к нижней кромке — под большой палец.
+  Widget _buildKeypadBlock(
+    Palette p,
+    bool canConfirm,
+    double parsedGrams, {
+    bool compactLandscape = false,
+    bool showQuickRow = true,
+  }) {
+    final quickItems = _quickItemsForCurrentMode();
     final confirmLabel = _isEditingWaste
         ? 'Готово'
         : (widget.isEditing ? 'Сохранить' : 'Добавить');
@@ -607,6 +642,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
           ? const ValueKey('waste-edit-done')
           : const ValueKey('numpad-confirm'),
       compactLandscape: compactLandscape,
+      showQuickRow: showQuickRow,
       onKey: _onKey,
       onBackspace: _onBackspace,
       onClear: _onClear,
@@ -617,6 +653,11 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
 
   Widget _buildHeader(Palette p, {bool compact = false}) {
     final canPop = Navigator.canPop(context);
+    final hasEditActions = widget.isEditing &&
+        (widget.onEditLoss != null ||
+            widget.onReplaceProduct != null ||
+            widget.onDelete != null);
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -626,12 +667,13 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
             children: [
               Text(
                 widget.product.name,
-                style: AppTypography.title.copyWith(color: p.ink),
+                style: (compact ? AppTypography.headline : AppTypography.title)
+                    .copyWith(color: p.ink),
                 maxLines: compact ? 1 : 2,
                 overflow: TextOverflow.ellipsis,
               ),
               if (!compact) ...[
-                const SizedBox(height: 2),
+                const SizedBox(height: Space.x1),
                 Text(
                   '${CalculationEngine.formatKcal(widget.product.kcal)} ккал / 100 г · ${SourceLabel.of(widget.product.source, fallback: widget.product.source)}',
                   style: AppTypography.caption.copyWith(color: p.inkMuted),
@@ -642,46 +684,69 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
             ],
           ),
         ),
-        if (widget.isEditing && widget.onEditLoss != null) ...[
+        if (hasEditActions) ...[
           const SizedBox(width: Space.x1),
-          IconButton(
-            key: const ValueKey('numpad-edit-loss'),
-            onPressed: () {
-              AppHaptics.toggle();
-              widget.onEditLoss!();
+          PopupMenuButton<String>(
+            key: const ValueKey('numpad-more-btn'),
+            tooltip: 'Действия с ингредиентом',
+            icon: Icon(Icons.more_vert_rounded, color: p.inkSecondary),
+            onSelected: (value) {
+              if (value == 'loss') {
+                AppHaptics.toggle();
+                widget.onEditLoss?.call();
+              } else if (value == 'replace') {
+                _replaceProduct();
+              } else if (value == 'delete') {
+                _deleteFromDish();
+              }
             },
-            tooltip: 'Группа и обработка',
-            constraints: const BoxConstraints(
-              minWidth: kMinTapTarget,
-              minHeight: kMinTapTarget,
-            ),
-            icon: Icon(Icons.tune_rounded, size: 22, color: p.accent),
-          ),
-        ],
-        if (widget.isEditing && widget.onReplaceProduct != null) ...[
-          const SizedBox(width: Space.x1),
-          IconButton(
-            key: const ValueKey('numpad-replace-product'),
-            onPressed: _replaceProduct,
-            tooltip: 'Заменить продукт',
-            constraints: const BoxConstraints(
-              minWidth: kMinTapTarget,
-              minHeight: kMinTapTarget,
-            ),
-            icon: Icon(Icons.swap_horiz_rounded, size: 22, color: p.accent),
-          ),
-        ],
-        if (widget.isEditing && widget.onDelete != null) ...[
-          const SizedBox(width: Space.x1),
-          IconButton(
-            key: const ValueKey('numpad-delete'),
-            onPressed: _deleteFromDish,
-            tooltip: 'Удалить из блюда',
-            constraints: const BoxConstraints(
-              minWidth: kMinTapTarget,
-              minHeight: kMinTapTarget,
-            ),
-            icon: Icon(Icons.delete_outline_rounded, size: 22, color: p.danger),
+            itemBuilder: (_) => [
+              if (widget.onEditLoss != null)
+                const PopupMenuItem<String>(
+                  key: ValueKey('numpad-edit-loss'),
+                  value: 'loss',
+                  child: Row(
+                    children: [
+                      Icon(Icons.tune_rounded, size: 18),
+                      SizedBox(width: Space.x2),
+                      Expanded(child: Text('Группа и обработка')),
+                    ],
+                  ),
+                ),
+              if (widget.onReplaceProduct != null)
+                const PopupMenuItem<String>(
+                  key: ValueKey('numpad-replace-product'),
+                  value: 'replace',
+                  child: Row(
+                    children: [
+                      Icon(Icons.swap_horiz_rounded, size: 18),
+                      SizedBox(width: Space.x2),
+                      Expanded(child: Text('Заменить продукт')),
+                    ],
+                  ),
+                ),
+              if (widget.onDelete != null)
+                PopupMenuItem<String>(
+                  key: const ValueKey('numpad-delete'),
+                  value: 'delete',
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.delete_outline_rounded,
+                        size: 18,
+                        color: p.danger,
+                      ),
+                      const SizedBox(width: Space.x2),
+                      Expanded(
+                        child: Text(
+                          'Удалить из блюда',
+                          style: TextStyle(color: p.danger),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
           ),
         ],
         if (canPop) ...[
@@ -695,7 +760,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
             ),
             icon: Icon(Icons.close_rounded, size: 22, color: p.inkSecondary),
           ),
-        ] else if (!(widget.isEditing && widget.onDelete != null)) ...[
+        ] else if (!hasEditActions && !compact) ...[
           const SizedBox(width: Space.x2),
           SourceBadge(source: widget.product.source, compact: true),
         ],
@@ -704,23 +769,50 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
   }
 
   Widget _buildModeSelector(Palette p, {bool compact = false}) {
-    const semanticsHint = 'Ввод чистой массы нетто · переключение Брутто/Нетто';
-    final isCompact = compact || MediaQuery.sizeOf(context).width < 380;
+    final semanticsHint = _isGross
+        ? 'Ввод массы брутто · переключение Брутто/Нетто'
+        : 'Ввод чистой массы нетто · переключение Брутто/Нетто';
+    final isCompact =
+        compact || AppLayout.isCompact(MediaQuery.sizeOf(context).width);
+    final baseStyle = AppSegmentedStyle.of(p, compact: isCompact);
+    final resolvedStyle = compact
+        ? baseStyle.copyWith(
+            padding: const WidgetStatePropertyAll(
+              EdgeInsets.symmetric(horizontal: Space.x1, vertical: Space.x1),
+            ),
+          )
+        : baseStyle;
     return Semantics(
       label: semanticsHint,
       child: SizedBox(
         width: double.infinity,
         child: SegmentedButton<bool>(
           showSelectedIcon: false,
-          style: AppSegmentedStyle.of(p, compact: isCompact),
+          style: resolvedStyle,
           segments: const [
             ButtonSegment(
               value: true,
-              label: Text('Брутто', textAlign: TextAlign.center),
+              label: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  'Брутто',
+                  maxLines: 1,
+                  softWrap: false,
+                  textAlign: TextAlign.center,
+                ),
+              ),
             ),
             ButtonSegment(
               value: false,
-              label: Text('Нетто', textAlign: TextAlign.center),
+              label: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  'Нетто',
+                  maxLines: 1,
+                  softWrap: false,
+                  textAlign: TextAlign.center,
+                ),
+              ),
             ),
           ],
           selected: {_isGross},
@@ -767,99 +859,25 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     final unit = _isEditingWaste ? '%' : 'г';
     final safeNet = (net.isFinite && net > 0) ? net : 0.0;
 
-    return InstrumentSlab(
-      borderRadius: Radii.cardAll,
-      padding: EdgeInsets.symmetric(
-        horizontal: Space.x3,
-        vertical: tight ? 6 : 9,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
+    return WeightReadout(
+      valueText: displayText,
+      unit: unit,
+      isFresh: isFresh,
+      tight: tight,
+      onClear: _onClear,
+      headerNote:
+          _isEditingWaste ? 'Процент отходов при обработке (0–99%)' : null,
+      freshHint: (isFresh && !_isEditingWaste && !tight)
+          ? 'цифра заменит значение · +г прибавит'
+          : null,
+      footer: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          if (_isEditingWaste)
-            Padding(
-              padding: const EdgeInsets.only(bottom: Space.x1),
-              child: Text(
-                'Процент отходов при обработке (0–99%)',
-                textAlign: TextAlign.center,
-                style: AppTypography.caption.copyWith(
-                  color: AppColors.accentDark,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Flexible(
-                child: AnimatedContainer(
-                  duration: Motion.fast,
-                  curve: Motion.ease,
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isFresh ? Space.x2 + 2 : 0,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isFresh ? p.slabSurface : Colors.transparent,
-                    borderRadius: Radii.chipAll,
-                  ),
-                  child: AnimatedSwitcher(
-                    duration: Duration.zero,
-                    child: tight
-                        ? ConstrainedBox(
-                            key: ValueKey<String>(displayText),
-                            constraints: const BoxConstraints(maxHeight: 40),
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                displayText,
-                                textAlign: TextAlign.center,
-                                maxLines: 1,
-                                style: AppTypography.numLg.copyWith(
-                                  color: isFresh
-                                      ? AppColors.accentDark
-                                      : p.slabInk,
-                                ),
-                              ),
-                            ),
-                          )
-                        : Text(
-                            displayText,
-                            key: ValueKey<String>(displayText),
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTypography.numLg.copyWith(
-                              color:
-                                  isFresh ? AppColors.accentDark : p.slabInk,
-                            ),
-                          ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: Space.x1),
-              Text(
-                unit,
-                style: AppTypography.title.copyWith(color: p.slabSecondary),
-              ),
-            ],
-          ),
-          if (isFresh && !_isEditingWaste && !tight) ...[
-            const SizedBox(height: 2),
-            Text(
-              'цифра заменит значение · +г прибавит',
-              textAlign: TextAlign.center,
-              style: AppTypography.caption.copyWith(color: p.slabSecondary),
-            ),
-          ],
-          const SizedBox(height: Space.x1),
           if (_isEditingWaste)
             _buildWasteEditCaption(p)
           else ...[
-            _buildLiveCaption(p, net, hasWaste),
-            const SizedBox(height: Space.x2),
+            _buildLiveCaption(p, net, hasWaste, tight: tight),
+            SizedBox(height: tight ? Space.x1 : Space.x2),
             _buildLiveMacrosRow(p, safeNet),
           ],
         ],
@@ -896,7 +914,12 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     );
   }
 
-  Widget _buildLiveCaption(Palette p, double net, bool hasWaste) {
+  Widget _buildLiveCaption(
+    Palette p,
+    double net,
+    bool hasWaste, {
+    bool tight = false,
+  }) {
     final String text;
     final bool ok;
     if (_isGross && hasWaste) {
@@ -918,7 +941,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
         Text(
           text,
           textAlign: TextAlign.center,
-          style: AppTypography.numSm.copyWith(
+          style: (tight ? AppTypography.caption : AppTypography.numSm).copyWith(
             color: ok ? p.slabSecondary : AppColors.warningDark,
           ),
         ),
@@ -929,7 +952,10 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
             style: TextButton.styleFrom(
               foregroundColor: AppColors.accentDark,
               minimumSize: const Size(kMinTapTarget, kMinTapTarget),
-              padding: const EdgeInsets.symmetric(horizontal: Space.x2),
+              padding: EdgeInsets.symmetric(
+                horizontal: tight ? Space.x1 : Space.x2,
+              ),
+              textStyle: tight ? AppTypography.caption : null,
             ),
             child: Text(
               'отходы ${CalculationEngine.formatWastePercent(_wastePct)} % · изменить',
@@ -966,21 +992,18 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
         value: CalculationEngine.formatMacro(protein),
         compact: true,
         onDarkSlab: true,
-        dotSize: 5.5,
       ),
       InlineMacroCell(
         type: NutrientType.fat,
         value: CalculationEngine.formatMacro(fat),
         compact: true,
         onDarkSlab: true,
-        dotSize: 5.5,
       ),
       InlineMacroCell(
         type: NutrientType.carbs,
         value: CalculationEngine.formatMacro(carbs),
         compact: true,
         onDarkSlab: true,
-        dotSize: 5.5,
       ),
       InlineMacroCell(
         type: NutrientType.kcal,
@@ -994,10 +1017,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
       alignment: WrapAlignment.center,
       spacing: Space.x3,
       runSpacing: Space.x1,
-      children: [
-        for (final cell in cells)
-          FittedBox(fit: BoxFit.scaleDown, child: cell),
-      ],
+      children: cells,
     );
   }
 
@@ -1017,13 +1037,16 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
       runSpacing: Space.x2,
       children: presets.map((preset) {
         final isSelected = (_wastePct - preset.$2).abs() < 0.01;
+        final pctLabel =
+            '${CalculationEngine.formatWastePercent(preset.$2)} %';
         return _TapChip(
           key: ValueKey('waste-${preset.$1}'),
           selected: isSelected,
           accent: p.accent,
           label: preset.$1,
-          trailing: '${CalculationEngine.formatWastePercent(preset.$2)} %',
+          trailing: pctLabel,
           season: preset.$3,
+          semanticsLabel: 'Установить отходы ${preset.$1} $pctLabel',
           onTap: () => _setWastePct(preset.$2),
         );
       }).toList(),
@@ -1155,74 +1178,234 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
   return ('0', true);
 }
 
-class _NumpadKeypadBlock extends StatelessWidget {
-  final List<(String, VoidCallback)> quickItems;
-  final String confirmLabel;
-  final bool canConfirm;
-  final Key? confirmMaterialKey;
-  final bool compactLandscape;
-  final void Function(String key) onKey;
-  final VoidCallback onBackspace;
+/// Единое приборное табло ввода массы для [CustomNumpadSheet] и
+/// [SimpleGramsNumpadSheet] с кнопкой сброса `C` прямо в табло.
+class WeightReadout extends StatelessWidget {
+  final String valueText;
+  final String unit;
+  final bool isFresh;
+  final bool tight;
   final VoidCallback onClear;
-  final VoidCallback onConfirm;
+  final String? headerNote;
+  final String? freshHint;
+  final Widget? footer;
 
-  const _NumpadKeypadBlock({
-    required this.quickItems,
-    required this.confirmLabel,
-    required this.canConfirm,
-    this.confirmMaterialKey,
-    this.compactLandscape = false,
-    required this.onKey,
-    required this.onBackspace,
+  const WeightReadout({
+    super.key,
+    required this.valueText,
+    required this.unit,
+    required this.isFresh,
     required this.onClear,
-    required this.onConfirm,
+    this.tight = false,
+    this.headerNote,
+    this.freshHint,
+    this.footer,
   });
 
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _buildQuickRow(p),
-        SizedBox(height: compactLandscape ? Space.x1 : Space.x2),
-        _buildKeypad(context, p),
-      ],
+    return InstrumentSlab(
+      borderRadius: Radii.cardAll,
+      padding: EdgeInsets.symmetric(
+        horizontal: tight ? Space.x3 : Space.x4,
+        vertical: tight ? Space.x1 : Space.x4,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (headerNote != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: Space.x1),
+              child: Text(
+                headerNote!,
+                textAlign: TextAlign.center,
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.accentDark,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const SizedBox(width: kMinTapTarget),
+              Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Flexible(
+                      child: AnimatedContainer(
+                        duration: Motion.fast,
+                        curve: Motion.ease,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isFresh ? Space.x2 : 0,
+                          vertical: tight ? 0 : Space.x1,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isFresh ? p.slabSurface : Colors.transparent,
+                          borderRadius: Radii.chipAll,
+                        ),
+                        child: AnimatedSwitcher(
+                          duration: Duration.zero,
+                          child: tight
+                              ? ConstrainedBox(
+                                  key: ValueKey<String>(valueText),
+                                  constraints:
+                                      const BoxConstraints(maxHeight: 44),
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      valueText,
+                                      textAlign: TextAlign.center,
+                                      maxLines: 1,
+                                      style: AppTypography.numLg.copyWith(
+                                        color: isFresh
+                                            ? AppColors.accentDark
+                                            : p.slabInk,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : Text(
+                                  valueText,
+                                  key: ValueKey<String>(valueText),
+                                  textAlign: TextAlign.center,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.numLg.copyWith(
+                                    color: isFresh
+                                        ? AppColors.accentDark
+                                        : p.slabInk,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: Space.x1),
+                    Text(
+                      unit,
+                      style:
+                          AppTypography.title.copyWith(color: p.slabSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(
+                key: const ValueKey('key-C'),
+                width: kMinTapTarget,
+                height: kMinTapTarget,
+                child: TactilePress(
+                  child: MergeSemantics(
+                    child: Semantics(
+                      button: true,
+                      label: 'Сбросить значение',
+                      child: Material(
+                        color: p.slabSurface,
+                        borderRadius: Radii.fieldAll,
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          onTap: onClear,
+                          borderRadius: Radii.fieldAll,
+                          child: ExcludeSemantics(
+                            child: Center(
+                              child: Text(
+                                'C',
+                                maxLines: 1,
+                                style: AppTypography.headline.copyWith(
+                                  color: AppColors.dangerDark,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (freshHint != null) ...[
+            const SizedBox(height: Space.x1),
+            Text(
+              freshHint!,
+              textAlign: TextAlign.center,
+              style: AppTypography.caption.copyWith(color: p.slabSecondary),
+            ),
+          ],
+          if (footer != null) ...[
+            const SizedBox(height: Space.x1),
+            footer!,
+          ],
+        ],
+      ),
     );
   }
+}
 
-  Widget _buildQuickRow(Palette p) {
+class _NumpadQuickRow extends StatelessWidget {
+  final List<(String, VoidCallback)> quickItems;
+  final bool compact;
+
+  const _NumpadQuickRow({
+    required this.quickItems,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final media = MediaQuery.sizeOf(context);
+    final scaler = MediaQuery.textScalerOf(context).scale(1);
+    final compactQuick =
+        AppLayout.isNarrow(media.width) && AppLayout.isLargeText(scaler);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: Space.x3),
-      child: Row(
-        children: [
-          for (final item in quickItems)
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact || compactQuick ? Space.x2 : Space.x4,
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < quickItems.length; i++) ...[
+              if (i > 0) const SizedBox(width: Space.x1),
+              Expanded(
                 child: TactilePress(
                   child: Material(
                     color: p.accentSoft,
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: Radii.fieldAll,
                     clipBehavior: Clip.antiAlias,
                     child: InkWell(
-                      onTap: item.$2,
-                      borderRadius: BorderRadius.circular(14),
+                      onTap: quickItems[i].$2,
+                      borderRadius: Radii.fieldAll,
                       child: Semantics(
                         button: true,
-                        label: 'Прибавить ${item.$1}',
+                        label: 'Прибавить ${quickItems[i].$1}',
                         child: ExcludeSemantics(
                           child: Container(
-                            height: kMinTapTarget,
+                            constraints: const BoxConstraints(
+                              minHeight: kMinTapTarget,
+                            ),
                             alignment: Alignment.center,
                             padding: const EdgeInsets.symmetric(
-                                horizontal: Space.x1),
+                              horizontal: Space.x1,
+                              vertical: Space.x1,
+                            ),
                             child: FittedBox(
                               fit: BoxFit.scaleDown,
                               child: Text(
-                                item.$1,
+                                quickItems[i].$1,
                                 maxLines: 1,
-                                style: AppTypography.numSm.copyWith(
+                                softWrap: false,
+                                textAlign: TextAlign.center,
+                                style: (compactQuick
+                                        ? AppTypography.caption
+                                        : AppTypography.numSm)
+                                    .copyWith(
                                   color: p.accent,
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -1235,13 +1418,64 @@ class _NumpadKeypadBlock extends StatelessWidget {
                   ),
                 ),
               ),
-            ),
-        ],
+            ],
+          ],
+        ),
       ),
     );
   }
+}
 
-  Widget _buildKeypad(BuildContext context, Palette p) {
+class _NumpadKeypadBlock extends StatelessWidget {
+  final List<(String, VoidCallback)> quickItems;
+  final String confirmLabel;
+  final bool canConfirm;
+  final Key? confirmMaterialKey;
+  final bool compactLandscape;
+  final bool showQuickRow;
+  final void Function(String key) onKey;
+  final VoidCallback onBackspace;
+  final VoidCallback onClear;
+  final VoidCallback onConfirm;
+
+  const _NumpadKeypadBlock({
+    required this.quickItems,
+    required this.confirmLabel,
+    required this.canConfirm,
+    this.confirmMaterialKey,
+    this.compactLandscape = false,
+    this.showQuickRow = true,
+    required this.onKey,
+    required this.onBackspace,
+    required this.onClear,
+    required this.onConfirm,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final media = MediaQuery.sizeOf(context);
+    final scaler = MediaQuery.textScalerOf(context).scale(1);
+    final shortHeight = compactLandscape ||
+        media.height < 580 ||
+        (media.height < 680 && AppLayout.isLargeText(scaler));
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (showQuickRow) ...[
+          _NumpadQuickRow(quickItems: quickItems, compact: compactLandscape),
+          SizedBox(height: shortHeight ? Space.x1 : Space.x2),
+        ],
+        _buildKeypad(context, p, shortHeight: shortHeight),
+      ],
+    );
+  }
+
+  Widget _buildKeypad(
+    BuildContext context,
+    Palette p, {
+    required bool shortHeight,
+  }) {
     const rows = <List<String>>[
       ['1', '2', '3'],
       ['4', '5', '6'],
@@ -1249,67 +1483,41 @@ class _NumpadKeypadBlock extends StatelessWidget {
       ['⌫', '0', ','],
     ];
     final scaler = MediaQuery.textScalerOf(context).scale(1);
-    final shortHeight = compactLandscape ||
-        MediaQuery.sizeOf(context).height < 520 ||
-        (MediaQuery.sizeOf(context).height < 640 && scaler > 1.3);
-    final keyGap = compactLandscape ? 2.0 : Space.x1;
+    final keyGap = (compactLandscape || shortHeight) ? Space.x1 : Space.x2;
     final double keyHeight = shortHeight
         ? kMinTapTarget
         : (48.0 * (scaler > 1.3 ? 1.12 : 1.0))
-            .clamp(kMinTapTarget, 54.0)
+            .clamp(kMinTapTarget, 52.0)
             .toDouble();
-    final gridHeight = keyHeight * 4 + keyGap * 4;
-    final confirmHeight = keyHeight * 3 + keyGap * 2;
+    final confirmHeight = shortHeight ? kMinTapTarget : 56.0;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
-        compactLandscape ? Space.x2 : Space.x3,
+        compactLandscape ? Space.x2 : Space.x4,
         0,
-        compactLandscape ? Space.x2 : Space.x3,
-        compactLandscape ? Space.x1 : Space.x2,
+        compactLandscape ? Space.x2 : Space.x4,
+        shortHeight ? Space.x1 : Space.x2,
       ),
-      child: SizedBox(
-        height: gridHeight,
-        child: Row(
-          children: [
-            Expanded(
-              flex: 3,
-              child: Column(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final row in rows)
+            Padding(
+              padding: EdgeInsets.only(bottom: keyGap),
+              child: Row(
                 children: [
-                  for (final row in rows)
-                    Padding(
-                      padding: EdgeInsets.only(bottom: keyGap),
-                      child: Row(
-                        children: [
-                          for (final k in row)
-                            Expanded(
-                              child: Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 2),
-                                child: _buildKey(p, k, keyHeight),
-                              ),
-                            ),
-                        ],
-                      ),
+                  for (var i = 0; i < row.length; i++) ...[
+                    if (i > 0) SizedBox(width: keyGap),
+                    Expanded(
+                      child: _buildKey(p, row[i], keyHeight),
                     ),
+                  ],
                 ],
               ),
             ),
-            const SizedBox(width: Space.x1),
-            Expanded(
-              flex: 2,
-              child: Column(
-                children: [
-                  Padding(
-                    padding: EdgeInsets.only(bottom: keyGap),
-                    child: _buildClearKey(p, keyHeight),
-                  ),
-                  _buildConfirmKey(p, confirmHeight),
-                ],
-              ),
-            ),
-          ],
-        ),
+          _buildConfirmKey(p, confirmHeight, compact: shortHeight),
+        ],
       ),
     );
   }
@@ -1338,13 +1546,10 @@ class _NumpadKeypadBlock extends StatelessWidget {
                   child: Center(
                     child: isBackspace
                         ? Icon(Icons.backspace_outlined, size: 22, color: p.ink)
-                        : FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              k,
-                              maxLines: 1,
-                              style: AppTypography.title.copyWith(color: p.ink),
-                            ),
+                        : Text(
+                            k,
+                            maxLines: 1,
+                            style: AppTypography.title.copyWith(color: p.ink),
                           ),
                   ),
                 ),
@@ -1356,43 +1561,11 @@ class _NumpadKeypadBlock extends StatelessWidget {
     );
   }
 
-  Widget _buildClearKey(Palette p, double height) {
-    return SizedBox(
-      key: const ValueKey('key-C'),
-      height: height,
-      child: TactilePress(
-        child: MergeSemantics(
-          child: Semantics(
-            button: true,
-            label: 'Сбросить значение',
-            child: Material(
-              color: p.isDark ? p.raised : p.sunken,
-              borderRadius: Radii.fieldAll,
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTap: onClear,
-                borderRadius: Radii.fieldAll,
-                child: ExcludeSemantics(
-                  child: Center(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        'C',
-                        maxLines: 1,
-                        style: AppTypography.title.copyWith(color: p.danger),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildConfirmKey(Palette p, double height) {
+  Widget _buildConfirmKey(
+    Palette p,
+    double height, {
+    bool compact = false,
+  }) {
     return Semantics(
       button: true,
       enabled: canConfirm,
@@ -1402,24 +1575,23 @@ class _NumpadKeypadBlock extends StatelessWidget {
         child: Material(
           key: confirmMaterialKey,
           color: canConfirm ? p.accent : p.borderStatic,
-          borderRadius: Radii.cardAll,
+          borderRadius: Radii.fieldAll,
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: canConfirm ? onConfirm : null,
             child: Container(
-              height: height,
+              constraints: BoxConstraints(minHeight: height),
               alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(horizontal: Space.x2),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  confirmLabel,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  softWrap: false,
-                  style: AppTypography.label.copyWith(
-                    color: canConfirm ? p.onAccent : p.inkMuted,
-                  ),
+              padding: EdgeInsets.symmetric(
+                horizontal: Space.x4,
+                vertical: compact ? Space.x1 : Space.x2,
+              ),
+              child: Text(
+                confirmLabel,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                style: AppTypography.label.copyWith(
+                  color: canConfirm ? p.onAccent : p.inkMuted,
                 ),
               ),
             ),
@@ -1498,7 +1670,7 @@ class _SimpleGramsNumpadSheetState extends State<SimpleGramsNumpadSheet> {
   void _onAdd(double delta) {
     AppHaptics.key();
     final val = CalculationEngine.parseInputDouble(_input) ?? 0.0;
-    final next = (val + delta).clamp(widget.minGrams, 99999.0);
+    final next = (val + delta).clamp(widget.minGrams, widget.maxGrams);
     setState(() {
       _input = CalculationEngine.formatGrams(next);
       _isFresh = false;
@@ -1508,11 +1680,115 @@ class _SimpleGramsNumpadSheetState extends State<SimpleGramsNumpadSheet> {
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
+    final media = MediaQuery.sizeOf(context);
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final sideBySide = AppLayout.canSideBySideNumpad(
+      media.width,
+      media.height,
+      textScale,
+    );
+    final tightPortrait = !sideBySide &&
+        (media.height < 640 || AppLayout.isLargeText(textScale));
     final parsed = CalculationEngine.parseInputDouble(_input);
     final canConfirm = parsed != null &&
         parsed.isFinite &&
         parsed >= widget.minGrams &&
         parsed <= widget.maxGrams;
+
+    final bodyPane = SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(
+        Space.x4,
+        Space.x1,
+        Space.x4,
+        Space.x3,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.title,
+                      style: AppTypography.title.copyWith(color: p.ink),
+                    ),
+                    if (widget.subtitle != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: Space.x1),
+                        child: Text(
+                          widget.subtitle!,
+                          style: AppTypography.caption
+                              .copyWith(color: p.inkMuted),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (widget.onClearValue != null && widget.initialGrams != null)
+                TextButton(
+                  onPressed: () {
+                    AppHaptics.toggle();
+                    widget.onClearValue!();
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Сбросить'),
+                ),
+              IconButton(
+                onPressed: () => Navigator.maybePop(context),
+                tooltip: 'Закрыть',
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ],
+          ),
+          const SizedBox(height: Space.x3),
+          WeightReadout(
+            valueText: _input,
+            unit: 'г',
+            isFresh: _isFresh,
+            tight: tightPortrait,
+            onClear: _onClear,
+            footer: !canConfirm
+                ? Text(
+                    'Введите от ${CalculationEngine.formatGrams(widget.minGrams)} '
+                    'до ${CalculationEngine.formatGrams(widget.maxGrams)} г',
+                    textAlign: TextAlign.center,
+                    style: AppTypography.numSm.copyWith(
+                      color: AppColors.dangerDark,
+                    ),
+                  )
+                : null,
+          ),
+        ],
+      ),
+    );
+
+    final quickItems = [
+      ('+10 г', () => _onAdd(10)),
+      ('+50 г', () => _onAdd(50)),
+      ('+100 г', () => _onAdd(100)),
+      ('+250 г', () => _onAdd(250)),
+    ];
+
+    final keypadPane = _NumpadKeypadBlock(
+      quickItems: quickItems,
+      confirmLabel: 'Применить',
+      canConfirm: canConfirm,
+      compactLandscape: sideBySide,
+      showQuickRow: !sideBySide,
+      onKey: _onKey,
+      onBackspace: _onBackspace,
+      onClear: _onClear,
+      onConfirm: () {
+        if (!canConfirm) return;
+        AppHaptics.commit();
+        widget.onConfirm(parsed);
+        Navigator.pop(context);
+      },
+    );
 
     return Container(
       decoration: BoxDecoration(
@@ -1521,108 +1797,53 @@ class _SimpleGramsNumpadSheetState extends State<SimpleGramsNumpadSheet> {
       ),
       child: SafeArea(
         top: false,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                    Space.x4, Space.x1, Space.x1, Space.x2),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.title,
-                            style: AppTypography.title.copyWith(color: p.ink),
-                          ),
-                          if (widget.subtitle != null)
-                            Text(
-                              widget.subtitle!,
-                              style: AppTypography.caption
-                                  .copyWith(color: p.inkMuted),
-                            ),
-                        ],
-                      ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            if (sideBySide && constraints.maxWidth >= 540) {
+              final rightWidth =
+                  (constraints.maxWidth * 0.52).clamp(260.0, 340.0).toDouble();
+              final leftPane = constraints.hasBoundedHeight
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(child: bodyPane),
+                        const SizedBox(height: Space.x1),
+                        _NumpadQuickRow(quickItems: quickItems, compact: true),
+                        const SizedBox(height: Space.x1),
+                      ],
+                    )
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        bodyPane,
+                        const SizedBox(height: Space.x1),
+                        _NumpadQuickRow(quickItems: quickItems, compact: true),
+                        const SizedBox(height: Space.x1),
+                      ],
+                    );
+              return Row(
+                crossAxisAlignment: constraints.hasBoundedHeight
+                    ? CrossAxisAlignment.stretch
+                    : CrossAxisAlignment.end,
+                children: [
+                  Expanded(child: leftPane),
+                  Container(width: 1, color: p.divider),
+                  SizedBox(
+                    width: rightWidth,
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: keypadPane,
                     ),
-                    if (widget.onClearValue != null &&
-                        widget.initialGrams != null)
-                      TextButton(
-                        onPressed: () {
-                          AppHaptics.toggle();
-                          widget.onClearValue!();
-                          Navigator.pop(context);
-                        },
-                        child: const Text('Сбросить'),
-                      ),
-                    IconButton(
-                      onPressed: () => Navigator.maybePop(context),
-                      tooltip: 'Закрыть',
-                      icon: const Icon(Icons.close_rounded),
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: Space.x4),
-                child: InstrumentSlab(
-                  borderRadius: Radii.cardAll,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: Space.x3,
-                    vertical: 9,
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          _input,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTypography.numLg.copyWith(
-                            color: _isFresh ? AppColors.accentDark : p.slabInk,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: Space.x1),
-                      Text(
-                        'г',
-                        style: AppTypography.title.copyWith(
-                          color: p.slabSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: Space.x3),
-              _NumpadKeypadBlock(
-                quickItems: [
-                  ('+10 г', () => _onAdd(10)),
-                  ('+50 г', () => _onAdd(50)),
-                  ('+100 г', () => _onAdd(100)),
-                  ('+250 г', () => _onAdd(250)),
                 ],
-                confirmLabel: 'Применить',
-                canConfirm: canConfirm,
-                compactLandscape: MediaQuery.sizeOf(context).height < 460,
-                onKey: _onKey,
-                onBackspace: _onBackspace,
-                onClear: _onClear,
-                onConfirm: () {
-                  if (!canConfirm) return;
-                  AppHaptics.commit();
-                  widget.onConfirm(parsed);
-                  Navigator.pop(context);
-                },
-              ),
-            ],
-          ),
+              );
+            }
+            return AdaptiveHost(
+              body: bodyPane,
+              stickyFooter: keypadPane,
+            );
+          },
         ),
       ),
     );
@@ -1636,6 +1857,7 @@ class _TapChip extends StatelessWidget {
   final bool selected;
   final bool season;
   final Color accent;
+  final String? semanticsLabel;
   final VoidCallback onTap;
 
   const _TapChip({
@@ -1646,65 +1868,70 @@ class _TapChip extends StatelessWidget {
     required this.onTap,
     this.trailing,
     this.season = false,
+    this.semanticsLabel,
   });
 
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
-    return TactilePress(
-      child: Material(
-        color: selected ? p.accentSoft : p.sunken,
-        borderRadius: Radii.chipAll,
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Container(
-            constraints: const BoxConstraints(minHeight: kMinTapTarget),
-            padding: const EdgeInsets.symmetric(
-              horizontal: Space.x3,
-              vertical: Space.x1,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (season) ...[
-                      Container(
-                        width: 4,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: accent,
-                          shape: BoxShape.circle,
+    return Semantics(
+      selected: selected,
+      label: semanticsLabel,
+      child: TactilePress(
+        child: Material(
+          color: selected ? p.accentSoft : p.sunken,
+          borderRadius: Radii.chipAll,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Container(
+              constraints: const BoxConstraints(minHeight: kMinTapTarget),
+              padding: const EdgeInsets.symmetric(
+                horizontal: Space.x3,
+                vertical: Space.x1,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (season) ...[
+                        Container(
+                          width: Space.x1,
+                          height: Space.x1,
+                          decoration: BoxDecoration(
+                            color: accent,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: Space.x1),
+                      ],
+                      Flexible(
+                        child: Text(
+                          label,
+                          style: AppTypography.label.copyWith(
+                            color: selected ? accent : p.ink,
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 4),
                     ],
-                    Flexible(
+                  ),
+                  if (trailing != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: Space.x1),
                       child: Text(
-                        label,
-                        style: AppTypography.label.copyWith(
-                          color: selected ? accent : p.ink,
+                        trailing!,
+                        style: AppTypography.caption.copyWith(
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                          color: selected ? accent : p.inkSecondary,
                         ),
                       ),
                     ),
-                  ],
-                ),
-                if (trailing != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 1),
-                    child: Text(
-                      trailing!,
-                      style: AppTypography.caption.copyWith(
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                        color: selected ? accent : p.inkSecondary,
-                      ),
-                    ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

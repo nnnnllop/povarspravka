@@ -51,9 +51,9 @@ class SourceBadge extends StatelessWidget {
     final label = labelFor(source);
 
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 7 : 9,
-        vertical: compact ? 2 : 4,
+      padding: const EdgeInsets.symmetric(
+        horizontal: Space.x2,
+        vertical: Space.x1,
       ),
       decoration: BoxDecoration(
         color: p.sunken,
@@ -64,14 +64,14 @@ class SourceBadge extends StatelessWidget {
         children: [
           Icon(
             iconFor(source),
-            size: compact ? 12 : 14,
+            size: Space.x4,
             color: p.sourceInk,
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: Space.x1),
           Text(
             label,
             style: AppTypography.caption.copyWith(
-              fontWeight: FontWeight.w400,
+              fontWeight: FontWeight.w500,
               color: p.sourceInk,
             ),
           ),

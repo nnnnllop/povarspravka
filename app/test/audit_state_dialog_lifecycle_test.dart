@@ -296,6 +296,8 @@ void main() {
         ),
       ));
       await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('numpad-extras-toggle')));
+      await tester.pumpAndSettle();
       final chip = find.byKey(const ValueKey('measure-клубень'));
       await tester.ensureVisible(chip);
       await tester.pumpAndSettle();
@@ -305,6 +307,8 @@ void main() {
         tester.widget<Text>(find.byKey(const ValueKey('measure-count-label'))).data,
         '1',
       );
+      await tester.ensureVisible(find.byKey(const ValueKey('measure-inc')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('measure-inc')));
       await tester.pumpAndSettle();
       expect(
@@ -312,9 +316,14 @@ void main() {
         '2',
       );
       // 2 × 80 г нетто при 20 % отходов = 200 г брутто, без ",0"
-      final readout = tester
-          .widget<AnimatedSwitcher>(find.byType(AnimatedSwitcher).first)
-          .child as Text;
+      final readout = tester.widget<Text>(
+        find
+            .descendant(
+              of: find.byType(AnimatedSwitcher).first,
+              matching: find.byType(Text),
+            )
+            .first,
+      );
       expect(readout.data, '200');
       await tester.ensureVisible(find.text('Добавить'));
       await tester.tap(find.text('Добавить'));
@@ -342,6 +351,8 @@ void main() {
         ),
       ));
       await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('numpad-extras-toggle')));
+      await tester.pumpAndSettle();
       final chip = find.byKey(const ValueKey('measure-клубень'));
       await tester.ensureVisible(chip);
       await tester.pumpAndSettle();

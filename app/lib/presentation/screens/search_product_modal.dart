@@ -13,6 +13,7 @@ import '../../data/repositories/product_repository.dart' show FoodGroup;
 import '../providers/dish_provider.dart';
 import '../providers/search_provider.dart';
 import '../widgets/app_buttons.dart';
+import '../widgets/app_sheet.dart';
 import '../widgets/custom_numpad.dart';
 import '../widgets/custom_product_form_sheet.dart';
 
@@ -30,10 +31,13 @@ class _DishBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      padding: const EdgeInsets.symmetric(
+        horizontal: Space.x2,
+        vertical: Space.x1,
+      ),
       decoration: BoxDecoration(
         color: palette.sunken,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: Radii.chipAll,
       ),
       child: Text(
         'Готовое блюдо',
@@ -410,16 +414,15 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
 
   Future<void> _openFiltersSheet(BuildContext context) async {
     FocusManager.instance.primaryFocus?.unfocus();
-    final p = Palette.of(context);
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      showDragHandle: true,
-      backgroundColor: p.surface,
-      shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
+      showDragHandle: false,
+      backgroundColor: Colors.transparent,
       builder: (sheetCtx) => Consumer(
         builder: (sheetCtx, sheetRef, _) {
+          final p = Palette.of(sheetCtx);
           final st = sheetRef.watch(searchProvider);
           final counts = sheetRef.watch(sourceCountsProvider).maybeWhen(
                 data: (value) => value,
@@ -443,139 +446,137 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
               st.selectedGroupId != null ||
               _onlyFavorites;
 
-          return SafeArea(
-            top: false,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x4),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Фильтры справочника',
-                          style: AppTypography.title.copyWith(color: p.ink),
-                        ),
+          return AppSheetScaffold(
+            title: 'Фильтры справочника',
+            showHandle: true,
+            maxHeightFactor: 0.85,
+            trailing: hasExtra
+                ? TextButton(
+                    onPressed: () {
+                      AppHaptics.toggle();
+                      setState(() => _onlyFavorites = false);
+                      sheetRef.read(searchProvider.notifier).resetFilters(
+                            clearQuery: false,
+                            clearSource: true,
+                            clearGroup: true,
+                            clearIsDish: false,
+                          );
+                    },
+                    child: const Text('Сбросить'),
+                  )
+                : null,
+            bodyPadding: const EdgeInsets.fromLTRB(
+              Space.x4,
+              Space.x3,
+              Space.x4,
+              Space.x4,
+            ),
+            footer: SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                key: const ValueKey('filters-apply-btn'),
+                onPressed: () => Navigator.pop(sheetCtx),
+                child: const Text('Готово'),
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Источник',
+                  style: AppTypography.label.copyWith(color: p.inkSecondary),
+                ),
+                const SizedBox(height: Space.x2),
+                Wrap(
+                  spacing: Space.x2,
+                  runSpacing: Space.x2,
+                  children: [
+                    _FilterPill(
+                      label: 'Все базы',
+                      selected: st.selectedSource == null,
+                      palette: p,
+                      onTap: () {
+                        AppHaptics.toggle();
+                        sheetRef
+                            .read(searchProvider.notifier)
+                            .setSourceFilter(_allSourcesValue);
+                      },
+                    ),
+                    for (final (code, count) in [
+                      ('skurikhin', counts.skurikhin),
+                      ('bls', counts.bls),
+                      if (counts.supplement > 0)
+                        ('supplement', counts.supplement),
+                    ])
+                      _FilterPill(
+                        label: count > 0
+                            ? '${SourceLabel.of(code)} · ${_spaced(count)}'
+                            : SourceLabel.of(code),
+                        selected: st.selectedSource == code,
+                        palette: p,
+                        onTap: () {
+                          AppHaptics.toggle();
+                          sheetRef.read(searchProvider.notifier).setSourceFilter(
+                                st.selectedSource == code
+                                    ? _allSourcesValue
+                                    : code,
+                              );
+                        },
                       ),
-                      if (hasExtra)
-                        TextButton(
-                          onPressed: () {
-                            AppHaptics.toggle();
-                            setState(() => _onlyFavorites = false);
-                            sheetRef.read(searchProvider.notifier).resetFilters(
-                                  clearQuery: false,
-                                  clearSource: true,
-                                  clearGroup: true,
-                                  clearIsDish: false,
-                                );
-                          },
-                          child: const Text('Сбросить'),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: Space.x3),
+                    if (counts.custom > 0)
+                      _FilterPill(
+                        key: const ValueKey('custom-source-pill'),
+                        label: 'Свои · ${counts.custom}',
+                        selected: st.selectedSource == 'custom',
+                        palette: p,
+                        onTap: () {
+                          AppHaptics.toggle();
+                          sheetRef.read(searchProvider.notifier).setSourceFilter(
+                                st.selectedSource == 'custom'
+                                    ? _allSourcesValue
+                                    : 'custom',
+                              );
+                        },
+                      ),
+                  ],
+                ),
+                if (favCount > 0 || groups.isNotEmpty) ...[
+                  const SizedBox(height: Space.x4),
                   Text(
-                    'Источник',
+                    'Подборка и категория',
                     style: AppTypography.label.copyWith(color: p.inkSecondary),
                   ),
                   const SizedBox(height: Space.x2),
                   Wrap(
                     spacing: Space.x2,
-                    runSpacing: Space.x1,
+                    runSpacing: Space.x2,
                     children: [
-                      _FilterPill(
-                        label: 'Все базы',
-                        selected: st.selectedSource == null,
-                        palette: p,
-                        onTap: () {
-                          AppHaptics.toggle();
-                          sheetRef
-                              .read(searchProvider.notifier)
-                              .setSourceFilter(_allSourcesValue);
-                        },
-                      ),
-                      for (final (code, count) in [
-                        ('skurikhin', counts.skurikhin),
-                        ('bls', counts.bls),
-                        if (counts.supplement > 0)
-                          ('supplement', counts.supplement),
-                      ])
+                      if (favCount > 0)
                         _FilterPill(
-                          label: count > 0
-                              ? '${SourceLabel.of(code)} · ${_spaced(count)}'
-                              : SourceLabel.of(code),
-                          selected: st.selectedSource == code,
+                          key: const ValueKey('favorites-filter-pill'),
+                          label: '★ Избранное · $favCount',
+                          selected: _onlyFavorites,
                           palette: p,
                           onTap: () {
                             AppHaptics.toggle();
-                            sheetRef.read(searchProvider.notifier).setSourceFilter(
-                                  st.selectedSource == code
-                                      ? _allSourcesValue
-                                      : code,
-                                );
+                            setState(() => _onlyFavorites = !_onlyFavorites);
                           },
                         ),
-                      if (counts.custom > 0)
+                      if (groups.isNotEmpty)
                         _FilterPill(
-                          key: const ValueKey('custom-source-pill'),
-                          label: 'Свои · ${counts.custom}',
-                          selected: st.selectedSource == 'custom',
+                          key: const ValueKey('group-filter-pill'),
+                          label: selectedGroup?.name ?? 'Категория',
+                          trailingIcon: Icons.expand_more_rounded,
+                          selected: st.selectedGroupId != null,
                           palette: p,
-                          onTap: () {
-                            AppHaptics.toggle();
-                            sheetRef.read(searchProvider.notifier).setSourceFilter(
-                                  st.selectedSource == 'custom'
-                                      ? _allSourcesValue
-                                      : 'custom',
-                                );
-                          },
+                          onTap: () =>
+                              _openGroupPicker(groups, st.selectedGroupId),
                         ),
                     ],
                   ),
-                  if (favCount > 0 || groups.isNotEmpty) ...[
-                    const SizedBox(height: Space.x3),
-                    Text(
-                      'Подборка и категория',
-                      style: AppTypography.label.copyWith(color: p.inkSecondary),
-                    ),
-                    const SizedBox(height: Space.x2),
-                    Wrap(
-                      spacing: Space.x2,
-                      runSpacing: Space.x1,
-                      children: [
-                        if (favCount > 0)
-                          _FilterPill(
-                            key: const ValueKey('favorites-filter-pill'),
-                            label: '★ Избранное · $favCount',
-                            selected: _onlyFavorites,
-                            palette: p,
-                            onTap: () {
-                              AppHaptics.toggle();
-                              setState(() => _onlyFavorites = !_onlyFavorites);
-                            },
-                          ),
-                        if (groups.isNotEmpty)
-                          _FilterPill(
-                            key: const ValueKey('group-filter-pill'),
-                            label: selectedGroup?.name ?? 'Категория',
-                            trailingIcon: Icons.expand_more_rounded,
-                            selected: st.selectedGroupId != null,
-                            palette: p,
-                            onTap: () =>
-                                _openGroupPicker(groups, st.selectedGroupId),
-                          ),
-                      ],
-                    ),
-                  ],
-                  const SizedBox(height: Space.x4),
-                  FilledButton(
-                    onPressed: () => Navigator.pop(sheetCtx),
-                    child: const Text('Показать результаты'),
-                  ),
                 ],
-              ),
+              ],
             ),
           );
         },
@@ -598,11 +599,11 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
       if (favoriteProducts.isEmpty) {
         final emptyFav = Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(Space.x5),
+            padding: const EdgeInsets.all(Space.x4),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.star_outline_rounded, size: 42, color: p.inkMuted),
+                Icon(Icons.star_outline_rounded, size: 40, color: p.inkMuted),
                 const SizedBox(height: Space.x2),
                 Text(
                   'В избранном нет подходящих продуктов',
@@ -768,14 +769,16 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
       BuildContext context, Palette p, SearchState searchState) {
     final hasFilters = searchState.query.trim().isNotEmpty ||
         searchState.selectedSource != null ||
-        searchState.selectedGroupId != null;
+        searchState.selectedGroupId != null ||
+        searchState.selectedIsDish != null ||
+        _onlyFavorites;
     return Center(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(Space.x5),
+        padding: const EdgeInsets.all(Space.x4),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.search_off_rounded, size: 42, color: p.inkMuted),
+            Icon(Icons.search_off_rounded, size: 40, color: p.inkMuted),
             const SizedBox(height: Space.x2),
             Text(
               'Ничего не найдено',
@@ -797,9 +800,9 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                         clearQuery: true,
                         clearSource: true,
                         clearGroup: true,
-                        clearIsDish: false,
+                        clearIsDish: true,
                       );
-                  setState(() {});
+                  setState(() => _onlyFavorites = false);
                 },
                 child: const Text('Сбросить фильтры'),
               ),
@@ -853,15 +856,18 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
     if (!alreadyInDish) {
       inDishBadgeText = null;
     } else if (singleExisting != null) {
-      final grams = CalculationEngine.formatGrams(singleExisting.weightGrams);
+      final netStr = CalculationEngine.formatNetGrams(
+        singleExisting.netGramsRounded,
+        singleExisting.product.wastePct,
+      );
       inDishBadgeText = singleExisting.isGross
-          ? 'в блюде · $grams г брутто'
-          : 'в блюде · $grams г';
+          ? 'В блюде: $netStr г нетто (брутто ${CalculationEngine.formatGrams(singleExisting.weightGrams)} г)'
+          : 'В блюде: $netStr г нетто';
     } else {
       final totalNet =
           existingList.fold<double>(0.0, (sum, ing) => sum + ing.netGrams);
       inDishBadgeText =
-          'в блюде · ${existingList.length} поз. (${CalculationEngine.formatGrams(totalNet)} г)';
+          'В блюде: ${existingList.length} поз. (${CalculationEngine.formatGrams(totalNet)} г нетто)';
     }
 
     final showInvalidInline = !valid && _invalidProductId == product.id;
@@ -916,13 +922,13 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                         children: [
                           Wrap(
                             spacing: Space.x2,
-                            runSpacing: 4,
+                            runSpacing: Space.x1,
                             crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               if (isFavorite)
                                 Icon(
                                   Icons.star_rounded,
-                                  size: 14,
+                                  size: 16,
                                   color: p.accent,
                                 ),
                               _HighlightedProductName(
@@ -937,10 +943,12 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                               if (inDishBadgeText != null)
                                 Container(
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 7, vertical: 2),
+                                    horizontal: Space.x2,
+                                    vertical: Space.x1,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: p.accentSoft,
-                                    borderRadius: BorderRadius.circular(6),
+                                    borderRadius: Radii.chipAll,
                                   ),
                                   child: Text(
                                     inDishBadgeText,
@@ -954,7 +962,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                                 _DishBadge(p),
                             ],
                           ),
-                          const SizedBox(height: 3),
+                          const SizedBox(height: Space.x1),
                           Text(
                             subtitle,
                             style: AppTypography.caption.copyWith(
@@ -1280,17 +1288,13 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
 
   void _openProductInfoCard(Product product, {Ingredient? existing}) {
     FocusManager.instance.primaryFocus?.unfocus();
-    final p = Palette.of(context);
     final isCustom = product.source.trim().toLowerCase() == 'custom';
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      showDragHandle: true,
-      backgroundColor: p.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(Radii.sheet)),
-      ),
+      showDragHandle: false,
+      backgroundColor: Colors.transparent,
       builder: (sheetCtx) => ProductInfoCardSheet(
         product: product,
         actionLabel: _isReplaceMode ? 'Выбрать для замены' : null,
@@ -1402,7 +1406,7 @@ class _FilterPill extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: Radii.chipAll,
           child: ConstrainedBox(
             constraints: const BoxConstraints(
               minWidth: kMinTapTarget,
@@ -1412,11 +1416,13 @@ class _FilterPill extends StatelessWidget {
             child: Center(
               widthFactor: 1,
               child: Container(
-                height: 34,
-                padding: const EdgeInsets.symmetric(horizontal: Space.x3),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: Space.x3,
+                  vertical: Space.x2,
+                ),
                 decoration: BoxDecoration(
                   color: selected ? palette.accent : palette.sunken,
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: Radii.chipAll,
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -1435,7 +1441,7 @@ class _FilterPill extends StatelessWidget {
                       ),
                     ),
                     if (trailingIcon != null) ...[
-                      const SizedBox(width: 2),
+                      const SizedBox(width: Space.x1),
                       Icon(
                         trailingIcon,
                         size: 16,
@@ -1600,107 +1606,13 @@ class ProductInfoCardSheet extends ConsumerWidget {
       isValid = false;
     }
 
-    final size = MediaQuery.sizeOf(context);
-    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
-    final scrollEntireSheet =
-        size.height < 460 || (size.height < 580 && textScale > 1.4);
-
-    final headerWidget = Padding(
-      padding:
-          const EdgeInsets.fromLTRB(Space.x4, Space.x1, Space.x1, Space.x2),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  product.name,
-                  style: AppTypography.title.copyWith(color: p.ink),
-                ),
-                const SizedBox(height: Space.x1),
-                Wrap(
-                  spacing: Space.x2,
-                  runSpacing: Space.x1,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Text(
-                      product.sourceLabel,
-                      style: AppTypography.caption
-                          .copyWith(color: p.sourceInk),
-                    ),
-                    Text(
-                      'Код: ${product.code}',
-                      style: AppTypography.caption.copyWith(color: p.inkMuted),
-                    ),
-                    if (product.pageNum != null && product.pageNum! > 0)
-                      Text(
-                        'Стр. ${product.pageNum}',
-                        style: AppTypography.caption
-                            .copyWith(color: p.inkMuted),
-                      ),
-                    if (product.isDishOnly) _DishBadge(p),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          if (isValid)
-            IconButton(
-              key: const ValueKey('toggle-favorite-btn'),
-              icon: Icon(
-                isFavorite ? Icons.star_rounded : Icons.star_outline_rounded,
-                color: isFavorite ? p.accent : p.inkSecondary,
-              ),
-              tooltip:
-                  isFavorite ? 'Убрать из избранного' : 'Добавить в избранное',
-              constraints: const BoxConstraints(
-                minWidth: kMinTapTarget,
-                minHeight: kMinTapTarget,
-              ),
-              onPressed: () async {
-                AppHaptics.toggle();
-                await ref
-                    .read(favoriteProductsProvider.notifier)
-                    .toggleFavorite(product);
-              },
-            ),
-          if (onEditCustom != null)
-            IconButton(
-              icon: Icon(Icons.edit_outlined, color: p.inkSecondary),
-              tooltip: 'Редактировать продукт',
-              constraints: const BoxConstraints(
-                minWidth: kMinTapTarget,
-                minHeight: kMinTapTarget,
-              ),
-              onPressed: onEditCustom,
-            ),
-          if (onDeleteCustom != null)
-            IconButton(
-              icon: Icon(Icons.delete_outline_rounded, color: p.danger),
-              tooltip: 'Удалить продукт',
-              constraints: const BoxConstraints(
-                minWidth: kMinTapTarget,
-                minHeight: kMinTapTarget,
-              ),
-              onPressed: onDeleteCustom,
-            ),
-          IconButton(
-            icon: const Icon(Icons.close_rounded),
-            tooltip: 'Закрыть',
-            constraints: const BoxConstraints(
-              minWidth: kMinTapTarget,
-              minHeight: kMinTapTarget,
-            ),
-            onPressed: () {
-              if (Navigator.canPop(context)) Navigator.pop(context);
-            },
-          ),
-        ],
-      ),
-    );
-
+    final hasCustomActions = onEditCustom != null || onDeleteCustom != null;
+    final subtitleParts = <String>[
+      product.sourceLabel,
+      'Код: ${product.code}',
+      if (product.pageNum != null && product.pageNum! > 0)
+        'Стр. ${product.pageNum}',
+    ];
     final chemRows = <(String, String)>[
       ('Вода', '${CalculationEngine.formatMacro(product.water)} г'),
       (
@@ -1738,8 +1650,121 @@ class ProductInfoCardSheet extends ConsumerWidget {
       ),
     ];
 
-    final bodyContent = Padding(
-      padding: const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, Space.x4),
+    return AppSheetScaffold(
+      title: product.name,
+      subtitle: subtitleParts.join(' · '),
+      showHandle: true,
+      maxHeightFactor: 0.9,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isValid)
+            IconButton(
+              key: const ValueKey('toggle-favorite-btn'),
+              icon: Icon(
+                isFavorite ? Icons.star_rounded : Icons.star_outline_rounded,
+                color: isFavorite ? p.accent : p.inkSecondary,
+              ),
+              tooltip:
+                  isFavorite ? 'Убрать из избранного' : 'Добавить в избранное',
+              constraints: const BoxConstraints(
+                minWidth: kMinTapTarget,
+                minHeight: kMinTapTarget,
+              ),
+              onPressed: () async {
+                AppHaptics.toggle();
+                await ref
+                    .read(favoriteProductsProvider.notifier)
+                    .toggleFavorite(product);
+              },
+            ),
+          if (hasCustomActions)
+            PopupMenuButton<String>(
+              key: const ValueKey('product-info-more-btn'),
+              tooltip: 'Действия с продуктом',
+              icon: Icon(Icons.more_vert_rounded, color: p.inkSecondary),
+              onSelected: (value) {
+                if (value == 'edit') {
+                  onEditCustom?.call();
+                } else if (value == 'delete') {
+                  onDeleteCustom?.call();
+                }
+              },
+              itemBuilder: (_) => [
+                if (onEditCustom != null)
+                  const PopupMenuItem<String>(
+                    key: ValueKey('product-info-edit-btn'),
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined, size: 18),
+                        SizedBox(width: Space.x2),
+                        Expanded(child: Text('Редактировать продукт')),
+                      ],
+                    ),
+                  ),
+                if (onDeleteCustom != null)
+                  PopupMenuItem<String>(
+                    key: const ValueKey('product-info-delete-btn'),
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.delete_outline_rounded,
+                          size: 18,
+                          color: p.danger,
+                        ),
+                        const SizedBox(width: Space.x2),
+                        Expanded(
+                          child: Text(
+                            'Удалить продукт',
+                            style: TextStyle(color: p.danger),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.close_rounded),
+              tooltip: 'Закрыть',
+              constraints: const BoxConstraints(
+                minWidth: kMinTapTarget,
+                minHeight: kMinTapTarget,
+              ),
+              onPressed: () {
+                if (Navigator.canPop(context)) Navigator.pop(context);
+              },
+            ),
+        ],
+      ),
+      headerExtra: product.isDishOnly
+          ? Align(
+              alignment: Alignment.centerLeft,
+              child: _DishBadge(p),
+            )
+          : null,
+      bodyPadding: const EdgeInsets.fromLTRB(
+        Space.x4,
+        Space.x3,
+        Space.x4,
+        Space.x4,
+      ),
+      footer: SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          onPressed: isValid ? onAddToRecipe : null,
+          icon: const Icon(Icons.add_circle_outline_rounded, size: 20),
+          label: Text(
+            isValid
+                ? (actionLabel ?? 'Добавить в расчет')
+                : 'Недоступно для расчёта (ошибка БЖУ в источнике)',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1760,7 +1785,7 @@ class ProductInfoCardSheet extends ConsumerWidget {
                   Expanded(
                     child: Text(
                       'Сумма нутриентов в исходных данных превышает 100 г '
-                      '(${(product.protein + product.fat + product.carbs).toStringAsFixed(2)} г). '
+                      '(${CalculationEngine.formatMacro(product.protein + product.fat + product.carbs)} г). '
                       'Продукт доступен только для справки.',
                       style: AppTypography.caption.copyWith(color: p.danger),
                     ),
@@ -1829,69 +1854,6 @@ class ProductInfoCardSheet extends ConsumerWidget {
         ],
       ),
     );
-
-    final footerWidget = DecoratedBox(
-      decoration: BoxDecoration(
-        color: p.surface,
-        border: Border(top: BorderSide(color: p.divider)),
-      ),
-      child: Padding(
-        padding:
-            const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x2),
-        child: SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: isValid ? onAddToRecipe : null,
-            icon: const Icon(Icons.add_circle_outline_rounded, size: 20),
-            label: Text(
-              isValid
-                  ? (actionLabel ?? 'Добавить в расчет')
-                  : 'Недоступно для расчёта (ошибка БЖУ в источнике)',
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ),
-      ),
-    );
-
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: size.height * 0.9,
-      ),
-      decoration: BoxDecoration(
-        color: p.surface,
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(Radii.sheet),
-        ),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: SafeArea(
-        top: false,
-        child: scrollEntireSheet
-            ? SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    headerWidget,
-                    Divider(height: 1, color: p.divider),
-                    bodyContent,
-                    footerWidget,
-                  ],
-                ),
-              )
-            : Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  headerWidget,
-                  Divider(height: 1, color: p.divider),
-                  Flexible(
-                    child: SingleChildScrollView(child: bodyContent),
-                  ),
-                  footerWidget,
-                ],
-              ),
-      ),
-    );
   }
 
   Widget _sectionTitle(Palette p, String text) => Text(
@@ -1954,7 +1916,7 @@ class ProductInfoCardSheet extends ConsumerWidget {
         const SizedBox(height: Space.x2),
         for (var i = 0; i < rows.length; i++) ...[
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 7),
+            padding: const EdgeInsets.symmetric(vertical: Space.x2),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,

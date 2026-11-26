@@ -385,8 +385,10 @@ void main() {
       expect(container.read(dishProvider).ingredients[0].weightGrams, 500);
       expect(container.read(dishProvider).ingredients[1].weightGrams, 625);
 
-      // 2) Replace ingredient product via CustomNumpadSheet header button.
+      // 2) Replace ingredient product via CustomNumpadSheet menu button.
       await tester.tap(find.text('Курица (грудка)'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('numpad-more-btn')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('numpad-replace-product')));
       await tester.pumpAndSettle();
@@ -468,7 +470,7 @@ void main() {
       expect(find.byKey(const ValueKey('favorites-filter-pill')), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('favorites-filter-pill')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Показать результаты'));
+      await tester.tap(find.byKey(const ValueKey('filters-apply-btn')));
       await tester.pumpAndSettle();
       expect(find.text(favRepo.items.first.name), findsOneWidget);
     });

@@ -59,7 +59,7 @@ class AppBottomBar extends StatelessWidget {
       return SafeArea(
         top: false,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(hPad, 2, hPad, Space.x1),
+          padding: EdgeInsets.fromLTRB(hPad, Space.x1, hPad, Space.x2),
           child: Center(
             heightFactor: 1,
             child: ConstrainedBox(
@@ -67,7 +67,7 @@ class AppBottomBar extends StatelessWidget {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: p.isDark ? p.raised : p.surface,
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: Radii.dockAll,
                   border: Border.all(
                     color: p.borderStatic.withOpacity(p.isDark ? 0.9 : 0.75),
                   ),
@@ -88,7 +88,7 @@ class AppBottomBar extends StatelessWidget {
                         ],
                 ),
                 child: Padding(
-                  padding: padding ?? const EdgeInsets.all(4),
+                  padding: padding ?? const EdgeInsets.all(Space.x2),
                   child: child,
                 ),
               ),

@@ -1,7 +1,7 @@
 name: povarspravka
 description: "Поварская справка — офлайн калькулятор пищевой ценности блюд по справочнику Скурихина и BLS 4.0"
 publish_to: 'none'
-version: 1.7.0+10
+version: 1.8.0+11
 
 environment:
   sdk: '>=3.3.0 <4.0.0'

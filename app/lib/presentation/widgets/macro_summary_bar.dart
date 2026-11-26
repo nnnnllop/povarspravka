@@ -11,6 +11,7 @@ import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
 import 'app_buttons.dart';
+import 'app_sheet.dart';
 import 'instrument_widgets.dart';
 import 'loss_clarity_hints.dart';
 import 'macro_balance_bar.dart';
@@ -42,6 +43,10 @@ class MacroSummaryBar extends StatefulWidget {
   /// Интегрированный нижний ярус Hero-карточки (параметры обработки и выхода).
   final Widget? heroFooter;
 
+  /// Синхронизированный внешний режим расчёта («На 100 г» / «На всё блюдо»).
+  final bool? showPer100g;
+  final ValueChanged<bool>? onModeChanged;
+
   const MacroSummaryBar({
     super.key,
     required this.result,
@@ -49,6 +54,8 @@ class MacroSummaryBar extends StatefulWidget {
     this.hero = false,
     this.ingredients,
     this.heroFooter,
+    this.showPer100g,
+    this.onModeChanged,
   });
 
   /// Открывает модальный инспектор расчёта (шаги потерь, выход, вклад).
@@ -180,12 +187,12 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
           Row(
             children: [
               Container(
-                width: 22,
-                height: 22,
+                width: Space.x6,
+                height: Space.x6,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: p.accentSoft,
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: Radii.chipAll,
                 ),
                 child: Text(
                   '3',
@@ -299,7 +306,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
   /// + встроенный при необходимости нижний ярус параметров.
   Widget _buildHero(BuildContext context, Palette p, CalculationResult r) {
     final canSwitch = r.hasYield;
-    final per100 = canSwitch && _showPer100g;
+    final per100 = canSwitch && (widget.showPer100g ?? _showPer100g);
     final kcalVal = per100 ? r.per100gKcal : r.cookedKcal;
     final proteinVal = per100 ? r.per100gProtein : r.cookedProtein;
     final fatVal = per100 ? r.per100gFat : r.cookedFat;
@@ -312,7 +319,12 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            padding: const EdgeInsets.fromLTRB(
+              Space.x4,
+              Space.x3,
+              Space.x4,
+              Space.x3,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -325,7 +337,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: Space.x1 + 2),
+                const SizedBox(height: Space.x1),
                 Wrap(
                   alignment: WrapAlignment.spaceBetween,
                   crossAxisAlignment: WrapCrossAlignment.center,
@@ -346,7 +358,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                             style: AppTypography.heroKcal
                                 .copyWith(color: p.slabInk),
                           ),
-                          const SizedBox(width: Space.x1 + 2),
+                          const SizedBox(width: Space.x2),
                           Text(
                             per100 ? 'ккал / 100 г' : 'ккал',
                             style: AppTypography.bodySm.copyWith(
@@ -360,13 +372,18 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                     if (canSwitch)
                       Material(
                         color: p.accent,
-                        borderRadius: BorderRadius.circular(999),
+                        borderRadius: Radii.fieldAll,
                         clipBehavior: Clip.antiAlias,
                         child: InkWell(
                           key: const ValueKey('hero-mode-toggle'),
                           onTap: () {
                             AppHaptics.toggle();
-                            setState(() => _showPer100g = !_showPer100g);
+                            final next = !per100;
+                            if (widget.onModeChanged != null) {
+                              widget.onModeChanged!(next);
+                            } else {
+                              setState(() => _showPer100g = next);
+                            }
                           },
                           child: ConstrainedBox(
                             constraints: const BoxConstraints(
@@ -376,7 +393,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: Space.x3,
-                                vertical: 6,
+                                vertical: Space.x2,
                               ),
                               child: Center(
                                 widthFactor: 1,
@@ -437,7 +454,12 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
           Tooltip(
             message: 'Инспектор расчёта',
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 14, 10),
+              padding: const EdgeInsets.fromLTRB(
+                Space.x4,
+                Space.x3,
+                Space.x4,
+                Space.x3,
+              ),
               child: Row(
                 children: [
                   Expanded(
@@ -634,31 +656,23 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      showDragHandle: true,
-      backgroundColor: p.canvas,
-      shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
-      builder: (context) => SizedBox(
-        height: MediaQuery.sizeOf(context).height * 0.92,
-        child: SingleChildScrollView(
-          padding:
-              const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x5),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Расчёт блюда',
-                style: AppTypography.title.copyWith(color: p.ink),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'На 100 г, на порцию и по шагам тепловой обработки.',
-                style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
-              ),
-              const SizedBox(height: Space.x3),
-              // ── 1. Результат (чистая 2-колоночная карточка) ─────────────
-              GroupedSurface(
-                padding: const EdgeInsets.all(Space.x4),
+      showDragHandle: false,
+      backgroundColor: Colors.transparent,
+      builder: (context) => AppSheetScaffold(
+        title: 'Расчёт блюда',
+        subtitle: 'На 100 г, на порцию и по шагам тепловой обработки.',
+        showHandle: true,
+        maxHeightFactor: 0.92,
+        bodyPadding:
+            const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, Space.x6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── 1. Результат (чистая 2-колоночная карточка) ─────────────
+            GroupedSurface(
+              color: p.sunken,
+              padding: const EdgeInsets.all(Space.x4),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -681,13 +695,13 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                                 style: AppTypography.caption
                                     .copyWith(color: p.inkSecondary),
                               ),
-                              const SizedBox(height: 2),
+                              const SizedBox(height: Space.x1),
                               Text(
                                 '${k(r.cookedKcal)} ккал',
                                 style:
                                     AppTypography.title.copyWith(color: p.ink),
                               ),
-                              const SizedBox(height: 2),
+                              const SizedBox(height: Space.x1),
                               Text(
                                 'Б ${m(r.cookedProtein)} · Ж ${m(r.cookedFat)} · У ${m(r.cookedCarbs)} г',
                                 style: AppTypography.numSm
@@ -706,14 +720,14 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                                 style: AppTypography.caption
                                     .copyWith(color: p.inkSecondary),
                               ),
-                              const SizedBox(height: 2),
+                              const SizedBox(height: Space.x1),
                               if (r.hasYield) ...[
                                 Text(
                                   '${k(r.per100gKcal)} ккал',
                                   style: AppTypography.title
                                       .copyWith(color: p.accent),
                                 ),
-                                const SizedBox(height: 2),
+                                const SizedBox(height: Space.x1),
                                 Text(
                                   'Б ${m(r.per100gProtein)} · Ж ${m(r.per100gFat)} · У ${m(r.per100gCarbs)} г',
                                   style: AppTypography.numSm
@@ -778,11 +792,11 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: Space.x2,
-                              vertical: 4,
+                              vertical: Space.x1,
                             ),
                             decoration: BoxDecoration(
                               color: p.sunken,
-                              borderRadius: BorderRadius.circular(999),
+                              borderRadius: Radii.chipAll,
                             ),
                             child: Text(
                               stepLabel,
@@ -802,7 +816,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: Space.x1),
                     Text(
                       e.description,
                       style: AppTypography.bodySm
@@ -819,7 +833,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                       const SizedBox(height: Space.x2),
                       Container(
                         key: const ValueKey('inspector-loss-clarity-hints'),
-                        padding: const EdgeInsets.all(Space.x2 + 2),
+                        padding: const EdgeInsets.all(Space.x3),
                         decoration: BoxDecoration(
                           color: p.accentSoft,
                           borderRadius: Radii.fieldAll,
@@ -828,7 +842,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Icon(Icons.info_outline_rounded,
-                                size: 15, color: p.accent),
+                                size: 16, color: p.accent),
                             const SizedBox(width: Space.x2),
                             Expanded(
                               child: Column(
@@ -836,7 +850,8 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                                 children: [
                                   for (final note in clarityNotes)
                                     Padding(
-                                      padding: const EdgeInsets.only(bottom: 2),
+                                      padding: const EdgeInsets.only(
+                                          bottom: Space.x1),
                                       child: Text(
                                         note,
                                         style: AppTypography.caption
@@ -961,7 +976,8 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                                   ),
                                 ])
                                   Padding(
-                                    padding: const EdgeInsets.only(top: 3),
+                                    padding:
+                                        const EdgeInsets.only(top: Space.x1),
                                     child: Text(
                                       '${row.$1}: ${m(row.$2)} × ${CalculationEngine.formatPercent(row.$3)}% = ${m(row.$4)} г',
                                       style: AppTypography.numSm
@@ -1004,7 +1020,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                                   style: AppTypography.caption
                                       .copyWith(color: p.inkMuted),
                                 ),
-                                const SizedBox(height: 2),
+                                const SizedBox(height: Space.x1),
                                 Text(
                                   '${macros(r.per100gProtein, r.per100gFat, r.per100gCarbs)} · ${k(r.per100gKcal)} ккал',
                                   style: AppTypography.numSm.copyWith(
@@ -1053,8 +1069,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 
   /// Шаг 2 нового расчёта: потери по каждому ингредиенту — группа, способ,
@@ -1090,7 +1105,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
           const SizedBox(height: Space.x2),
           for (final line in r.lines)
             Container(
-              margin: const EdgeInsets.only(bottom: 6),
+              margin: const EdgeInsets.only(bottom: Space.x2),
               padding: const EdgeInsets.symmetric(
                 horizontal: Space.x3,
                 vertical: Space.x2,
@@ -1127,7 +1142,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: Space.x1),
                   Text(
                     'Б ${m(line.rawProtein)} → ${m(line.cookedProtein)} · '
                     'Ж ${m(line.rawFat)} → ${m(line.cookedFat)} · '
@@ -1152,7 +1167,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
             const SizedBox(height: Space.x2),
             Container(
               key: const ValueKey('inspector-loss-clarity-hints'),
-              padding: const EdgeInsets.all(Space.x2 + 2),
+              padding: const EdgeInsets.all(Space.x3),
               decoration: BoxDecoration(
                 color: p.accentSoft,
                 borderRadius: Radii.fieldAll,
@@ -1160,7 +1175,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.info_outline_rounded, size: 15, color: p.accent),
+                  Icon(Icons.info_outline_rounded, size: 16, color: p.accent),
                   const SizedBox(width: Space.x2),
                   Expanded(
                     child: Column(
@@ -1168,7 +1183,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                       children: [
                         for (final note in clarityNotes)
                           Padding(
-                            padding: const EdgeInsets.only(bottom: 2),
+                            padding: const EdgeInsets.only(bottom: Space.x1),
                             child: Text(
                               note,
                               style: AppTypography.caption
@@ -1262,12 +1277,12 @@ class _StageRow extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 22,
-            height: 22,
+            width: Space.x6,
+            height: Space.x6,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: muted ? p.sunken : p.accentSoft,
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: Radii.chipAll,
             ),
             child: Text(
               '$number',
@@ -1585,19 +1600,19 @@ class _IngredientContributionSectionState
           segments: const [
             ButtonSegment(
               value: _ContributionMetric.kcal,
-              label: FittedBox(fit: BoxFit.scaleDown, child: Text('Ккал')),
+              label: Text('Ккал', maxLines: 1, overflow: TextOverflow.ellipsis),
             ),
             ButtonSegment(
               value: _ContributionMetric.protein,
-              label: FittedBox(fit: BoxFit.scaleDown, child: Text('Б')),
+              label: Text('Б', maxLines: 1),
             ),
             ButtonSegment(
               value: _ContributionMetric.fat,
-              label: FittedBox(fit: BoxFit.scaleDown, child: Text('Ж')),
+              label: Text('Ж', maxLines: 1),
             ),
             ButtonSegment(
               value: _ContributionMetric.carbs,
-              label: FittedBox(fit: BoxFit.scaleDown, child: Text('У')),
+              label: Text('У', maxLines: 1),
             ),
           ],
           selected: {_metric},
@@ -1646,7 +1661,7 @@ class _IngredientContributionSectionState
                     children: [
                       if (stackHeader) ...[
                         nameWidget,
-                        const SizedBox(height: 2),
+                        const SizedBox(height: Space.x1),
                         metricWidget,
                       ] else
                         Row(
@@ -1656,9 +1671,9 @@ class _IngredientContributionSectionState
                             Flexible(child: metricWidget),
                           ],
                         ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: Space.x1),
                       ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius: BorderRadius.circular(Space.x1),
                         child: Container(
                           height: 6,
                           color: p.sunken,

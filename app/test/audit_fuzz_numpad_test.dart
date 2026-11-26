@@ -221,16 +221,16 @@ void main() {
     expect(h.confirmed.single.$1, isNot(12345.67)); // what the chef typed
   });
 
-  testWidgets('quick-add clamps to [1, 99999] and never produces garbage', (tester) async {
-    final h = await open(tester, initialGrams: 99999);
+  testWidgets('quick-add clamps to [1, 9999999] and never produces garbage', (tester) async {
+    final h = await open(tester, initialGrams: 9999999);
     await tester.tap(find.text('+250 г'));
     await tester.pumpAndSettle();
-    expect(h.readout, '99999'); // formatGrams drops the ",0"
+    expect(h.readout, '9999999'); // formatGrams drops the ",0"
     await tester.tap(find.text('+10 г'));
     await tester.pumpAndSettle();
-    expect(h.readout, '99999');
+    expect(h.readout, '9999999');
     await h.pressConfirm(tester);
-    expect(h.confirmed.single.$1, 99999.0);
+    expect(h.confirmed.single.$1, 9999999.0);
   });
 
   testWidgets('quick-add on "0" adds the delta (0 + 10)', (tester) async {

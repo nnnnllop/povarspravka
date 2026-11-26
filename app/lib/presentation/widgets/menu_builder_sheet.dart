@@ -11,6 +11,7 @@ import '../../core/calculation/models/dish.dart';
 import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
+import 'app_sheet.dart';
 import 'custom_numpad.dart';
 import 'instrument_widgets.dart';
 import 'macro_balance_bar.dart';
@@ -148,14 +149,12 @@ class MenuBuilderSheet extends StatefulWidget {
     required List<Dish> dishes,
   }) {
     FocusManager.instance.primaryFocus?.unfocus();
-    final p = Palette.of(context);
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      showDragHandle: true,
-      backgroundColor: p.surface,
-      shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
+      showDragHandle: false,
+      backgroundColor: Colors.transparent,
       builder: (_) => MenuBuilderSheet(dishes: dishes),
     );
   }
@@ -214,50 +213,69 @@ class _MenuBuilderSheetState extends State<MenuBuilderSheet> {
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
-    final size = MediaQuery.sizeOf(context);
     final summary = computeMenuSummary(_items);
     final m = CalculationEngine.formatMacro;
     final k = CalculationEngine.formatKcal;
     final g = CalculationEngine.formatGrams;
 
-    return SizedBox(
+    return AppSheetScaffold(
       key: const ValueKey('menu-builder-sheet'),
-      height: size.height * 0.9,
-      child: SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x5),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Набор блюд (меню)',
-                style: AppTypography.title.copyWith(color: p.ink),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Укажите массу порции каждого блюда — итог пересчитается автоматически.',
-                style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
-              ),
-              if (_invalidCount > 0) ...[
-                const SizedBox(height: Space.x2),
-                Container(
-                  padding: const EdgeInsets.all(Space.x3),
-                  decoration: BoxDecoration(
-                    color: p.dangerSoft,
-                    borderRadius: Radii.fieldAll,
-                  ),
-                  child: Text(
-                    'Пропущено блюд с ошибкой расчёта: $_invalidCount.',
-                    style: AppTypography.caption.copyWith(color: p.danger),
-                  ),
+      title: 'Набор блюд (меню)',
+      subtitle:
+          'Укажите массу порции каждого блюда — итог пересчитается автоматически.',
+      showHandle: true,
+      maxHeightFactor: 0.9,
+      bodyPadding:
+          const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, Space.x4),
+      footer: _items.isNotEmpty
+          ? SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                key: const ValueKey('menu-copy-text-btn'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, kMinTapTarget),
                 ),
-              ],
-              if (_items.isNotEmpty) ...[
-                const SizedBox(height: Space.x3),
-                InstrumentSlab(
-                  key: const ValueKey('menu-total-card'),
-                  padding: const EdgeInsets.all(Space.x3 + 2),
+                onPressed: () async {
+                  final text = formatMenuPlainText(_items, summary);
+                  await Clipboard.setData(ClipboardData(text: text));
+                  AppHaptics.commit();
+                  if (!context.mounted) return;
+                  final messenger = ScaffoldMessenger.maybeOf(context);
+                  Navigator.pop(context);
+                  messenger
+                    ?..hideCurrentSnackBar()
+                    ..showSnackBar(
+                      const SnackBar(
+                        content: Text('Сводка меню скопирована'),
+                      ),
+                    );
+                },
+                icon: const Icon(Icons.copy_all_rounded, size: 18),
+                label: const Text('Скопировать меню текстом'),
+              ),
+            )
+          : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_invalidCount > 0) ...[
+            Container(
+              padding: const EdgeInsets.all(Space.x3),
+              decoration: BoxDecoration(
+                color: p.dangerSoft,
+                borderRadius: Radii.fieldAll,
+              ),
+              child: Text(
+                'Пропущено блюд с ошибкой расчёта: $_invalidCount.',
+                style: AppTypography.caption.copyWith(color: p.danger),
+              ),
+            ),
+            const SizedBox(height: Space.x3),
+          ],
+          if (_items.isNotEmpty) ...[
+            InstrumentSlab(
+              key: const ValueKey('menu-total-card'),
+              padding: const EdgeInsets.all(Space.x4),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -351,7 +369,7 @@ class _MenuBuilderSheetState extends State<MenuBuilderSheet> {
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 2),
+                          const SizedBox(height: Space.x1),
                           Text(
                             item.usesWholeDish
                                 ? 'Целое блюдо (выход не указан) · '
@@ -451,34 +469,8 @@ class _MenuBuilderSheetState extends State<MenuBuilderSheet> {
                     },
                   ),
                 ],
-                const SizedBox(height: Space.x4),
-                FilledButton.icon(
-                  key: const ValueKey('menu-copy-text-btn'),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(0, kMinTapTarget),
-                  ),
-                  onPressed: () async {
-                    final text = formatMenuPlainText(_items, summary);
-                    await Clipboard.setData(ClipboardData(text: text));
-                    AppHaptics.commit();
-                    if (!context.mounted) return;
-                    final messenger = ScaffoldMessenger.maybeOf(context);
-                    Navigator.pop(context);
-                    messenger
-                      ?..hideCurrentSnackBar()
-                      ..showSnackBar(
-                        const SnackBar(
-                          content: Text('Сводка меню скопирована'),
-                        ),
-                      );
-                  },
-                  icon: const Icon(Icons.copy_all_rounded, size: 18),
-                  label: const Text('Скопировать меню текстом'),
-                ),
-              ],
-            ],
-          ),
-        ),
+          ],
+        ],
       ),
     );
   }

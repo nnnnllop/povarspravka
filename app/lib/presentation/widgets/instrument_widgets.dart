@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_space.dart';
 
 /// Приборная плита (`#15171A` в светлой / `#1E2126` в тёмной теме)
-/// со скруглениями в духе Material 3 / iOS (`R = 22 dp`).
+/// со скруглениями в духе Material 3 / iOS (`R = 20 dp`).
 class InstrumentSlab extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry? padding;
@@ -57,7 +57,7 @@ class InstrumentSlab extends StatelessWidget {
   }
 }
 
-/// Чистая сгруппированная поверхность без жёсткой сетки рамок (`R = 20 dp`).
+/// Чистая сгруппированная поверхность без жёсткой сетки рамок (`R = 16 dp`).
 class GroupedSurface extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry? padding;

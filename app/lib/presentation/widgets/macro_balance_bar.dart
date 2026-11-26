@@ -47,7 +47,7 @@ class MacroBalanceBar extends StatelessWidget {
         child: Row(
           children: [
             for (int i = 0; i < active.length; i++) ...[
-              if (i > 0 && barHeight >= 6) const SizedBox(width: 1.5),
+              if (i > 0 && barHeight >= 6) const SizedBox(width: Space.x1),
               Expanded(
                 flex: active[i].$1,
                 child: AnimatedContainer(
@@ -88,7 +88,7 @@ class MacroBalanceBar extends StatelessWidget {
                       shape: BoxShape.circle,
                     ),
                   ),
-                  const SizedBox(width: 5),
+                  const SizedBox(width: Space.x1),
                   Flexible(
                     child: Text(
                       seg.$3,

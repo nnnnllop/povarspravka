@@ -437,7 +437,7 @@ void main() {
       // Enter selection mode via long-press on first dish, then tap second dish.
       await tester.longPress(find.text('Пюре с маслом'));
       await tester.pumpAndSettle();
-      expect(find.text('Выбрано: 1'), findsOneWidget);
+      expect(find.text('Выбрано 1'), findsOneWidget);
 
       await tester.scrollUntilVisible(
         find.text('Куриная грудка запечённая'),
@@ -447,7 +447,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Куриная грудка запечённая'));
       await tester.pumpAndSettle();
-      expect(find.text('Выбрано: 2'), findsOneWidget);
+      expect(find.text('Выбрано 2'), findsOneWidget);
 
       // 1) Open DishComparisonSheet (#5) and switch between На 100 г / На всё блюдо.
       await tester.tap(find.byKey(const ValueKey('selection-compare-btn')));

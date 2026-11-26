@@ -497,14 +497,14 @@ void main() {
       await tester.pumpAndSettle();
 
       // Badge shows product already in dish.
-      expect(find.text('в блюде · 100 г'), findsOneWidget);
+      expect(find.text('В блюде: 100 г нетто'), findsOneWidget);
 
       // Source filter: Skurikhin -> hides chicken, then "Все базы" shows both.
       await tester.tap(find.byKey(const ValueKey('search-filters-btn')));
       await tester.pumpAndSettle();
       await tester.tap(find.textContaining('Скурихин').last);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Показать результаты'));
+      await tester.tap(find.byKey(const ValueKey('filters-apply-btn')));
       await tester.pumpAndSettle();
       expect(find.text('Курица (грудка)'), findsNothing);
 
@@ -512,7 +512,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Все базы').last);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Показать результаты'));
+      await tester.tap(find.byKey(const ValueKey('filters-apply-btn')));
       await tester.pumpAndSettle();
       expect(find.text('Курица (грудка)'), findsOneWidget);
 
@@ -523,7 +523,8 @@ void main() {
       await tester.tap(find.text('Картофель').first);
       await tester.pumpAndSettle();
       expect(find.text('Сохранить'), findsOneWidget);
-      await tester.ensureVisible(find.byKey(const ValueKey('numpad-delete')));
+      await tester.tap(find.byKey(const ValueKey('numpad-more-btn')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('numpad-delete')));
       await tester.pumpAndSettle();
       expect(find.text('Удалено: Картофель'), findsOneWidget);
@@ -538,7 +539,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.textContaining('BLS').last);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Показать результаты'));
+      await tester.tap(find.byKey(const ValueKey('filters-apply-btn')));
       await tester.pumpAndSettle();
       expect(container.read(searchProvider).selectedSource, 'bls');
       expect(container.read(searchProvider).query, 'Карт');
@@ -812,7 +813,7 @@ void main() {
       expect(find.text('Категория продуктов'), findsOneWidget);
       await tester.tap(find.text('Овощи').last);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Показать результаты'));
+      await tester.tap(find.byKey(const ValueKey('filters-apply-btn')));
       await tester.pumpAndSettle();
       expect(find.text('Курица (грудка)'), findsNothing);
 
@@ -823,7 +824,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Все категории').last);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Показать результаты'));
+      await tester.tap(find.byKey(const ValueKey('filters-apply-btn')));
       await tester.pumpAndSettle();
       expect(find.text('Курица (грудка)'), findsOneWidget);
 

@@ -394,7 +394,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Как считается'));
+    await tester.tap(find.byTooltip('Настройки и справка'));
     await tester.pumpAndSettle();
 
     // A3-SRC-01/02 rules also appear in How It Works.
@@ -657,6 +657,8 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Морковь'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('numpad-more-btn')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('numpad-edit-loss')));
     await tester.pumpAndSettle();
