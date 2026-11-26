@@ -23,14 +23,7 @@ class AppTypography {
   ];
 
   // ─── Дисплей и крупные заголовки (шаг сетки 4 dp) ───────────────────────
-  static const TextStyle largeTitle = TextStyle(
-    fontFamily: fontName,
-    fontSize: 24,
-    height: 28 / 24,
-    fontWeight: FontWeight.w700,
-    letterSpacing: -0.4,
-    fontFeatures: _tnum,
-  );
+  static TextStyle get largeTitle => display;
 
   static const TextStyle heroKcal = TextStyle(
     fontFamily: fontName,

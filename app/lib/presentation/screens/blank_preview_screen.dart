@@ -13,6 +13,7 @@ import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
 import '../providers/dish_provider.dart';
 import '../widgets/app_buttons.dart';
+import '../widgets/app_sheet.dart';
 import '../widgets/calc_error_banner.dart';
 
 /// Просмотр бланка (аудит P1-8).
@@ -65,20 +66,49 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
     }
   }
 
-  void _applyScale(double scale) {
+  void _applyScale(double scale, {double? viewportWidth, double? viewportHeight}) {
     final next = scale.clamp(_minScale, _maxScale);
+    final oldScale = _scale > 0 ? _scale : 1.0;
+    final matrix = _transform.value;
+    if (viewportWidth != null &&
+        viewportHeight != null &&
+        viewportWidth > 0 &&
+        viewportHeight > 0) {
+      final cx = viewportWidth / 2;
+      final cy = viewportHeight / 2;
+      final tx = matrix.storage[12];
+      final ty = matrix.storage[13];
+      final ratio = next / oldScale;
+      final nextTx = cx - (cx - tx) * ratio;
+      final nextTy = cy - (cy - ty) * ratio;
+      final updated = Matrix4.identity()
+        ..translate(nextTx, nextTy)
+        ..scale(next, next, 1.0);
+      setState(() {
+        _scale = next;
+        _transform.value = updated;
+      });
+      return;
+    }
     setState(() {
       _scale = next;
       _transform.value = Matrix4.diagonal3Values(next, next, 1.0);
     });
   }
 
-  void _zoomBy(double factor) => _applyScale(_scale * factor);
+  double? _viewerWidth;
+  double? _viewerHeight;
+
+  void _zoomBy(double factor) => _applyScale(
+        _scale * factor,
+        viewportWidth: _viewerWidth,
+        viewportHeight: _viewerHeight,
+      );
 
   void _resetZoom() => _applyScale(_fitScale);
 
   Future<void> _run(Future<void> Function() action,
-      {String failure = 'Ошибка при экспорте'}) async {
+      {String failure = 'Не удалось экспортировать'}) async {
     if (_busy) return;
     setState(() => _busy = true);
     try {
@@ -100,14 +130,12 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
   Widget build(BuildContext context) {
     final dish = ref.watch(dishProvider);
     final calc = ref.watch(calculationResultProvider);
+    final canExport = calc != null;
     final p = Palette.of(context);
 
     return Scaffold(
       backgroundColor: p.canvas,
       appBar: AppBar(
-        // AppBar сам корректно масштабируется вместе с текстом. Прежняя
-        // формула `64 * scale(14)/14` = `64·s` давала двойное масштабирование
-        // и при s=2.0 толкала панель до 128 dp (аудит P2-8).
         toolbarHeight: kToolbarHeight,
         title: const Text(
           'Бланк',
@@ -117,15 +145,20 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.ios_share_rounded),
-            tooltip: 'Экспорт',
-            onPressed: _busy ? null : () => _showExportSheet(dish),
+            tooltip:
+                canExport ? 'Экспорт' : 'Сначала исправьте ошибку расчёта',
+            onPressed:
+                (_busy || !canExport) ? null : () => _showExportSheet(dish),
           ),
           IconButton(
             icon: const Icon(Icons.print_rounded),
-            tooltip: 'Печать бланка',
-            onPressed:
-                _busy ? null : () => _run(() => ExportService.printPdf(dish),
-                    failure: 'Ошибка при печати'),
+            tooltip: canExport
+                ? 'Печать бланка'
+                : 'Сначала исправьте ошибку расчёта',
+            onPressed: (_busy || !canExport)
+                ? null
+                : () => _run(() => ExportService.printPdf(dish),
+                    failure: 'Не удалось напечатать'),
           ),
         ],
       ),
@@ -133,17 +166,14 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
         builder: (context) {
           final media = MediaQuery.sizeOf(context);
           final textScale = MediaQuery.textScalerOf(context).scale(1.0);
-          final inlineModeBanner =
-              (media.height < 680 && AppLayout.isLargeText(textScale)) ||
-              (textScale > 1.5 && media.height < 900) ||
-              media.height < 420;
+          final compactBanner = AppLayout.isCompactBlankBar(media.width);
           final stackModeBanner =
-              textScale > 1.15 || AppLayout.isCompact(media.width);
+              textScale > 1.35 || compactBanner;
           final modeIcon = Icon(
             dish.blankMode == BlankMode.photoCross
                 ? Icons.grid_on_rounded
                 : Icons.view_list_rounded,
-            size: 16,
+            size: IconSizes.xs,
             color: p.inkSecondary,
           );
 
@@ -181,12 +211,11 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
                           ],
                         ),
                       ),
-                      if (!inlineModeBanner)
-                        Padding(
-                          padding: const EdgeInsets.only(left: Space.x2),
-                          child: Icon(Icons.tune_rounded,
-                              size: 18, color: p.accent),
-                        ),
+                      Padding(
+                        padding: const EdgeInsets.only(left: Space.x2),
+                        child: Icon(Icons.tune_rounded,
+                            size: IconSizes.btn, color: p.accent),
+                      ),
                     ],
                   )
                 : Row(
@@ -208,10 +237,9 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
                               .copyWith(color: p.inkSecondary),
                         ),
                       ),
-                      if (!inlineModeBanner) ...[
-                        const SizedBox(width: Space.x2),
-                        Icon(Icons.tune_rounded, size: 18, color: p.accent),
-                      ],
+                      const SizedBox(width: Space.x2),
+                      Icon(Icons.tune_rounded,
+                          size: IconSizes.btn, color: p.accent),
                     ],
                   ),
           );
@@ -221,182 +249,172 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
               color: p.surface,
               border: Border(bottom: BorderSide(color: p.divider)),
             ),
-            child: inlineModeBanner
-                ? modeBannerContent
-                : Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      key: const ValueKey('blank-mode-banner'),
-                      onTap: () => _showBlankOptionsSheet(),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(
-                          minHeight: kMinTapTarget,
-                        ),
-                        child: Center(
-                          heightFactor: 1,
-                          child: modeBannerContent,
-                        ),
-                      ),
-                    ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                key: const ValueKey('blank-mode-banner'),
+                onTap: () => _showBlankOptionsSheet(),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    minHeight: kMinTapTarget,
                   ),
-          );
-
-          final previewDoc = calc == null
-              // STATE-01: невычислимое блюдо не роняет бланк.
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CalcErrorBanner(detail: ref.watch(calculationErrorProvider)),
-                  ],
-                )
-              : _BlankPreviewDocument(
-                  dish: dish,
-                  calc: calc,
-                  scale: docScale,
-                );
-
-          return Column(
-            children: [
-              // Плашка режима: на просторных экранах закреплена над листом,
-              // а на тесных с крупным текстом прокручивается вместе с листом.
-              if (!inlineModeBanner) modeBanner,
-
-              // Лист бланка: пинч-зум, автоподгонка по ширине и перетаскивание.
-              Expanded(
-                child: ColoredBox(
-                  color: p.mountingTable,
-                  child: CustomPaint(
-                    painter: _MountingDotGridPainter(dotColor: p.tableDot),
-                    child: LayoutBuilder(
-                      builder: (context, viewerConstraints) {
-                        final viewportW = viewerConstraints.maxWidth;
-                        final nextFit = (calc != null &&
-                                viewportW.isFinite &&
-                                viewportW > 0)
-                            ? (viewportW / docOuterWidth)
-                                .clamp(_minScale, 1.0)
-                            : 1.0;
-                        _fitScale = nextFit;
-                        if (!_initialFitApplied &&
-                            calc != null &&
-                            viewportW.isFinite &&
-                            viewportW > 0) {
-                          _initialFitApplied = true;
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (!mounted) return;
-                            _applyScale(_fitScale);
-                          });
-                        }
-                        return InteractiveViewer(
-                          transformationController: _transform,
-                          minScale: _minScale,
-                          maxScale: _maxScale,
-                          // Лист больше экрана — панорамируем свободно по обеим осям.
-                          constrained: false,
-                          boundaryMargin: const EdgeInsets.all(80),
-                          child: Container(
-                            padding: const EdgeInsets.all(Space.x4),
-                            child: inlineModeBanner
-                                ? Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      SizedBox(
-                                        width: (media.width - Space.x8)
-                                            .clamp(240.0, double.infinity),
-                                        child: modeBanner,
-                                      ),
-                                      const SizedBox(height: Space.x3),
-                                      previewDoc,
-                                    ],
-                                  )
-                                : previewDoc,
-                          ),
-                        );
-                      },
-                    ),
+                  child: Center(
+                    heightFactor: 1,
+                    child: modeBannerContent,
                   ),
                 ),
               ),
+            ),
+          );
 
-          // Панель масштаба: плоский нижний док с 1 px верхним разделителем.
-          AppBottomBar(
-            padding: const EdgeInsets.symmetric(
-                horizontal: Space.x2, vertical: Space.x1),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final textScale = MediaQuery.textScalerOf(context).scale(1.0);
-                final twoRows = AppLayout.isCompact(constraints.maxWidth) ||
-                    (textScale > 1.2 && constraints.maxWidth < 520);
+          return Column(
+            children: [
+              modeBanner,
 
-                final zoomOutBtn = IconButton(
-                  tooltip: 'Уменьшить',
-                  icon: const Icon(Icons.zoom_out_rounded),
-                  onPressed: _scale <= _minScale + 0.01
-                      ? null
-                      : () => _zoomBy(1 / 1.25),
-                );
-                final zoomInBtn = IconButton(
-                  tooltip: 'Увеличить',
-                  icon: const Icon(Icons.zoom_in_rounded),
-                  onPressed:
-                      _scale >= _maxScale - 0.01 ? null : () => _zoomBy(1.25),
-                );
-                final scaleLabel = Text(
-                  'Масштаб ${(_scale * 100).round()} %',
-                  key: const ValueKey('blank-zoom'),
-                  textAlign: TextAlign.center,
-                  style: AppTypography.numSm.copyWith(color: p.inkSecondary),
-                );
-                final resetBtn = TextButton.icon(
-                  onPressed: _resetZoom,
-                  icon: const Icon(Icons.fit_screen_rounded, size: 18),
-                  label: const Text('По размеру'),
-                );
-
-                if (twoRows) {
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      IntrinsicHeight(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            zoomOutBtn,
-                            const SizedBox(width: Space.x1),
-                            Flexible(child: Center(child: scaleLabel)),
-                            const SizedBox(width: Space.x1),
-                            zoomInBtn,
-                          ],
+              // Лист бланка: при ошибке расчёта показываем баннер вне InteractiveViewer.
+              Expanded(
+                child: calc == null
+                    ? Container(
+                        color: p.canvas,
+                        alignment: Alignment.topCenter,
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(Space.x4),
+                          child: AppContentFrame(
+                            child: CalcErrorBanner(
+                              detail: ref.watch(calculationErrorProvider),
+                            ),
+                          ),
+                        ),
+                      )
+                    : ColoredBox(
+                        color: p.mountingTable,
+                        child: CustomPaint(
+                          painter:
+                              _MountingDotGridPainter(dotColor: p.tableDot),
+                          child: LayoutBuilder(
+                            builder: (context, viewerConstraints) {
+                              final viewportW = viewerConstraints.maxWidth;
+                              final viewportH = viewerConstraints.maxHeight;
+                              _viewerWidth =
+                                  viewportW.isFinite ? viewportW : null;
+                              _viewerHeight =
+                                  viewportH.isFinite ? viewportH : null;
+                              final nextFit =
+                                  (viewportW.isFinite && viewportW > 0)
+                                      ? (viewportW / docOuterWidth)
+                                          .clamp(_minScale, 1.0)
+                                      : 1.0;
+                              _fitScale = nextFit;
+                              if (!_initialFitApplied &&
+                                  viewportW.isFinite &&
+                                  viewportW > 0) {
+                                _initialFitApplied = true;
+                                WidgetsBinding.instance
+                                    .addPostFrameCallback((_) {
+                                  if (!mounted) return;
+                                  _applyScale(_fitScale);
+                                });
+                              }
+                              return InteractiveViewer(
+                                transformationController: _transform,
+                                minScale: _minScale,
+                                maxScale: _maxScale,
+                                constrained: false,
+                                boundaryMargin: const EdgeInsets.all(80),
+                                child: Container(
+                                  padding: const EdgeInsets.all(Space.x4),
+                                  child: _BlankPreviewDocument(
+                                    dish: dish,
+                                    calc: calc,
+                                    scale: docScale,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
                         ),
                       ),
-                      resetBtn,
-                    ],
-                  );
-                }
+              ),
 
-                return IntrinsicHeight(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      zoomOutBtn,
-                      const SizedBox(width: Space.x1),
-                      Flexible(child: Center(child: scaleLabel)),
-                      const SizedBox(width: Space.x1),
-                      zoomInBtn,
-                      const SizedBox(width: Space.x2),
-                      resetBtn,
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
+              // Панель масштаба: плоский нижний док с 1 px верхним разделителем.
+              AppBottomBar(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: Space.x2, vertical: Space.x1),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+                    final twoRows =
+                        AppLayout.isCompactBlankBar(constraints.maxWidth) ||
+                            (textScale > 1.2 && constraints.maxWidth < 520);
+
+                    final zoomOutBtn = IconButton(
+                      tooltip: 'Уменьшить',
+                      icon: const Icon(Icons.zoom_out_rounded),
+                      onPressed: (calc == null || _scale <= _minScale + 0.01)
+                          ? null
+                          : () => _zoomBy(1 / 1.25),
+                    );
+                    final zoomInBtn = IconButton(
+                      tooltip: 'Увеличить',
+                      icon: const Icon(Icons.zoom_in_rounded),
+                      onPressed: (calc == null || _scale >= _maxScale - 0.01)
+                          ? null
+                          : () => _zoomBy(1.25),
+                    );
+                    final scaleLabel = Text(
+                      'Масштаб ${(_scale * 100).round()}\u202F%',
+                      key: const ValueKey('blank-zoom'),
+                      textAlign: TextAlign.center,
+                      style: AppTypography.numSm.copyWith(color: p.inkSecondary),
+                    );
+                    final resetBtn = TextButton.icon(
+                      onPressed: calc == null ? null : _resetZoom,
+                      icon: const Icon(Icons.fit_screen_rounded,
+                          size: IconSizes.btn),
+                      label: const Text('По размеру'),
+                    );
+
+                    if (twoRows) {
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          IntrinsicHeight(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                zoomOutBtn,
+                                const SizedBox(width: Space.x1),
+                                Flexible(child: Center(child: scaleLabel)),
+                                const SizedBox(width: Space.x1),
+                                zoomInBtn,
+                              ],
+                            ),
+                          ),
+                          resetBtn,
+                        ],
+                      );
+                    }
+
+                    return IntrinsicHeight(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          zoomOutBtn,
+                          const SizedBox(width: Space.x1),
+                          Flexible(child: Center(child: scaleLabel)),
+                          const SizedBox(width: Space.x1),
+                          zoomInBtn,
+                          const SizedBox(width: Space.x2),
+                          resetBtn,
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
             ],
           );
         },
@@ -408,79 +426,71 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
   Future<void> _showExportSheet(Dish dish) async {
     final p = Palette.of(context);
     final calc = ref.read(calculationResultProvider);
+    if (calc == null) return;
     final choice = await showModalBottomSheet<Object>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      showDragHandle: true,
-      backgroundColor: p.surface,
-      shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
-      builder: (ctx) => SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x4),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('Экспорт и вид бланка',
-                  style: AppTypography.title.copyWith(color: p.ink)),
-              const SizedBox(height: Space.x1),
-              Text(
-                'Файл сохраняется на телефоне, дальше — «Поделиться» или печать.',
-                style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
-              ),
-              const SizedBox(height: Space.x3),
-              _ExportTile(
-                palette: p,
-                icon: Icons.picture_as_pdf_rounded,
-                title: 'PDF',
-                subtitle: 'Векторный, идентичен типовому бланку',
-                onTap: () => Navigator.pop(ctx, ExportType.pdf),
-              ),
-              Divider(color: p.divider, height: 1),
-              _ExportTile(
-                palette: p,
-                icon: Icons.description_rounded,
-                title: 'Word (.docx)',
-                subtitle: 'Редактируемый документ',
-                onTap: () => Navigator.pop(ctx, ExportType.docx),
-              ),
-              Divider(color: p.divider, height: 1),
-              _ExportTile(
-                palette: p,
-                icon: Icons.table_chart_rounded,
-                title: 'Excel (.xlsx)',
-                subtitle: 'С живыми формулами',
-                onTap: () => Navigator.pop(ctx, ExportType.xlsx),
-              ),
-              if (calc != null) ...[
-                Divider(color: p.divider, height: 1),
-                _ExportTile(
-                  palette: p,
-                  icon: Icons.content_copy_rounded,
-                  title: 'Скопировать КБЖУ текстом',
-                  subtitle: 'Краткая сводка состава и цифр для мессенджеров',
-                  onTap: () => Navigator.pop(ctx, 'copy-text'),
-                ),
-              ],
-              Divider(color: p.divider, height: 1),
-              _ExportTile(
-                palette: p,
-                icon: Icons.tune_rounded,
-                title: 'Настроить вид бланка',
-                subtitle: 'Режим с крестом, строка «В 100 г», заголовок',
-                onTap: () => Navigator.pop(ctx, 'blank-options'),
-              ),
-            ],
-          ),
+      showDragHandle: false,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => AppSheetScaffold(
+        title: 'Экспорт и вид бланка',
+        subtitle: 'Файл откроется в меню «Поделиться»: сохраните его в «Файлы» или отправьте.',
+        showHandle: true,
+        showClose: true,
+        bodyPadding:
+            const EdgeInsets.fromLTRB(Space.x4, Space.x2, Space.x4, Space.x4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _ExportTile(
+              palette: p,
+              icon: Icons.picture_as_pdf_rounded,
+              title: 'PDF',
+              subtitle: 'Векторный, идентичен типовому бланку',
+              onTap: () => Navigator.pop(ctx, ExportType.pdf),
+            ),
+            Divider(color: p.divider, height: 1),
+            _ExportTile(
+              palette: p,
+              icon: Icons.description_rounded,
+              title: 'Word (.docx)',
+              subtitle: 'Редактируемый документ',
+              onTap: () => Navigator.pop(ctx, ExportType.docx),
+            ),
+            Divider(color: p.divider, height: 1),
+            _ExportTile(
+              palette: p,
+              icon: Icons.table_chart_rounded,
+              title: 'Excel (.xlsx)',
+              subtitle: 'С живыми формулами',
+              onTap: () => Navigator.pop(ctx, ExportType.xlsx),
+            ),
+            Divider(color: p.divider, height: 1),
+            _ExportTile(
+              palette: p,
+              icon: Icons.content_copy_rounded,
+              title: 'Скопировать КБЖУ текстом',
+              subtitle: 'Краткая сводка состава и цифр для мессенджеров',
+              onTap: () => Navigator.pop(ctx, 'copy-text'),
+            ),
+            Divider(color: p.divider, height: 1),
+            _ExportTile(
+              palette: p,
+              icon: Icons.tune_rounded,
+              title: 'Настроить вид бланка',
+              subtitle: 'Режим с крестом, строка «В 100 г», заголовок',
+              onTap: () => Navigator.pop(ctx, 'blank-options'),
+            ),
+          ],
         ),
       ),
     );
     if (!mounted || choice == null) return;
     if (choice is ExportType) {
       await _run(() => ExportService.shareFile(dish, choice));
-    } else if (choice == 'copy-text' && calc != null) {
+    } else if (choice == 'copy-text') {
       await Clipboard.setData(
         ClipboardData(text: ExportService.formatPlainTextSummary(dish, calc)),
       );
@@ -500,77 +510,71 @@ class _BlankPreviewScreenState extends ConsumerState<BlankPreviewScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      showDragHandle: true,
-      backgroundColor: p.surface,
-      shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
+      showDragHandle: false,
+      backgroundColor: Colors.transparent,
       builder: (sheetCtx) => Consumer(
         builder: (ctx, ref, _) {
           final dish = ref.watch(dishProvider);
           final notifier = ref.read(dishProvider.notifier);
-          return SafeArea(
-            top: false,
-            child: SingleChildScrollView(
-              padding:
-                  const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x4),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'Настройки бланка',
-                    style: AppTypography.title.copyWith(color: p.ink),
-                  ),
-                  const SizedBox(height: Space.x3),
-                  SegmentedButton<BlankMode>(
-                    showSelectedIcon: false,
-                    style: AppSegmentedStyle.of(p, compact: true),
-                    segments: [
-                      for (final mode in BlankMode.values)
-                        ButtonSegment<BlankMode>(
-                          value: mode,
-                          label: Text(
-                            mode.shortName,
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+          return AppSheetScaffold(
+            title: 'Настройки бланка',
+            showHandle: true,
+            showClose: true,
+            bodyPadding: const EdgeInsets.fromLTRB(
+                Space.x4, Space.x3, Space.x4, Space.x4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SegmentedButton<BlankMode>(
+                  showSelectedIcon: false,
+                  style: AppSegmentedStyle.of(p, compact: true),
+                  segments: [
+                    for (final mode in BlankMode.values)
+                      ButtonSegment<BlankMode>(
+                        value: mode,
+                        label: Text(
+                          mode.shortName,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                    ],
-                    selected: {dish.blankMode},
-                    onSelectionChanged: (sel) {
-                      AppHaptics.toggle();
-                      notifier.setBlankMode(sel.single);
-                    },
+                      ),
+                  ],
+                  selected: {dish.blankMode},
+                  onSelectionChanged: (sel) {
+                    AppHaptics.toggle();
+                    notifier.setBlankMode(sel.single);
+                  },
+                ),
+                const SizedBox(height: Space.x2),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  materialTapTargetSize: MaterialTapTargetSize.padded,
+                  title: Text(
+                    'Печатать название в заголовке бланка',
+                    style: AppTypography.bodySm.copyWith(color: p.ink),
                   ),
-                  const SizedBox(height: Space.x2),
-                  SwitchListTile.adaptive(
-                    contentPadding: EdgeInsets.zero,
-                    materialTapTargetSize: MaterialTapTargetSize.padded,
-                    title: Text(
-                      'Печатать название в заголовке бланка',
-                      style: AppTypography.bodySm.copyWith(color: p.ink),
-                    ),
-                    value: dish.showTitleInExport,
-                    onChanged: (v) {
-                      AppHaptics.toggle();
-                      notifier.toggleShowTitle(v);
-                    },
+                  value: dish.showTitleInExport,
+                  onChanged: (v) {
+                    AppHaptics.toggle();
+                    notifier.toggleShowTitle(v);
+                  },
+                ),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  materialTapTargetSize: MaterialTapTargetSize.padded,
+                  title: Text(
+                    'Строка «В 100 г блюда» в бланке',
+                    style: AppTypography.bodySm.copyWith(color: p.ink),
                   ),
-                  SwitchListTile.adaptive(
-                    contentPadding: EdgeInsets.zero,
-                    materialTapTargetSize: MaterialTapTargetSize.padded,
-                    title: Text(
-                      'Строка «В 100 г блюда» в бланке',
-                      style: AppTypography.bodySm.copyWith(color: p.ink),
-                    ),
-                    value: dish.showPer100gRowInExport,
-                    onChanged: (v) {
-                      AppHaptics.toggle();
-                      notifier.toggleShowPer100gRow(v);
-                    },
-                  ),
-                ],
-              ),
+                  value: dish.showPer100gRowInExport,
+                  onChanged: (v) {
+                    AppHaptics.toggle();
+                    notifier.toggleShowPer100gRow(v);
+                  },
+                ),
+              ],
             ),
           );
         },
@@ -610,7 +614,7 @@ class _ExportTile extends StatelessWidget {
                   horizontal: Space.x1, vertical: Space.x3),
               child: Row(
                 children: [
-                  Icon(icon, size: 22, color: p.inkSecondary),
+                  Icon(icon, size: IconSizes.lg, color: p.inkSecondary),
                   const SizedBox(width: Space.x3),
                   Expanded(
                     child: Column(

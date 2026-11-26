@@ -53,9 +53,6 @@ class IngredientCard extends StatelessWidget {
   final bool isFirst;
   final bool isLast;
 
-  /// Доля ингредиента в общей калорийности блюда (`0..1`) для тонкой шкалы вклада.
-  final double? kcalShare;
-
   const IngredientCard({
     super.key,
     required this.index,
@@ -67,7 +64,6 @@ class IngredientCard extends StatelessWidget {
     this.onLossTap,
     this.isFirst = true,
     this.isLast = true,
-    this.kcalShare,
   });
 
   /// Строка потерь нового расчёта (таблица потерь по группам продуктов).
@@ -155,7 +151,7 @@ class IngredientCard extends StatelessWidget {
                             if (showGross) ...[
                               const SizedBox(height: Space.x1),
                               Text(
-                                'Введено брутто $grossGramsStr г · отходы ${CalculationEngine.formatWastePercent(ing.product.wastePct)} %',
+                                'Введено брутто $grossGramsStr г · отходы ${CalculationEngine.formatWastePercent(ing.product.wastePct)}\u00A0%',
                                 style: AppTypography.caption
                                     .copyWith(color: p.inkMuted),
                               ),
@@ -212,7 +208,7 @@ class IngredientCard extends StatelessWidget {
                               width: kMinTapTarget,
                               height: kMinTapTarget,
                               child: Icon(Icons.drag_indicator_rounded,
-                                  size: 19, color: p.inkMuted),
+                                  size: IconSizes.md, color: p.inkMuted),
                             ),
                           ),
                         ),
@@ -237,7 +233,7 @@ class IngredientCard extends StatelessWidget {
                           children: [
                             Icon(
                               Icons.local_fire_department_outlined,
-                              size: 16,
+                              size: IconSizes.xs,
                               color: p.accent,
                             ),
                             const SizedBox(width: Space.x1),
@@ -254,7 +250,7 @@ class IngredientCard extends StatelessWidget {
                             const SizedBox(width: Space.x1),
                             Icon(
                               Icons.chevron_right_rounded,
-                              size: 16,
+                              size: IconSizes.xs,
                               color: p.inkMuted,
                             ),
                           ],

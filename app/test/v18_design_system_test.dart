@@ -93,6 +93,8 @@ void main() {
     ];
     final arithmeticSpace = RegExp(r'Space\.x\d+\s*[+\-]\s*\d');
     final rawFontSize = RegExp(r'\bfontSize\s*:');
+    final rawColorHex = RegExp(r'Color\(\s*0x');
+    final strayIconSize = RegExp(r'\bIcon\([^)]*\bsize\s*:\s*(15|19|22)\b');
     final violations = <String>[];
 
     for (final dir in dirs) {
@@ -103,7 +105,7 @@ void main() {
         for (var i = 0; i < lines.length; i++) {
           final lineNum = i + 1;
           final line = lines[i];
-          // Исключаем печатный документ бланка (>= 634) и определения AppTypography.
+          // Исключаем печатный документ бланка (>= 634) и определения AppTypography/AppColors.
           if (normalized.endsWith('blank_preview_screen.dart') &&
               lineNum >= 634) {
             continue;
@@ -114,6 +116,13 @@ void main() {
           if (!normalized.endsWith('app_typography.dart') &&
               rawFontSize.hasMatch(line)) {
             violations.add('$normalized:$lineNum raw fontSize: $line');
+          }
+          if (!normalized.endsWith('app_colors.dart') &&
+              rawColorHex.hasMatch(line)) {
+            violations.add('$normalized:$lineNum raw Color(0x...): $line');
+          }
+          if (strayIconSize.hasMatch(line)) {
+            violations.add('$normalized:$lineNum stray Icon size: $line');
           }
         }
       }
@@ -271,9 +280,12 @@ void main() {
     final draft = Dish(
       id: 'd-sync',
       title: 'Суп картофельный',
-      customYieldGrams: 200,
+      customYieldGrams: 500,
       ingredients: const [
         Ingredient(id: 'i1', product: _potato, weightGrams: 100),
+        Ingredient(id: 'i2', product: _potato, weightGrams: 150),
+        Ingredient(id: 'i3', product: _potato, weightGrams: 120),
+        Ingredient(id: 'i4', product: _potato, weightGrams: 130),
       ],
       createdAt: DateTime(2026),
       updatedAt: DateTime(2026),

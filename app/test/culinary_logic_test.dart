@@ -58,7 +58,7 @@ void main() {
     expect(r.cookedKcal, 77);
     const e = YieldExplanation(200, 100);
     expect(e.concentration, 2);
-    expect(e.badge, contains('50%'));
+    expect(e.badge, contains('−50\u202F%'));
     expect(e.description, contains('не появляются'));
   });
   test('Automatic yield follows edits, add, remove, undo', () async {

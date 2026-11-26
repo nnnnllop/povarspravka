@@ -78,6 +78,8 @@ class CustomProductFormSheet extends ConsumerStatefulWidget {
       _CustomProductFormSheetState();
 }
 
+enum _CustomFieldError { none, name, macros, kcal, waste }
+
 class _CustomProductFormSheetState
     extends ConsumerState<CustomProductFormSheet> {
   late final TextEditingController _nameCtrl;
@@ -86,10 +88,18 @@ class _CustomProductFormSheetState
   late final TextEditingController _cCtrl;
   late final TextEditingController _kcalCtrl;
   late final TextEditingController _wasteCtrl;
+  late final String _initNameText;
+  late final String _initPText;
+  late final String _initFText;
+  late final String _initCText;
+  late final String _initKcalText;
+  late final String _initWasteText;
+  late final bool _initIsDishVal;
   late bool _isDish;
   bool _kcalManual = false;
   bool _saving = false;
   String? _error;
+  _CustomFieldError _errorField = _CustomFieldError.none;
 
   @override
   void initState() {
@@ -101,26 +111,63 @@ class _CustomProductFormSheetState
     final kcalVal = init?.kcal ?? widget.initialKcal;
     final wasteVal = init?.wastePct ?? widget.initialWastePct;
 
-    _nameCtrl = TextEditingController(
-      text: init?.name ?? widget.initialName,
-    );
-    _pCtrl = TextEditingController(
-      text: pVal != null ? CalculationEngine.formatMacro(pVal) : '',
-    );
-    _fCtrl = TextEditingController(
-      text: fVal != null ? CalculationEngine.formatMacro(fVal) : '',
-    );
-    _cCtrl = TextEditingController(
-      text: cVal != null ? CalculationEngine.formatMacro(cVal) : '',
-    );
-    _kcalCtrl = TextEditingController(
-      text: kcalVal != null ? CalculationEngine.formatKcal(kcalVal) : '0',
-    );
-    _wasteCtrl = TextEditingController(
-      text: CalculationEngine.formatWastePercent(wasteVal),
-    );
-    _isDish = init?.isDishOnly ?? widget.initialIsDish;
+    _initNameText = init?.name ?? widget.initialName;
+    _initPText = pVal != null ? CalculationEngine.formatMacro(pVal) : '';
+    _initFText = fVal != null ? CalculationEngine.formatMacro(fVal) : '';
+    _initCText = cVal != null ? CalculationEngine.formatMacro(cVal) : '';
+    _initKcalText = kcalVal != null ? CalculationEngine.formatKcal(kcalVal) : '0';
+    _initWasteText = CalculationEngine.formatWastePercent(wasteVal);
+    _initIsDishVal = init?.isDishOnly ?? widget.initialIsDish;
+
+    _nameCtrl = TextEditingController(text: _initNameText);
+    _pCtrl = TextEditingController(text: _initPText);
+    _fCtrl = TextEditingController(text: _initFText);
+    _cCtrl = TextEditingController(text: _initCText);
+    _kcalCtrl = TextEditingController(text: _initKcalText);
+    _wasteCtrl = TextEditingController(text: _initWasteText);
+    _isDish = _initIsDishVal;
     _kcalManual = init != null || widget.initialKcal != null;
+  }
+
+  bool get _hasUnsavedEdits =>
+      _nameCtrl.text != _initNameText ||
+      _pCtrl.text != _initPText ||
+      _fCtrl.text != _initFText ||
+      _cCtrl.text != _initCText ||
+      _kcalCtrl.text != _initKcalText ||
+      _wasteCtrl.text != _initWasteText ||
+      _isDish != _initIsDishVal;
+
+  Future<void> _confirmDiscardAndClose() async {
+    if (_saving) return;
+    if (!_hasUnsavedEdits) {
+      if (mounted) Navigator.pop(context);
+      return;
+    }
+    final p = Palette.of(context);
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        title: const Text('Отменить изменения?'),
+        content: const Text(
+          'Введённые данные продукта не сохранены и будут потеряны.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, false),
+            child: const Text('Продолжить ввод'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, true),
+            style: TextButton.styleFrom(foregroundColor: p.danger),
+            child: const Text('Сбросить и закрыть'),
+          ),
+        ],
+      ),
+    );
+    if (discard == true && mounted) {
+      Navigator.pop(context);
+    }
   }
 
   @override
@@ -147,7 +194,10 @@ class _CustomProductFormSheetState
     if (_saving) return;
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) {
-      setState(() => _error = 'Введите название продукта');
+      setState(() {
+        _error = 'Введите название продукта';
+        _errorField = _CustomFieldError.name;
+      });
       return;
     }
     final prot = _pCtrl.text.trim().isEmpty
@@ -164,27 +214,46 @@ class _CustomProductFormSheetState
         ? 0.0
         : CalculationEngine.parseInputDouble(_wasteCtrl.text);
 
-    if (prot == null || fat == null || carbs == null || kcal == null) {
-      setState(() => _error = 'Проверьте числа Б, Ж, У и ккал');
+    if (prot == null || fat == null || carbs == null) {
+      setState(() {
+        _error = 'Проверьте числа Б, Ж и У';
+        _errorField = _CustomFieldError.macros;
+      });
       return;
     }
-    if (prot < 0 || fat < 0 || carbs < 0 || kcal < 0) {
-      setState(() => _error = 'Значения не могут быть отрицательными');
+    if (kcal == null || kcal < 0) {
+      setState(() {
+        _error = 'Проверьте энергетическую ценность (ккал ≥ 0)';
+        _errorField = _CustomFieldError.kcal;
+      });
+      return;
+    }
+    if (prot < 0 || fat < 0 || carbs < 0) {
+      setState(() {
+        _error = 'Значения Б, Ж и У не могут быть отрицательными';
+        _errorField = _CustomFieldError.macros;
+      });
       return;
     }
     if (prot + fat + carbs > 100.0) {
-      setState(() =>
-          _error = 'Сумма Б + Ж + У на 100 г не должна превышать 100 г');
+      setState(() {
+        _error = 'Сумма Б + Ж + У на 100 г не должна превышать 100 г';
+        _errorField = _CustomFieldError.macros;
+      });
       return;
     }
     if (waste == null || waste < 0 || waste >= 100) {
-      setState(() => _error = 'Отходы должны быть от 0 до 99 %');
+      setState(() {
+        _error = 'Отходы должны быть от 0 до 99,9\u202F%';
+        _errorField = _CustomFieldError.waste;
+      });
       return;
     }
 
     setState(() {
       _saving = true;
       _error = null;
+      _errorField = _CustomFieldError.none;
     });
     try {
       final notifier = ref.read(customProductsProvider.notifier);
@@ -237,6 +306,7 @@ class _CustomProductFormSheetState
       required Key fieldKey,
       required TextEditingController ctrl,
       required String label,
+      bool hasError = false,
       void Function(String)? onChanged,
     }) {
       return TextField(
@@ -247,9 +317,17 @@ class _CustomProductFormSheetState
         decoration: InputDecoration(
           isDense: true,
           labelText: label,
+          error: hasError ? const SizedBox.shrink() : null,
         ),
         onChanged: onChanged,
       );
+    }
+
+    void clearError() {
+      if (_error != null) {
+        _error = null;
+        _errorField = _CustomFieldError.none;
+      }
     }
 
     final macroFields = [
@@ -257,19 +335,31 @@ class _CustomProductFormSheetState
         fieldKey: const ValueKey('custom-protein'),
         ctrl: _pCtrl,
         label: 'Белки, г',
-        onChanged: (_) => setState(_recalcKcalIfAuto),
+        hasError: _errorField == _CustomFieldError.macros,
+        onChanged: (_) => setState(() {
+          clearError();
+          _recalcKcalIfAuto();
+        }),
       ),
       numField(
         fieldKey: const ValueKey('custom-fat'),
         ctrl: _fCtrl,
         label: 'Жиры, г',
-        onChanged: (_) => setState(_recalcKcalIfAuto),
+        hasError: _errorField == _CustomFieldError.macros,
+        onChanged: (_) => setState(() {
+          clearError();
+          _recalcKcalIfAuto();
+        }),
       ),
       numField(
         fieldKey: const ValueKey('custom-carbs'),
         ctrl: _cCtrl,
         label: 'Углеводы, г',
-        onChanged: (_) => setState(_recalcKcalIfAuto),
+        hasError: _errorField == _CustomFieldError.macros,
+        onChanged: (_) => setState(() {
+          clearError();
+          _recalcKcalIfAuto();
+        }),
       ),
     ];
 
@@ -295,7 +385,7 @@ class _CustomProductFormSheetState
               ),
               const SizedBox(height: Space.x1),
               TextButton(
-                onPressed: _saving ? null : () => Navigator.pop(context),
+                onPressed: _saving ? null : _confirmDiscardAndClose,
                 child: const Text('Отмена'),
               ),
             ],
@@ -305,7 +395,7 @@ class _CustomProductFormSheetState
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 TextButton(
-                  onPressed: _saving ? null : () => Navigator.pop(context),
+                  onPressed: _saving ? null : _confirmDiscardAndClose,
                   child: const Text('Отмена'),
                 ),
                 const SizedBox(width: Space.x2),
@@ -323,109 +413,145 @@ class _CustomProductFormSheetState
             ),
           );
 
-    return AppSheetScaffold(
-      title: title,
-      subtitle: subtitle,
-      showHandle: true,
-      maxHeightFactor: 0.9,
-      bodyPadding:
-          const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, Space.x4),
-      footer: footerWidget,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TextField(
-            key: const ValueKey('custom-name'),
-            controller: _nameCtrl,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(
-              labelText: 'Название продукта',
-              hintText: 'Например, соус терияки',
-            ),
-          ),
-          const SizedBox(height: Space.x3),
-          if (stackMacros)
-            Column(
-              children: [
-                macroFields[0],
-                const SizedBox(height: Space.x2),
-                macroFields[1],
-                const SizedBox(height: Space.x2),
-                macroFields[2],
-              ],
-            )
-          else
-            Row(
-              children: [
-                Expanded(child: macroFields[0]),
-                const SizedBox(width: Space.x2),
-                Expanded(child: macroFields[1]),
-                const SizedBox(width: Space.x2),
-                Expanded(child: macroFields[2]),
-              ],
-            ),
-          const SizedBox(height: Space.x2),
-          if (stackMacros) ...[
-            numField(
-              fieldKey: const ValueKey('custom-kcal'),
-              ctrl: _kcalCtrl,
-              label: _kcalManual ? 'Ккал / 100 г' : 'Ккал (авто)',
-              onChanged: (_) => setState(() => _kcalManual = true),
-            ),
-            const SizedBox(height: Space.x2),
-            numField(
-              fieldKey: const ValueKey('custom-waste'),
-              ctrl: _wasteCtrl,
-              label: 'Отходы, %',
-            ),
-          ] else
-            Row(
-              children: [
-                Expanded(
-                  child: numField(
-                    fieldKey: const ValueKey('custom-kcal'),
-                    ctrl: _kcalCtrl,
-                    label: _kcalManual ? 'Ккал / 100 г' : 'Ккал (авто)',
-                    onChanged: (_) => setState(() => _kcalManual = true),
-                  ),
-                ),
-                const SizedBox(width: Space.x2),
-                Expanded(
-                  child: numField(
-                    fieldKey: const ValueKey('custom-waste'),
-                    ctrl: _wasteCtrl,
-                    label: 'Отходы, %',
-                  ),
-                ),
-              ],
-            ),
-          const SizedBox(height: Space.x2),
-          SwitchListTile.adaptive(
-            contentPadding: EdgeInsets.zero,
-            materialTapTargetSize: MaterialTapTargetSize.padded,
-            title: Text(
-              'Готовое блюдо',
-              style: AppTypography.bodySm.copyWith(color: p.ink),
-            ),
-            value: _isDish,
-            onChanged: (v) => setState(() => _isDish = v),
-          ),
-          if (_error != null) ...[
-            const SizedBox(height: Space.x2),
-            Container(
-              padding: const EdgeInsets.all(Space.x3),
-              decoration: BoxDecoration(
-                color: p.dangerSoft,
-                borderRadius: Radii.fieldAll,
+    return PopScope(
+      canPop: !_hasUnsavedEdits || _saving,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _confirmDiscardAndClose();
+      },
+      child: AppSheetScaffold(
+        title: title,
+        subtitle: subtitle,
+        showHandle: true,
+        maxHeightFactor: 0.9,
+        noticeText: _error,
+        noticeIsError: true,
+        bodyPadding:
+            const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, Space.x4),
+        footer: footerWidget,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              key: const ValueKey('custom-name'),
+              controller: _nameCtrl,
+              textCapitalization: TextCapitalization.sentences,
+              onChanged: (_) {
+                if (_errorField == _CustomFieldError.name) {
+                  setState(clearError);
+                }
+              },
+              decoration: InputDecoration(
+                labelText: 'Название продукта',
+                hintText: 'Например, соус терияки',
+                errorText: _errorField == _CustomFieldError.name ? _error : null,
               ),
-              child: Text(
-                _error!,
-                style: AppTypography.caption.copyWith(color: p.danger),
+            ),
+            const SizedBox(height: Space.x3),
+            if (stackMacros)
+              Column(
+                children: [
+                  macroFields[0],
+                  const SizedBox(height: Space.x2),
+                  macroFields[1],
+                  const SizedBox(height: Space.x2),
+                  macroFields[2],
+                ],
+              )
+            else
+              Row(
+                children: [
+                  Expanded(child: macroFields[0]),
+                  const SizedBox(width: Space.x2),
+                  Expanded(child: macroFields[1]),
+                  const SizedBox(width: Space.x2),
+                  Expanded(child: macroFields[2]),
+                ],
               ),
+            const SizedBox(height: Space.x2),
+            if (stackMacros) ...[
+              numField(
+                fieldKey: const ValueKey('custom-kcal'),
+                ctrl: _kcalCtrl,
+                label: _kcalManual ? 'Ккал / 100 г' : 'Ккал (авто)',
+                hasError: _errorField == _CustomFieldError.kcal,
+                onChanged: (_) => setState(() {
+                  clearError();
+                  _kcalManual = true;
+                }),
+              ),
+              const SizedBox(height: Space.x2),
+              numField(
+                fieldKey: const ValueKey('custom-waste'),
+                ctrl: _wasteCtrl,
+                label: 'Отходы, %',
+                hasError: _errorField == _CustomFieldError.waste,
+                onChanged: (_) => setState(clearError),
+              ),
+            ] else
+              Row(
+                children: [
+                  Expanded(
+                    child: numField(
+                      fieldKey: const ValueKey('custom-kcal'),
+                      ctrl: _kcalCtrl,
+                      label: _kcalManual ? 'Ккал / 100 г' : 'Ккал (авто)',
+                      hasError: _errorField == _CustomFieldError.kcal,
+                      onChanged: (_) => setState(() {
+                        clearError();
+                        _kcalManual = true;
+                      }),
+                    ),
+                  ),
+                  const SizedBox(width: Space.x2),
+                  Expanded(
+                    child: numField(
+                      fieldKey: const ValueKey('custom-waste'),
+                      ctrl: _wasteCtrl,
+                      label: 'Отходы, %',
+                      hasError: _errorField == _CustomFieldError.waste,
+                      onChanged: (_) => setState(clearError),
+                    ),
+                  ),
+                ],
+              ),
+            if (_kcalManual)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const ValueKey('custom-kcal-recalc-btn'),
+                  onPressed: () {
+                    AppHaptics.toggle();
+                    setState(() {
+                      _kcalManual = false;
+                      clearError();
+                      _recalcKcalIfAuto();
+                    });
+                  },
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(0, kMinTapTarget),
+                    padding: const EdgeInsets.symmetric(horizontal: Space.x2),
+                  ),
+                  icon: const Icon(
+                    Icons.calculate_outlined,
+                    size: IconSizes.btn,
+                  ),
+                  label: const Text('Пересчитать по БЖУ'),
+                ),
+              ),
+            const SizedBox(height: Space.x2),
+            SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              materialTapTargetSize: MaterialTapTargetSize.padded,
+              title: Text(
+                'Готовое блюдо',
+                style: AppTypography.bodySm.copyWith(color: p.ink),
+              ),
+              value: _isDish,
+              onChanged: (v) => setState(() => _isDish = v),
             ),
           ],
-        ],
+        ),
       ),
     );
   }

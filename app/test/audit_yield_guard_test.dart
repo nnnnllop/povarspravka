@@ -86,11 +86,12 @@ void main() {
     final field = find.byKey(const ValueKey('actual-yield'));
     expect(field, findsOneWidget);
     await tester.enterText(field, '10');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
 
     // The invalid value must be refused, not stored, and the screen must live.
     expect(tester.takeException(), isNull);
     expect(notifier.state.customYieldGrams, 750);
-    expect(find.textContaining('выход'), findsWidgets);
+    expect(find.textContaining('вес'), findsWidgets);
   });
 }

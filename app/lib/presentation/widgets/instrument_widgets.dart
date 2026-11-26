@@ -36,8 +36,8 @@ class InstrumentSlab extends StatelessWidget {
         color: bg,
         borderRadius: radius,
         border: Border.all(
-          color: p.slabEdge.withOpacity(p.isDark ? 0.9 : 0.65),
-          width: 1,
+          color: p.isDark ? p.slabEdge : p.slabEdge.withOpacity(0.65),
+          width: p.isDark ? 1.25 : 1,
         ),
       ),
       child: Material(

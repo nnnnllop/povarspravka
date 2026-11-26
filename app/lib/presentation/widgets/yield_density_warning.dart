@@ -29,10 +29,10 @@ class YieldDensityWarning extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.only(top: 1),
+            padding: const EdgeInsets.only(top: Space.x1),
             child: Icon(
               Icons.warning_amber_rounded,
-              size: 18,
+              size: IconSizes.btn,
               color: p.warning,
             ),
           ),
@@ -40,9 +40,9 @@ class YieldDensityWarning extends StatelessWidget {
           Expanded(
             child: Text(
               'Вес готового блюда (${CalculationEngine.formatGrams(result.yieldGrams)} г) '
-              'меньше массы Б/Ж/У после т.о. (${CalculationEngine.formatMacro(cookedMacroMass)} г): '
+              'меньше массы Б/Ж/У после готовки (${CalculationEngine.formatMacro(cookedMacroMass)} г): '
               'значения на 100 г превышают 100 г. Вес сохранён как введено — '
-              'проверьте выход готового блюда.',
+              'проверьте вес готового блюда.',
               style: AppTypography.bodySm.copyWith(
                 color: p.warning,
                 fontWeight: FontWeight.w700,

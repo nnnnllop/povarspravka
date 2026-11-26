@@ -171,11 +171,19 @@ class AppTheme {
       ),
       chipTheme: ChipThemeData(
         backgroundColor: p.surface,
-        selectedColor: p.accentSoft,
+        selectedColor: p.accent,
         disabledColor: p.sunken,
-        side: BorderSide(color: p.border),
+        color: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) return p.sunken;
+          return states.contains(WidgetState.selected) ? p.accent : p.surface;
+        }),
+        side: WidgetStateBorderSide.resolveWith((states) {
+          final isSelected = states.contains(WidgetState.selected);
+          return BorderSide(color: isSelected ? p.accent : p.borderStatic);
+        }),
         shape: const RoundedRectangleBorder(borderRadius: Radii.chipAll),
         labelStyle: AppTypography.label.copyWith(color: p.ink),
+        secondaryLabelStyle: AppTypography.label.copyWith(color: p.onAccent),
         padding: const EdgeInsets.symmetric(
           horizontal: Space.x3,
           vertical: Space.x1,
@@ -283,7 +291,7 @@ class AppTheme {
         modalBackgroundColor: p.surface,
         showDragHandle: true,
         dragHandleColor: p.sheetHandle,
-        dragHandleSize: const Size(36, 4),
+        dragHandleSize: const Size(Space.x8, Space.x1),
         shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
       ),
       dialogTheme: DialogTheme(

@@ -79,10 +79,16 @@ final calculationResultProvider = Provider<CalculationResult?>((ref) {
 
 /// Человеческое объяснение, почему блюдо не удалось посчитать (null — если
 /// всё в порядке).
-/// Ошибка сохранения на диск (null — сохранение успешно или ошибок нет).
+/// Ошибка сохранения или чтения на диск (null — ошибок нет).
 final persistenceErrorProvider = Provider<Object?>((ref) {
   ref.watch(dishProvider);
   return ref.read(dishProvider.notifier).lastPersistenceError;
+});
+
+/// Признак, что текущая ошибка хранилища возникла именно при чтении с диска.
+final persistenceIsLoadErrorProvider = Provider<bool>((ref) {
+  ref.watch(dishProvider);
+  return ref.read(dishProvider.notifier).isLoadError;
 });
 
 final calculationErrorProvider = Provider<String?>((ref) {
@@ -237,14 +243,13 @@ class SavedDishesNotifier extends StateNotifier<List<Dish>> {
         var changed = false;
         final updated = <Dish>[];
         for (final d in state) {
-          if (d.id == id) {
+              if (d.id == id) {
             if (d.category != normalized) {
               changed = true;
               updated.add(
                 d.copyWith(
                   category: normalized,
                   clearCategory: normalized == null,
-                  updatedAt: DateTime.now(),
                 ),
               );
             } else {
@@ -314,11 +319,23 @@ class DishNotifier extends StateNotifier<Dish> {
   Future<void> _saveQueue = Future<void>.value();
   bool _editedBeforeLoad = false;
   Object? lastPersistenceError;
+  bool isLoadError = false;
 
   /// Снимок последнего сохранённого / загруженного состояния — база для
   /// [isDirty]. Обновляется при `saveCurrentToLibrary`, `loadDish`,
   /// `createNewDish` и при восстановлении черновика с диска.
   Dish? _lastCleanSnapshot;
+
+  /// Активный черновик содержит несохранённый состав или название и отсутствует
+  /// в библиотеке «Мои блюда» (в том числе после перезапуска приложения).
+  bool get hasUnsavedDraftContent {
+    final hasContent =
+        state.ingredients.isNotEmpty || state.title.trim().isNotEmpty;
+    if (!hasContent) return false;
+    final savedNotifier = _savedDishesNotifier;
+    if (savedNotifier == null) return false;
+    return !savedNotifier.state.any((d) => d.id == state.id);
+  }
 
   /// Есть ли несохранённые правки относительно последнего сохранения.
   ///
@@ -342,6 +359,7 @@ class DishNotifier extends StateNotifier<Dish> {
         'ingredients': dish.ingredients.map((i) => i.toJson()).toList(),
         'customYieldGrams': dish.customYieldGrams,
         'process': dish.process.name,
+        'category': dish.category,
         'retention': [
           dish.retentionProtein,
           dish.retentionFat,
@@ -395,9 +413,11 @@ class DishNotifier extends StateNotifier<Dish> {
     try {
       await _initFromStorage();
       _initCompleted = true;
+      isLoadError = false;
     } catch (error) {
       // Observe initialization errors without silently replacing damaged data.
       lastPersistenceError = error;
+      isLoadError = true;
       debugPrint('Failed to load dishes: $error');
       if (mounted) state = state.copyWith();
     }
@@ -455,6 +475,7 @@ class DishNotifier extends StateNotifier<Dish> {
       }
       final hadError = lastPersistenceError != null;
       lastPersistenceError = null;
+      isLoadError = false;
       if (editedBeforeInit &&
           _savedDishesNotifier != null &&
           identical(state, snapshot)) {
@@ -465,6 +486,7 @@ class DishNotifier extends StateNotifier<Dish> {
       }
     }).catchError((Object error, StackTrace stack) {
       lastPersistenceError = error;
+      if (_initCompleted) isLoadError = false;
       debugPrint('Failed to persist dishes: $error');
       if (mounted) {
         state = state.copyWith();
@@ -860,6 +882,7 @@ class DishNotifier extends StateNotifier<Dish> {
       try {
         await _initFromStorage();
         _initCompleted = true;
+        isLoadError = false;
         if (!mounted) return false;
         if (!_editedBeforeLoad && !_pendingLibraryRetry) {
           lastPersistenceError = null;
@@ -868,6 +891,7 @@ class DishNotifier extends StateNotifier<Dish> {
         }
       } catch (error) {
         lastPersistenceError = error;
+        isLoadError = true;
         debugPrint('Failed to retry loading dishes: $error');
         if (mounted) state = state.copyWith();
         return false;
@@ -983,5 +1007,18 @@ class DishNotifier extends StateNotifier<Dish> {
 
   void clearAll() {
     createNewDish();
+  }
+
+  /// Очищает только список ингредиентов и вес готового блюда, сохраняя
+  /// название, способ обработки, категорию и `id` текущего блюда.
+  Dish clearIngredients() {
+    final previous = _snapshot(state);
+    state = state.copyWith(
+      ingredients: const [],
+      clearCustomYield: true,
+      updatedAt: DateTime.now(),
+    );
+    _persist();
+    return previous;
   }
 }

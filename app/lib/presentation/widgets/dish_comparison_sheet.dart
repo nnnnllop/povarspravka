@@ -47,6 +47,7 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
   late final CalculationResult? _calcA;
   late final CalculationResult? _calcB;
   late bool _wholeDish;
+  bool _swapped = false;
 
   @override
   void initState() {
@@ -69,10 +70,12 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
     final textScale = MediaQuery.textScalerOf(context).scale(1.0);
     final stackRows =
         AppLayout.isNarrow(size.width) || AppLayout.isLargeText(textScale);
-    final nameA = _dishName(widget.first, 'Блюдо 1');
-    final nameB = _dishName(widget.second, 'Блюдо 2');
-    final a = _calcA;
-    final b = _calcB;
+    final firstDish = _swapped ? widget.second : widget.first;
+    final secondDish = _swapped ? widget.first : widget.second;
+    final nameA = _dishName(firstDish, 'Блюдо 1');
+    final nameB = _dishName(secondDish, 'Блюдо 2');
+    final a = _swapped ? _calcB : _calcA;
+    final b = _swapped ? _calcA : _calcB;
 
     String fmtVal(double? val, String Function(double) fmt) =>
         val == null ? '—' : fmt(val);
@@ -80,15 +83,27 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
     String fmtDelta(double? va, double? vb, String Function(double) fmt) {
       if (va == null || vb == null) return '—';
       final diff = vb - va;
-      if (diff.abs() < 0.005) return '0';
+      final formatted = fmt(diff.abs());
+      if (diff.abs() < 0.005 ||
+          formatted == '0' ||
+          formatted == '0,0' ||
+          formatted == '0,00') {
+        return '0';
+      }
       final sign = diff > 0 ? '+' : '−';
-      return '$sign${fmt(diff.abs())}';
+      return '$sign$formatted';
     }
 
-    Color deltaColor(double? va, double? vb) {
+    Color deltaColor(double? va, double? vb, String Function(double) fmt) {
       if (va == null || vb == null) return p.inkMuted;
       final diff = vb - va;
-      if (diff.abs() < 0.005) return p.inkSecondary;
+      final formatted = fmt(diff.abs());
+      if (diff.abs() < 0.005 ||
+          formatted == '0' ||
+          formatted == '0,0' ||
+          formatted == '0,00') {
+        return p.inkSecondary;
+      }
       return p.ink;
     }
 
@@ -130,7 +145,7 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
         CalculationEngine.formatKcal,
       ),
       (
-        'Выход, г',
+        'Вес готового блюда, г',
         (a != null && a.hasYield) ? a.yieldGrams : null,
         (b != null && b.hasYield) ? b.yieldGrams : null,
         CalculationEngine.formatGrams,
@@ -144,7 +159,8 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
       title: 'Сравнение блюд',
       subtitle: 'Разница показана для второго блюда относительно первого.',
       showHandle: true,
-      maxHeightFactor: 0.88,
+      showClose: true,
+      maxHeightFactor: 0.9,
       bodyPadding:
           const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, Space.x4),
       child: Column(
@@ -171,8 +187,25 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
               setState(() => _wholeDish = sel.first);
             },
           ),
+          const SizedBox(height: Space.x2),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const ValueKey('compare-swap-btn'),
+              onPressed: () {
+                AppHaptics.toggle();
+                setState(() => _swapped = !_swapped);
+              },
+              style: TextButton.styleFrom(
+                minimumSize: const Size(0, kMinTapTarget),
+                padding: const EdgeInsets.symmetric(horizontal: Space.x2),
+              ),
+              icon: const Icon(Icons.swap_horiz_rounded, size: IconSizes.btn),
+              label: const Text('Поменять местами'),
+            ),
+          ),
           if (a == null || b == null) ...[
-            const SizedBox(height: Space.x3),
+            const SizedBox(height: Space.x2),
             Container(
               padding: const EdgeInsets.all(Space.x3),
               decoration: BoxDecoration(
@@ -188,10 +221,38 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
           if (missingYieldInPer100) ...[
             const SizedBox(height: Space.x2),
             Text(
-              'Для блюда без указанного выхода значения на 100 г отмечены «—».',
+              'Для блюда без указанного веса готового блюда значения на 100 г отмечены «—».',
               style: AppTypography.caption.copyWith(color: p.inkSecondary),
             ),
           ],
+          const SizedBox(height: Space.x2),
+          Container(
+            padding: const EdgeInsets.all(Space.x3),
+            decoration: BoxDecoration(
+              color: p.sunken,
+              borderRadius: Radii.fieldAll,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '1 — $nameA',
+                  style: AppTypography.caption.copyWith(
+                    color: p.inkSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: Space.x1),
+                Text(
+                  '2 — $nameB',
+                  style: AppTypography.caption.copyWith(
+                    color: p.ink,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: Space.x3),
           GroupedSurface(
             color: p.sunken,
@@ -210,12 +271,27 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
                                   .copyWith(color: p.inkMuted),
                             ),
                           ),
+                          const SizedBox(width: Space.x2),
                           Expanded(
                             flex: 2,
                             child: Text(
-                              nameA,
+                              '1 ($nameA)',
                               textAlign: TextAlign.right,
-                              maxLines: 2,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.caption.copyWith(
+                                color: p.inkSecondary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: Space.x2),
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              '2 ($nameB)',
+                              textAlign: TextAlign.right,
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: AppTypography.caption.copyWith(
                                 color: p.ink,
@@ -223,24 +299,14 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
                               ),
                             ),
                           ),
-                          Expanded(
-                            flex: 2,
-                            child: Text(
-                              nameB,
-                              textAlign: TextAlign.right,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTypography.caption.copyWith(
-                                color: p.ink,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
+                          const SizedBox(width: Space.x2),
                           Expanded(
                             flex: 2,
                             child: Text(
                               'Разница',
                               textAlign: TextAlign.right,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: AppTypography.caption.copyWith(
                                 color: p.inkSecondary,
                                 fontWeight: FontWeight.w700,
@@ -271,7 +337,11 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
                               '$nameB: ${fmtVal(rows[i].$3, rows[i].$4)} '
                               '(Δ ${fmtDelta(rows[i].$2, rows[i].$3, rows[i].$4)})',
                               style: AppTypography.numSm.copyWith(
-                                color: deltaColor(rows[i].$2, rows[i].$3),
+                                color: deltaColor(
+                                  rows[i].$2,
+                                  rows[i].$3,
+                                  rows[i].$4,
+                                ),
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -287,6 +357,7 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
                                 style: AppTypography.bodySm.copyWith(color: p.ink),
                               ),
                             ),
+                            const SizedBox(width: Space.x2),
                             Expanded(
                               flex: 2,
                               child: Text(
@@ -296,6 +367,7 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
                                     .copyWith(color: p.inkSecondary),
                               ),
                             ),
+                            const SizedBox(width: Space.x2),
                             Expanded(
                               flex: 2,
                               child: Text(
@@ -307,13 +379,18 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
                                 ),
                               ),
                             ),
+                            const SizedBox(width: Space.x2),
                             Expanded(
                               flex: 2,
                               child: Text(
                                 fmtDelta(rows[i].$2, rows[i].$3, rows[i].$4),
                                 textAlign: TextAlign.right,
                                 style: AppTypography.numSm.copyWith(
-                                  color: deltaColor(rows[i].$2, rows[i].$3),
+                                  color: deltaColor(
+                                    rows[i].$2,
+                                    rows[i].$3,
+                                    rows[i].$4,
+                                  ),
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -334,7 +411,7 @@ class _DishComparisonSheetState extends State<DishComparisonSheet> {
                     shape: const Border(),
                     collapsedShape: const Border(),
                     title: Text(
-                      'Баланс Б / Ж / У',
+                      'Соотношение Б : Ж : У',
                       style: AppTypography.label.copyWith(color: p.ink),
                     ),
                     childrenPadding: const EdgeInsets.fromLTRB(

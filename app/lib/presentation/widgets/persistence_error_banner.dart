@@ -7,12 +7,14 @@ class PersistenceErrorBanner extends StatefulWidget {
   final Future<bool> Function() onRetry;
   final EdgeInsetsGeometry margin;
   final String message;
+  final IconData icon;
 
   const PersistenceErrorBanner({
     super.key,
     required this.onRetry,
     this.margin = EdgeInsets.zero,
     this.message = 'Ошибка сохранения: изменения не сохранены на диск',
+    this.icon = Icons.cloud_off,
   });
 
   @override
@@ -58,8 +60,8 @@ class _PersistenceErrorBannerState extends State<PersistenceErrorBanner> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
-                  padding: const EdgeInsets.only(top: 1),
-                  child: Icon(Icons.cloud_off, color: p.danger, size: 20),
+                  padding: const EdgeInsets.only(top: Space.x1),
+                  child: Icon(widget.icon, color: p.danger, size: IconSizes.md),
                 ),
                 const SizedBox(width: Space.x2),
                 Expanded(

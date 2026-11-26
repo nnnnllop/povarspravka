@@ -80,8 +80,6 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
   String m(double value) => CalculationEngine.formatMacro(value);
   String g(double value) => CalculationEngine.formatGrams(value);
   String k(double value) => CalculationEngine.formatKcal(value);
-  String macros(double p, double f, double c) =>
-      'Б: ${m(p)} · Ж: ${m(f)} · У: ${m(c)} г';
 
   @override
   Widget build(BuildContext context) {
@@ -158,7 +156,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
   Widget _buildInspectorButton(Palette p, {required bool dense}) {
     return TextButton.icon(
       onPressed: () => _inspect(context),
-      icon: const Icon(Icons.analytics_outlined, size: 16),
+      icon: const Icon(Icons.analytics_outlined, size: IconSizes.xs),
       label: const Text('Инспектор расчёта'),
       style: TextButton.styleFrom(
         foregroundColor: p.accent,
@@ -342,7 +340,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                   alignment: WrapAlignment.spaceBetween,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   spacing: Space.x2,
-                  runSpacing: Space.x1,
+                  runSpacing: Space.x2,
                   children: [
                     FittedBox(
                       fit: BoxFit.scaleDown,
@@ -371,8 +369,13 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                     ),
                     if (canSwitch)
                       Material(
-                        color: p.accent,
-                        borderRadius: Radii.fieldAll,
+                        color: p.slabSurface,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: Radii.fieldAll,
+                          side: BorderSide(
+                            color: p.slabAccent.withOpacity(0.55),
+                          ),
+                        ),
                         clipBehavior: Clip.antiAlias,
                         child: InkWell(
                           key: const ValueKey('hero-mode-toggle'),
@@ -395,14 +398,26 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                                 horizontal: Space.x3,
                                 vertical: Space.x2,
                               ),
-                              child: Center(
-                                widthFactor: 1,
-                                child: Text(
-                                  per100 ? 'На всё блюдо' : 'На 100 г',
-                                  style: AppTypography.label.copyWith(
-                                    color: p.onAccent,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.swap_horiz_rounded,
+                                    size: IconSizes.xs,
+                                    color: p.slabAccent,
                                   ),
-                                ),
+                                  const SizedBox(width: Space.x1),
+                                  Flexible(
+                                    child: Text(
+                                      per100 ? 'На всё блюдо' : 'На 100 г',
+                                      maxLines: 2,
+                                      textAlign: TextAlign.center,
+                                      style: AppTypography.label.copyWith(
+                                        color: p.slabInk,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -472,7 +487,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                   ),
                   Icon(
                     Icons.chevron_right_rounded,
-                    size: 18,
+                    size: IconSizes.btn,
                     color: p.slabSecondary,
                   ),
                 ],
@@ -543,7 +558,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                               ),
                           ],
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: Space.x1),
                       ],
                       if (inlineCells)
                         Semantics(
@@ -568,7 +583,9 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                                     child: Container(
                                       width: 6,
                                       height: 6,
-                                      margin: const EdgeInsets.only(right: 3),
+                                      margin: const EdgeInsets.only(
+                                        right: Space.x1,
+                                      ),
                                       decoration: BoxDecoration(
                                         color: cells[i].$2,
                                         shape: BoxShape.circle,
@@ -590,7 +607,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                       else
                         Wrap(
                           spacing: Space.x3,
-                          runSpacing: 2,
+                          runSpacing: Space.x1,
                           crossAxisAlignment: WrapCrossAlignment.start,
                           children: [
                             for (final cell in cells)
@@ -616,8 +633,11 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
             onPressed: () => _inspect(context),
             icon: Semantics(
               label: 'Инспектор расчёта',
-              child:
-                  Icon(Icons.analytics_outlined, size: 20, color: p.accent),
+              child: Icon(
+                Icons.analytics_outlined,
+                size: IconSizes.md,
+                color: p.accent,
+              ),
             ),
           ),
         ],
@@ -662,9 +682,17 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
         title: 'Расчёт блюда',
         subtitle: 'На 100 г, на порцию и по шагам тепловой обработки.',
         showHandle: true,
-        maxHeightFactor: 0.92,
+        showClose: true,
+        maxHeightFactor: 0.9,
         bodyPadding:
-            const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, Space.x6),
+            const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, Space.x4),
+        footer: SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Закрыть'),
+          ),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
@@ -842,7 +870,7 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Icon(Icons.info_outline_rounded,
-                                size: 16, color: p.accent),
+                                size: IconSizes.xs, color: p.accent),
                             const SizedBox(width: Space.x2),
                             Expanded(
                               child: Column(
@@ -1058,14 +1086,6 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
                   ],
                 ),
               ),
-              const SizedBox(height: Space.x4),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Закрыть'),
-                ),
-              ),
             ],
           ),
         ),
@@ -1175,7 +1195,11 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.info_outline_rounded, size: 16, color: p.accent),
+                  Icon(
+                    Icons.info_outline_rounded,
+                    size: IconSizes.xs,
+                    color: p.accent,
+                  ),
                   const SizedBox(width: Space.x2),
                   Expanded(
                     child: Column(
@@ -1214,8 +1238,8 @@ class _MacroSummaryBarState extends State<MacroSummaryBar> {
         Row(
           children: [
             Container(
-              width: 20,
-              height: 20,
+              width: Space.x5,
+              height: Space.x5,
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: palette.accentSoft,
@@ -1308,10 +1332,10 @@ class _StageRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 if (cells.isNotEmpty || trailing != null) ...[
-                  const SizedBox(height: 3),
+                  const SizedBox(height: Space.x1),
                   Wrap(
                     spacing: Space.x3,
-                    runSpacing: 2,
+                    runSpacing: Space.x1,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       for (final c in cells)

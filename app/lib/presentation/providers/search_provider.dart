@@ -203,6 +203,7 @@ class SearchState {
   /// `false` — только продукты/сырьё, `true` — только готовые блюда,
   /// `null` — без фильтра (этап 6).
   final bool? selectedIsDish;
+  final bool onlyFavorites;
   final List<Product> results;
   final bool isLoading;
   final Object? error;
@@ -212,6 +213,7 @@ class SearchState {
     this.selectedGroupId,
     this.selectedSource,
     this.selectedIsDish,
+    this.onlyFavorites = false,
     this.results = const [],
     this.isLoading = false,
     this.error,
@@ -227,6 +229,7 @@ class SearchState {
     bool clearSource = false,
     bool? selectedIsDish,
     bool clearIsDish = false,
+    bool? onlyFavorites,
     List<Product>? results,
     bool? isLoading,
     Object? error,
@@ -240,6 +243,7 @@ class SearchState {
           clearSource ? null : (selectedSource ?? this.selectedSource),
       selectedIsDish:
           clearIsDish ? null : (selectedIsDish ?? this.selectedIsDish),
+      onlyFavorites: onlyFavorites ?? this.onlyFavorites,
       results: results ?? this.results,
       isLoading: isLoading ?? this.isLoading,
       error: clearError ? null : (error ?? this.error),
@@ -320,7 +324,7 @@ class SearchNotifier extends StateNotifier<SearchState> {
         ? const <String>[]
         : normQuery.split(' ').where((t) => t.isNotEmpty).toList();
     return all.where((p) {
-      if (state.selectedIsDish != null && p.isDishOnly != state.selectedIsDish) {
+      if (state.selectedIsDish == true && !p.isDishOnly) {
         return false;
       }
       if (tokens.isEmpty) return true;
@@ -409,20 +413,33 @@ class SearchNotifier extends StateNotifier<SearchState> {
     search(state.query, immediate: true);
   }
 
+  void setOnlyFavorites(bool value) {
+    if (state.onlyFavorites == value) return;
+    state = state.copyWith(onlyFavorites: value);
+  }
+
+  void toggleOnlyFavorites() => setOnlyFavorites(!state.onlyFavorites);
+
   /// Сбрасывает поисковый запрос и временные фильтры при выходе из выбора.
   void resetFilters({
     bool clearQuery = true,
     bool clearSource = true,
     bool clearGroup = true,
     bool clearIsDish = false,
+    bool clearOnlyFavorites = false,
   }) {
     if (!mounted) return;
-    final hasAny =
+    final needsSearchReset =
         (clearQuery && state.query.isNotEmpty) ||
         (clearSource && state.selectedSource != null) ||
         (clearGroup && state.selectedGroupId != null) ||
         (clearIsDish && state.selectedIsDish != null);
-    if (!hasAny) return;
+    final needsFavReset = clearOnlyFavorites && state.onlyFavorites;
+    if (!needsSearchReset && !needsFavReset) return;
+    if (!needsSearchReset) {
+      state = state.copyWith(onlyFavorites: false);
+      return;
+    }
     _debounceTimer?.cancel();
     _pendingSearch = null;
     _requestId++;
@@ -432,6 +449,7 @@ class SearchNotifier extends StateNotifier<SearchState> {
       clearSource: clearSource,
       clearGroupId: clearGroup,
       clearIsDish: clearIsDish,
+      onlyFavorites: clearOnlyFavorites ? false : state.onlyFavorites,
     );
     search(nextQuery, immediate: true);
   }
@@ -684,10 +702,13 @@ final filteredFavoritesProvider = Provider<List<Product>>((ref) {
 
   final result = <Product>[];
   for (final raw in favorites) {
-    final Product? resolved =
-        raw.source.trim().toLowerCase() == 'custom' ? customById[raw.id] : raw;
+    final isCustom = raw.source.trim().toLowerCase() == 'custom';
+    final Product? resolved = isCustom ? customById[raw.id] : raw;
     if (resolved == null) continue;
+    final isCustomSemi =
+        search.selectedIsDish == false && resolved.isDishOnly && isCustom;
     if (search.selectedIsDish != null &&
+        !isCustomSemi &&
         resolved.isDishOnly != search.selectedIsDish) {
       continue;
     }

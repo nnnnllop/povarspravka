@@ -158,16 +158,19 @@ void main() {
     final input = find.byKey(const ValueKey('actual-yield'));
     await reveal(tester, input);
     await tester.enterText(input, '200');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
     expect(find.textContaining('+100 г жидкости'), findsOneWidget);
     await screenshot(tester, 'light_dilution');
     await tester.enterText(input, '0');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
-    expect(find.textContaining('Сохранён прежний выход.'), findsOneWidget);
+    expect(find.textContaining('сохранён прежний выход'), findsOneWidget);
     final container = ProviderScope.containerOf(
         tester.element(find.byType(RecipeEditorScreen)));
     expect(container.read(dishProvider).effectiveYieldGrams, 200);
     await tester.enterText(input, 'NaN');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
     expect(container.read(dishProvider).effectiveYieldGrams, 200);
     await reveal(tester, find.text('Задать фактический выход'));
@@ -235,7 +238,7 @@ void main() {
     await tester.pumpAndSettle();
     final input = find.byKey(const ValueKey('actual-yield'));
     expect(tester.widget<TextField>(input).controller!.text, '50');
-    expect(find.textContaining('50% уварка'), findsOneWidget);
+    expect(find.textContaining('−50\u202F%'), findsOneWidget);
     expect(
         CalculationEngine.calculate(c.read(dishProvider)).per100gProtein, 2.82);
   });
@@ -250,9 +253,10 @@ void main() {
     await tester.tap(find.text('Задать фактический выход'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('actual-yield')), '100');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
-    expect(find.textContaining('50% уварка'), findsOneWidget);
-    await reveal(tester, find.textContaining('50% уварка'));
+    expect(find.textContaining('−50\u202F%'), findsOneWidget);
+    await reveal(tester, find.textContaining('−50\u202F%'));
     await screenshot(tester, 'evaporation');
     // Переключатель «на 100 г» живёт в полной полосе (три ступени),
     // которая открывается «Инспектором расчёта» из нижнего дока.
@@ -308,10 +312,12 @@ void main() {
     await screenshot(tester, 'new_cold_no_weight');
     await reveal(tester, input);
     await tester.enterText(input, '80');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
     expect(c.read(dishProvider).effectiveYieldGrams, 80);
-    expect(find.textContaining('20% уварка'), findsOneWidget);
+    expect(find.textContaining('−20\u202F%'), findsOneWidget);
     await tester.enterText(input, '');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
     expect(c.read(dishProvider).customYieldGrams, isNull);
     expect(c.read(dishProvider).effectiveYieldGrams, 0,
@@ -345,6 +351,7 @@ void main() {
     final input = find.byKey(const ValueKey('actual-yield'));
     await reveal(tester, input);
     await tester.enterText(input, '90');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
     final r2 = CalculationEngine.calculate(c.read(dishProvider));
     expect(r2.yieldGrams, 90);

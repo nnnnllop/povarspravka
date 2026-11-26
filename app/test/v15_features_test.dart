@@ -486,7 +486,12 @@ void main() {
 
       expect(copied, contains('Набор блюд (2):'));
       expect(copied, contains('Баланс КБЖУ:'));
+      expect(find.text('Сводка меню скопирована'), findsOneWidget);
       expect(tester.takeException(), isNull);
+      Navigator.of(
+        tester.element(find.byKey(const ValueKey('menu-builder-sheet'))),
+      ).pop();
+      await tester.pumpAndSettle();
 
       // 3) Open BatchExportSheet (#3) and verify PDF + Excel buttons exist.
       await tester.tap(find.byKey(const ValueKey('selection-export-btn')));

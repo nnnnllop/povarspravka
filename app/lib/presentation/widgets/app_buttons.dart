@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'
     show MissingPluginException, PlatformException;
 
+import '../../core/calculation/calculation_engine.dart';
+import '../../core/calculation/calculation_math.dart';
+import '../../core/calculation/models/product.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_theme.dart';
 
@@ -71,21 +74,7 @@ class AppBottomBar extends StatelessWidget {
                   border: Border.all(
                     color: p.borderStatic.withOpacity(p.isDark ? 0.9 : 0.75),
                   ),
-                  boxShadow: p.isDark
-                      ? const <BoxShadow>[
-                          BoxShadow(
-                            color: Color(0x33000000),
-                            blurRadius: 16,
-                            offset: Offset(0, 6),
-                          ),
-                        ]
-                      : const <BoxShadow>[
-                          BoxShadow(
-                            color: Color(0x16000000),
-                            blurRadius: 20,
-                            offset: Offset(0, 6),
-                          ),
-                        ],
+                  boxShadow: p.dockShadow,
                 ),
                 child: Padding(
                   padding: padding ?? const EdgeInsets.all(Space.x2),
@@ -230,6 +219,77 @@ String pluralIngredients(int count) {
     return '$count ингредиента';
   }
   return '$count ингредиентов';
+}
+
+/// Человеческое склонение количества блюд:
+/// «1 блюдо», «2 блюда», «5 блюд».
+String pluralDishes(int count) {
+  final n = count.abs();
+  final mod100 = n % 100;
+  final mod10 = n % 10;
+  if (mod100 >= 11 && mod100 <= 14) {
+    return '$count блюд';
+  }
+  if (mod10 == 1) {
+    return '$count блюдо';
+  }
+  if (mod10 >= 2 && mod10 <= 4) {
+    return '$count блюда';
+  }
+  return '$count блюд';
+}
+
+/// Единое форматирование чисел, процентов, дат и ккал в UI.
+class UiFormat {
+  const UiFormat._();
+
+  /// Единая основа ккал для продукта на 100 г: по формуле Этуотера 4/9/4.
+  static double productKcal(Product product) =>
+      CalculationMath.energy(product.protein, product.fat, product.carbs);
+
+  /// Подпись «по источнику ...», если калорийность из справочника отличается от 4/9/4 на >= 1 ккал.
+  static String? sourceKcalFootnote(Product product) {
+    final calcKcal = productKcal(product);
+    if ((product.kcal - calcKcal).abs() < 1.0 || !product.kcal.isFinite) {
+      return null;
+    }
+    return 'по источнику ${CalculationEngine.formatKcal(product.kcal)}';
+  }
+
+  /// Процент с узким неразрывным пробелом перед «%».
+  static String percent(double value) =>
+      '${CalculationEngine.formatWastePercent(value)}\u202F%';
+
+  /// Разбивка разрядов целых чисел в сообщениях («9 999 999»).
+  static String intSpaced(int value) {
+    final s = value.abs().toString();
+    final buf = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      final revIdx = s.length - i;
+      if (i > 0 && revIdx % 3 == 0) {
+        buf.write('\u202F');
+      }
+      buf.write(s[i]);
+    }
+    return value < 0 ? '−$buf' : '$buf';
+  }
+
+  /// Локализованная дата и время «дд.мм.гггг, чч:мм».
+  static String dateTimeRu(DateTime dt) {
+    final local = dt.toLocal();
+    final d = local.day.toString().padLeft(2, '0');
+    final m = local.month.toString().padLeft(2, '0');
+    final y = local.year.toString().padLeft(4, '0');
+    final h = local.hour.toString().padLeft(2, '0');
+    final min = local.minute.toString().padLeft(2, '0');
+    return '$d.$m.$y, $h:$min';
+  }
+
+  /// Единая строка Б/Ж/У с «г» после каждого нутриента.
+  static String macrosWithUnits(double protein, double fat, double carbs) =>
+      'Б ${CalculationEngine.formatMacro(protein)} г · '
+      'Ж ${CalculationEngine.formatMacro(fat)} г · '
+      'У ${CalculationEngine.formatMacro(carbs)} г';
 }
 
 /// Безопасный пользовательский текст ошибки без сырых исключений (`$e`),

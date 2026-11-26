@@ -11,11 +11,11 @@ import '../../core/calculation/models/dish.dart';
 import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
+import 'app_buttons.dart';
 import 'app_sheet.dart';
 import 'custom_numpad.dart';
 import 'instrument_widgets.dart';
 import 'macro_balance_bar.dart';
-import 'nutrient_chip.dart';
 
 /// Элемент конструктора меню / набора блюд.
 class MenuItemDraft {
@@ -166,6 +166,7 @@ class MenuBuilderSheet extends StatefulWidget {
 class _MenuBuilderSheetState extends State<MenuBuilderSheet> {
   late final List<MenuItemDraft> _items;
   int _invalidCount = 0;
+  String? _noticeText;
 
   @override
   void initState() {
@@ -194,7 +195,7 @@ class _MenuBuilderSheetState extends State<MenuBuilderSheet> {
           MenuItemDraft(
             dish: d,
             calc: calc,
-            portionGrams: math.max(10.0, defaultGrams),
+            portionGrams: math.max(1.0, defaultGrams),
             usesWholeDish: false,
           ),
         );
@@ -207,6 +208,7 @@ class _MenuBuilderSheetState extends State<MenuBuilderSheet> {
     AppHaptics.key();
     setState(() {
       _items[index] = _items[index].copyWith(portionGrams: safe);
+      _noticeText = null;
     });
   }
 
@@ -217,6 +219,16 @@ class _MenuBuilderSheetState extends State<MenuBuilderSheet> {
     final m = CalculationEngine.formatMacro;
     final k = CalculationEngine.formatKcal;
     final g = CalculationEngine.formatGrams;
+    final noYieldNames = [
+      for (final item in _items)
+        if (item.usesWholeDish)
+          (item.dish.title.trim().isEmpty
+              ? 'Блюдо без названия'
+              : item.dish.title.trim()),
+    ];
+    final noYieldSummary = noYieldNames.length <= 3
+        ? noYieldNames.join(', ')
+        : '${noYieldNames.take(3).join(', ')} и ещё ${noYieldNames.length - 3}';
 
     return AppSheetScaffold(
       key: const ValueKey('menu-builder-sheet'),
@@ -224,7 +236,10 @@ class _MenuBuilderSheetState extends State<MenuBuilderSheet> {
       subtitle:
           'Укажите массу порции каждого блюда — итог пересчитается автоматически.',
       showHandle: true,
+      showClose: true,
       maxHeightFactor: 0.9,
+      noticeText: _noticeText,
+      noticeIsError: false,
       bodyPadding:
           const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, Space.x4),
       footer: _items.isNotEmpty
@@ -239,18 +254,12 @@ class _MenuBuilderSheetState extends State<MenuBuilderSheet> {
                   final text = formatMenuPlainText(_items, summary);
                   await Clipboard.setData(ClipboardData(text: text));
                   AppHaptics.commit();
-                  if (!context.mounted) return;
-                  final messenger = ScaffoldMessenger.maybeOf(context);
-                  Navigator.pop(context);
-                  messenger
-                    ?..hideCurrentSnackBar()
-                    ..showSnackBar(
-                      const SnackBar(
-                        content: Text('Сводка меню скопирована'),
-                      ),
-                    );
+                  if (!mounted) return;
+                  setState(() {
+                    _noticeText = 'Сводка меню скопирована';
+                  });
                 },
-                icon: const Icon(Icons.copy_all_rounded, size: 18),
+                icon: const Icon(Icons.copy_all_rounded, size: IconSizes.btn),
                 label: const Text('Скопировать меню текстом'),
               ),
             )
@@ -268,6 +277,35 @@ class _MenuBuilderSheetState extends State<MenuBuilderSheet> {
               child: Text(
                 'Пропущено блюд с ошибкой расчёта: $_invalidCount.',
                 style: AppTypography.caption.copyWith(color: p.danger),
+              ),
+            ),
+            const SizedBox(height: Space.x3),
+          ],
+          if (noYieldNames.isNotEmpty) ...[
+            Container(
+              key: const ValueKey('menu-no-yield-banner'),
+              padding: const EdgeInsets.all(Space.x3),
+              decoration: BoxDecoration(
+                color: p.sunken,
+                borderRadius: Radii.fieldAll,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.info_outline_rounded,
+                    size: IconSizes.xs,
+                    color: p.accent,
+                  ),
+                  const SizedBox(width: Space.x2),
+                  Expanded(
+                    child: Text(
+                      'Учтены целиком (вес готового блюда не указан): $noYieldSummary.',
+                      style: AppTypography.caption
+                          .copyWith(color: p.inkSecondary),
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: Space.x3),
@@ -372,12 +410,12 @@ class _MenuBuilderSheetState extends State<MenuBuilderSheet> {
                           const SizedBox(height: Space.x1),
                           Text(
                             item.usesWholeDish
-                                ? 'Целое блюдо (выход не указан) · '
-                                    'Б ${m(macros.protein)} · Ж ${m(macros.fat)} · '
-                                    'У ${m(macros.carbs)} г · ${k(macros.kcal)} ккал'
+                                ? 'Целое блюдо (вес не указан) · '
+                                    '${UiFormat.macrosWithUnits(macros.protein, macros.fat, macros.carbs)} · '
+                                    '${k(macros.kcal)} ккал'
                                 : '${g(item.portionGrams)} г · '
-                                    'Б ${m(macros.protein)} · Ж ${m(macros.fat)} · '
-                                    'У ${m(macros.carbs)} г · ${k(macros.kcal)} ккал',
+                                    '${UiFormat.macrosWithUnits(macros.protein, macros.fat, macros.carbs)} · '
+                                    '${k(macros.kcal)} ккал',
                             style: AppTypography.numSm
                                 .copyWith(color: p.inkSecondary),
                           ),
@@ -390,7 +428,7 @@ class _MenuBuilderSheetState extends State<MenuBuilderSheet> {
                                   tooltip: 'Уменьшить на 50 г',
                                   onPressed: () => _setPortion(
                                     i,
-                                    math.max(10.0, item.portionGrams - 50),
+                                    math.max(1.0, item.portionGrams - 50),
                                   ),
                                   icon: Icon(
                                     Icons.remove_circle_outline_rounded,

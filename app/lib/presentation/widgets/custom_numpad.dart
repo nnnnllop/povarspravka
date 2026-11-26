@@ -7,7 +7,6 @@ import '../../core/calculation/calculation_validation.dart';
 import '../../core/calculation/models/product.dart';
 import '../../core/calculation/models/ingredient.dart';
 import '../../core/calculation/models/source_label.dart';
-import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
@@ -48,6 +47,9 @@ class CustomNumpadSheet extends StatefulWidget {
   /// Колбэк настройки группы потерь и способа обработки (доступен в режиме правки).
   final VoidCallback? onEditLoss;
 
+  /// Добавление новой независимой строки тем же продуктом (в режиме правки).
+  final void Function(double grams, bool isGross)? onAddAsNewRow;
+
   const CustomNumpadSheet({
     super.key,
     required this.product,
@@ -59,6 +61,7 @@ class CustomNumpadSheet extends StatefulWidget {
     this.onDelete,
     this.onReplaceProduct,
     this.onEditLoss,
+    this.onAddAsNewRow,
   });
 
   @override
@@ -109,6 +112,15 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     });
   }
 
+  String? _validateWasteInput(String raw) {
+    final parsed = CalculationEngine.parseInputDouble(raw);
+    if (parsed == null || !parsed.isFinite) return null;
+    if (parsed < 0 || parsed >= 100) {
+      return 'Отходы должны быть от 0 до 99,9\u202F%';
+    }
+    return null;
+  }
+
   void _onKey(String k) {
     AppHaptics.key();
     setState(() {
@@ -121,7 +133,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
         );
         _wasteInput = next;
         _isFreshWasteInput = fresh;
-        _wasteError = null;
+        _wasteError = _validateWasteInput(next);
         return;
       }
       final (next, fresh) = _appendNumpadKeyValue(
@@ -144,7 +156,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
         final (next, fresh) = _backspaceNumpadString(_wasteInput);
         _wasteInput = next;
         _isFreshWasteInput = fresh;
-        _wasteError = null;
+        _wasteError = _validateWasteInput(next);
         return;
       }
       final (next, fresh) = _backspaceNumpadString(_currentInput);
@@ -276,7 +288,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     if (parsed == null || !parsed.isFinite || parsed < 0 || parsed >= 100) {
       AppHaptics.warn();
       setState(() {
-        _wasteError = 'Введите число от 0 до 99';
+        _wasteError = 'Отходы должны быть от 0 до 99,9\u202F%';
       });
       return;
     }
@@ -353,9 +365,18 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     }
   }
 
+  static final RegExp _potatoPattern =
+      RegExp(r'(?:^|[\s,(])картофел[ьяюе]?(?:$|[\s,)])');
+  static final RegExp _vegPattern = RegExp(
+    r'(?:^|[\s,(])(?:морков[ьию]?|свекл[аыуеой]?|капуст[аыуеой]?)(?:$|[\s,)])',
+  );
+  static final RegExp _onionPattern =
+      RegExp(r'(?:^|[\s,(])лук(?:а|у|ом|е)?(?:$|[\s,)])');
+
   List<(String, double, bool)> _getSeasonalPresets() {
-    final name = widget.product.name.toLowerCase();
-    if (name.contains('картофел')) {
+    if (widget.product.isDishOnly) return const [];
+    final name = widget.product.name.toLowerCase().replaceAll('ё', 'е');
+    if (_potatoPattern.hasMatch(name)) {
       return const [
         ('До 1 янв', 25.0, false),
         ('С 1 янв', 30.0, false),
@@ -363,19 +384,41 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
         ('С 25 апр', 40.0, false),
         ('Молодой', 20.0, true),
       ];
-    } else if (name.contains('морков') ||
-        name.contains('свекл') ||
-        name.contains('капуст')) {
+    } else if (_vegPattern.hasMatch(name)) {
       return const [
         ('До 1 янв', 20.0, false),
         ('С 1 янв', 25.0, false),
       ];
-    } else if (name.contains('лук') && !name.contains('зелен')) {
+    } else if (_onionPattern.hasMatch(name) &&
+        !name.contains('зелен') &&
+        !name.contains('порей') &&
+        !name.contains('шалот')) {
       return const [
         ('ГОСТ', 16.0, false),
       ];
     }
     return const [];
+  }
+
+  void _commitPendingChangesBeforeAction() {
+    if (!widget.isEditing) return;
+    final parsedGrams = CalculationEngine.parseInputDouble(_currentInput);
+    final canCommitGrams = parsedGrams != null &&
+        parsedGrams.isFinite &&
+        parsedGrams >= .1 &&
+        parsedGrams <= CalculationValidation.maxCustomYieldGrams;
+    final effectiveWasteChanged = _wastePct != widget.product.wastePct;
+    if (effectiveWasteChanged) {
+      widget.onProductUpdated
+          ?.call(widget.product.copyWith(wastePct: _wastePct));
+    }
+    final weightOrModeChanged = !_isFreshInput ||
+        _isGross != widget.initialIsGross ||
+        (canCommitGrams &&
+            (parsedGrams - widget.initialGrams).abs() >= 0.001);
+    if (canCommitGrams && (weightOrModeChanged || effectiveWasteChanged)) {
+      widget.onConfirm(parsedGrams, _isGross);
+    }
   }
 
   void _deleteFromDish() {
@@ -388,6 +431,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
 
   void _replaceProduct() {
     AppHaptics.key();
+    _commitPendingChangesBeforeAction();
     final cb = widget.onReplaceProduct;
     if (mounted && Navigator.canPop(context)) {
       Navigator.pop(context);
@@ -553,10 +597,19 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
           _buildHeader(p, compact: tightContent),
           SizedBox(height: tightPortrait ? Space.x1 : gap),
           _buildModeSelector(p, compact: tightContent),
-          if (_deltaNote != null && !_isEditingWaste) ...[
-            SizedBox(height: tightPortrait ? Space.x1 : Space.x2),
-            _buildDeltaNote(p),
-          ],
+          AnimatedSize(
+            duration: Motion.fast,
+            curve: Motion.ease,
+            alignment: Alignment.topCenter,
+            child: (_deltaNote != null && !_isEditingWaste)
+                ? Padding(
+                    padding: EdgeInsets.only(
+                      top: tightPortrait ? Space.x1 : Space.x2,
+                    ),
+                    child: _buildDeltaNote(p),
+                  )
+                : const SizedBox.shrink(),
+          ),
           SizedBox(height: tightPortrait ? Space.x1 : gap),
           _buildReadout(p, net, hasWaste, tight: tightContent),
           if (hasExtras) ...[
@@ -577,7 +630,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                   _showExtrasExpanded
                       ? Icons.expand_less_rounded
                       : Icons.tune_rounded,
-                  size: 16,
+                  size: IconSizes.xs,
                 ),
                 label: Text(
                   _showExtrasExpanded ? 'Скрыть меры и сезон' : 'Меры и сезон',
@@ -604,19 +657,51 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     );
   }
 
-  List<(String, VoidCallback)> _quickItemsForCurrentMode() {
+  List<_QuickItem> _quickItemsForCurrentMode() {
     return _isEditingWaste
-        ? <(String, VoidCallback)>[
-            ('0%', () => _applyWastePreset('0')),
-            ('15%', () => _applyWastePreset('15')),
-            ('25%', () => _applyWastePreset('25')),
-            ('35%', () => _applyWastePreset('35')),
+        ? <_QuickItem>[
+            (
+              label: '0%',
+              semanticsLabel: 'Установить отходы 0%',
+              onTap: () => _applyWastePreset('0'),
+            ),
+            (
+              label: '15%',
+              semanticsLabel: 'Установить отходы 15%',
+              onTap: () => _applyWastePreset('15'),
+            ),
+            (
+              label: '25%',
+              semanticsLabel: 'Установить отходы 25%',
+              onTap: () => _applyWastePreset('25'),
+            ),
+            (
+              label: '35%',
+              semanticsLabel: 'Установить отходы 35%',
+              onTap: () => _applyWastePreset('35'),
+            ),
           ]
-        : <(String, VoidCallback)>[
-            ('+10 г', () => _onAdd(10)),
-            ('+50 г', () => _onAdd(50)),
-            ('+100 г', () => _onAdd(100)),
-            ('+250 г', () => _onAdd(250)),
+        : <_QuickItem>[
+            (
+              label: '+10 г',
+              semanticsLabel: 'Прибавить 10 г',
+              onTap: () => _onAdd(10),
+            ),
+            (
+              label: '+50 г',
+              semanticsLabel: 'Прибавить 50 г',
+              onTap: () => _onAdd(50),
+            ),
+            (
+              label: '+100 г',
+              semanticsLabel: 'Прибавить 100 г',
+              onTap: () => _onAdd(100),
+            ),
+            (
+              label: '+250 г',
+              semanticsLabel: 'Прибавить 250 г',
+              onTap: () => _onAdd(250),
+            ),
           ];
   }
 
@@ -656,7 +741,10 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
     final hasEditActions = widget.isEditing &&
         (widget.onEditLoss != null ||
             widget.onReplaceProduct != null ||
+            widget.onAddAsNewRow != null ||
             widget.onDelete != null);
+    final calcKcal = UiFormat.productKcal(widget.product);
+    final sourceNote = UiFormat.sourceKcalFootnote(widget.product);
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -675,11 +763,18 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
               if (!compact) ...[
                 const SizedBox(height: Space.x1),
                 Text(
-                  '${CalculationEngine.formatKcal(widget.product.kcal)} ккал / 100 г · ${SourceLabel.of(widget.product.source, fallback: widget.product.source)}',
+                  '${CalculationEngine.formatKcal(calcKcal)} ккал / 100 г · ${SourceLabel.of(widget.product.source, fallback: widget.product.source)}',
                   style: AppTypography.caption.copyWith(color: p.inkMuted),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
+                if (sourceNote != null)
+                  Text(
+                    sourceNote,
+                    style: AppTypography.caption.copyWith(color: p.inkMuted),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
               ],
             ],
           ),
@@ -693,9 +788,25 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
             onSelected: (value) {
               if (value == 'loss') {
                 AppHaptics.toggle();
+                _commitPendingChangesBeforeAction();
                 widget.onEditLoss?.call();
               } else if (value == 'replace') {
                 _replaceProduct();
+              } else if (value == 'add_new') {
+                final parsed =
+                    CalculationEngine.parseInputDouble(_currentInput) ?? 0.0;
+                if (parsed >= .1 &&
+                    parsed <= CalculationValidation.maxCustomYieldGrams) {
+                  AppHaptics.commit();
+                  if (_wastePct != widget.product.wastePct) {
+                    widget.onProductUpdated
+                        ?.call(widget.product.copyWith(wastePct: _wastePct));
+                  }
+                  widget.onAddAsNewRow?.call(parsed, _isGross);
+                  if (mounted && Navigator.canPop(context)) {
+                    Navigator.pop(context);
+                  }
+                }
               } else if (value == 'delete') {
                 _deleteFromDish();
               }
@@ -707,7 +818,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                   value: 'loss',
                   child: Row(
                     children: [
-                      Icon(Icons.tune_rounded, size: 18),
+                      Icon(Icons.tune_rounded, size: IconSizes.btn),
                       SizedBox(width: Space.x2),
                       Expanded(child: Text('Группа и обработка')),
                     ],
@@ -719,9 +830,21 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                   value: 'replace',
                   child: Row(
                     children: [
-                      Icon(Icons.swap_horiz_rounded, size: 18),
+                      Icon(Icons.swap_horiz_rounded, size: IconSizes.btn),
                       SizedBox(width: Space.x2),
                       Expanded(child: Text('Заменить продукт')),
+                    ],
+                  ),
+                ),
+              if (widget.onAddAsNewRow != null)
+                const PopupMenuItem<String>(
+                  key: ValueKey('numpad-add-new-row'),
+                  value: 'add_new',
+                  child: Row(
+                    children: [
+                      Icon(Icons.playlist_add_rounded, size: IconSizes.btn),
+                      SizedBox(width: Space.x2),
+                      Expanded(child: Text('Добавить ещё строкой')),
                     ],
                   ),
                 ),
@@ -733,7 +856,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                     children: [
                       Icon(
                         Icons.delete_outline_rounded,
-                        size: 18,
+                        size: IconSizes.btn,
                         color: p.danger,
                       ),
                       const SizedBox(width: Space.x2),
@@ -758,7 +881,11 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
               minWidth: kMinTapTarget,
               minHeight: kMinTapTarget,
             ),
-            icon: Icon(Icons.close_rounded, size: 22, color: p.inkSecondary),
+            icon: Icon(
+              Icons.close_rounded,
+              size: IconSizes.md,
+              color: p.inkSecondary,
+            ),
           ),
         ] else if (!hasEditActions && !compact) ...[
           const SizedBox(width: Space.x2),
@@ -832,7 +959,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
       ),
       child: Row(
         children: [
-          Icon(Icons.swap_horiz_rounded, size: 16, color: p.accent),
+          Icon(Icons.swap_horiz_rounded, size: IconSizes.xs, color: p.accent),
           const SizedBox(width: Space.x2),
           Expanded(
             child: Text(
@@ -865,8 +992,9 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
       isFresh: isFresh,
       tight: tight,
       onClear: _onClear,
-      headerNote:
-          _isEditingWaste ? 'Процент отходов при обработке (0–99%)' : null,
+      headerNote: _isEditingWaste
+          ? 'Процент отходов при обработке (0–99,9\u202F%)'
+          : null,
       freshHint: (isFresh && !_isEditingWaste && !tight)
           ? 'цифра заменит значение · +г прибавит'
           : null,
@@ -886,31 +1014,33 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
   }
 
   Widget _buildWasteEditCaption(Palette p) {
-    return Wrap(
-      alignment: WrapAlignment.center,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: Space.x2,
-      runSpacing: Space.x1,
-      children: [
-        Text(
-          _wasteError ?? 'масса: $_currentInput г · нажмите «Готово»',
-          textAlign: TextAlign.center,
-          style: AppTypography.numSm.copyWith(
-            color:
-                _wasteError != null ? AppColors.dangerDark : p.slabSecondary,
+    return Semantics(
+      liveRegion: true,
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: Space.x2,
+        runSpacing: Space.x1,
+        children: [
+          Text(
+            _wasteError ?? 'масса: $_currentInput г · нажмите «Готово»',
+            textAlign: TextAlign.center,
+            style: AppTypography.numSm.copyWith(
+              color: _wasteError != null ? p.slabDanger : p.slabSecondary,
+            ),
           ),
-        ),
-        TextButton(
-          key: const ValueKey('waste-edit-cancel'),
-          onPressed: _toggleWasteEdit,
-          style: TextButton.styleFrom(
-            foregroundColor: AppColors.accentDark,
-            minimumSize: const Size(kMinTapTarget, kMinTapTarget),
-            padding: const EdgeInsets.symmetric(horizontal: Space.x2),
+          TextButton(
+            key: const ValueKey('waste-edit-cancel'),
+            onPressed: _toggleWasteEdit,
+            style: TextButton.styleFrom(
+              foregroundColor: p.slabAccent,
+              minimumSize: const Size(kMinTapTarget, kMinTapTarget),
+              padding: const EdgeInsets.symmetric(horizontal: Space.x2),
+            ),
+            child: const Text('Отмена'),
           ),
-          child: const Text('Отмена'),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -932,36 +1062,40 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
       text = '✓ чистая масса нетто';
       ok = true;
     }
-    return Wrap(
-      alignment: WrapAlignment.center,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: Space.x1,
-      runSpacing: Space.x1,
-      children: [
-        Text(
-          text,
-          textAlign: TextAlign.center,
-          style: (tight ? AppTypography.caption : AppTypography.numSm).copyWith(
-            color: ok ? p.slabSecondary : AppColors.warningDark,
+    return Semantics(
+      liveRegion: true,
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: Space.x1,
+        runSpacing: Space.x1,
+        children: [
+          Text(
+            text,
+            textAlign: TextAlign.center,
+            style: (tight ? AppTypography.caption : AppTypography.numSm)
+                .copyWith(
+              color: ok ? p.slabSecondary : p.slabWarning,
+            ),
           ),
-        ),
-        if (hasWaste || _isGross)
-          TextButton(
-            key: const ValueKey('waste-edit-toggle'),
-            onPressed: _toggleWasteEdit,
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.accentDark,
-              minimumSize: const Size(kMinTapTarget, kMinTapTarget),
-              padding: EdgeInsets.symmetric(
-                horizontal: tight ? Space.x1 : Space.x2,
+          if (hasWaste || _isGross)
+            TextButton(
+              key: const ValueKey('waste-edit-toggle'),
+              onPressed: _toggleWasteEdit,
+              style: TextButton.styleFrom(
+                foregroundColor: p.slabAccent,
+                minimumSize: const Size(kMinTapTarget, kMinTapTarget),
+                padding: EdgeInsets.symmetric(
+                  horizontal: tight ? Space.x1 : Space.x2,
+                ),
+                textStyle: tight ? AppTypography.caption : null,
               ),
-              textStyle: tight ? AppTypography.caption : null,
+              child: Text(
+                'отходы ${CalculationEngine.formatWastePercent(_wastePct)} % · изменить',
+              ),
             ),
-            child: Text(
-              'отходы ${CalculationEngine.formatWastePercent(_wastePct)} % · изменить',
-            ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -1105,7 +1239,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                         minWidth: kMinTapTarget,
                         minHeight: kMinTapTarget,
                       ),
-                      icon: const Icon(Icons.remove_rounded, size: 20),
+                      icon: const Icon(Icons.remove_rounded, size: IconSizes.md),
                     ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: Space.x1),
@@ -1124,7 +1258,7 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                         minWidth: kMinTapTarget,
                         minHeight: kMinTapTarget,
                       ),
-                      icon: const Icon(Icons.add_rounded, size: 20),
+                      icon: const Icon(Icons.add_rounded, size: IconSizes.md),
                     ),
                     IconButton(
                       key: const ValueKey('measure-clear'),
@@ -1134,8 +1268,11 @@ class _CustomNumpadSheetState extends State<CustomNumpadSheet> {
                         minWidth: kMinTapTarget,
                         minHeight: kMinTapTarget,
                       ),
-                      icon: Icon(Icons.close_rounded,
-                          size: 18, color: p.inkMuted),
+                      icon: Icon(
+                        Icons.close_rounded,
+                        size: IconSizes.btn,
+                        color: p.inkMuted,
+                      ),
                     ),
                   ],
                 ),
@@ -1221,7 +1358,7 @@ class WeightReadout extends StatelessWidget {
                 headerNote!,
                 textAlign: TextAlign.center,
                 style: AppTypography.caption.copyWith(
-                  color: AppColors.accentDark,
+                  color: p.slabAccent,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -1231,66 +1368,69 @@ class WeightReadout extends StatelessWidget {
             children: [
               const SizedBox(width: kMinTapTarget),
               Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Flexible(
-                      child: AnimatedContainer(
-                        duration: Motion.fast,
-                        curve: Motion.ease,
-                        padding: EdgeInsets.symmetric(
-                          horizontal: isFresh ? Space.x2 : 0,
-                          vertical: tight ? 0 : Space.x1,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isFresh ? p.slabSurface : Colors.transparent,
-                          borderRadius: Radii.chipAll,
-                        ),
-                        child: AnimatedSwitcher(
-                          duration: Duration.zero,
-                          child: tight
-                              ? ConstrainedBox(
-                                  key: ValueKey<String>(valueText),
-                                  constraints:
-                                      const BoxConstraints(maxHeight: 44),
-                                  child: FittedBox(
-                                    fit: BoxFit.scaleDown,
-                                    child: Text(
-                                      valueText,
-                                      textAlign: TextAlign.center,
-                                      maxLines: 1,
-                                      style: AppTypography.numLg.copyWith(
-                                        color: isFresh
-                                            ? AppColors.accentDark
-                                            : p.slabInk,
-                                      ),
-                                    ),
-                                  ),
-                                )
-                              : Text(
-                                  valueText,
-                                  key: ValueKey<String>(valueText),
-                                  textAlign: TextAlign.center,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTypography.numLg.copyWith(
-                                    color: isFresh
-                                        ? AppColors.accentDark
-                                        : p.slabInk,
-                                  ),
-                                ),
+                child: Semantics(
+                  liveRegion: true,
+                  child: () {
+                    final valuePill = AnimatedContainer(
+                      duration: Motion.fast,
+                      curve: Motion.ease,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isFresh ? Space.x2 : 0,
+                        vertical: tight ? 0 : Space.x1,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isFresh ? p.slabSurface : Colors.transparent,
+                        borderRadius: Radii.chipAll,
+                      ),
+                      child: AnimatedSwitcher(
+                        duration: Duration.zero,
+                        child: Text(
+                          valueText,
+                          key: ValueKey<String>(valueText),
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: tight
+                              ? TextOverflow.visible
+                              : TextOverflow.ellipsis,
+                          style: AppTypography.numLg.copyWith(
+                            color: isFresh ? p.slabAccent : p.slabInk,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: Space.x1),
-                    Text(
+                    );
+                    final unitText = Text(
                       unit,
-                      style:
-                          AppTypography.title.copyWith(color: p.slabSecondary),
-                    ),
-                  ],
+                      style: AppTypography.title.copyWith(color: p.slabSecondary),
+                    );
+                    if (tight) {
+                      return ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 44),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              valuePill,
+                              const SizedBox(width: Space.x1),
+                              unitText,
+                            ],
+                          ),
+                        ),
+                      );
+                    }
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Flexible(child: valuePill),
+                        const SizedBox(width: Space.x1),
+                        unitText,
+                      ],
+                    );
+                  }(),
                 ),
               ),
               SizedBox(
@@ -1315,7 +1455,7 @@ class WeightReadout extends StatelessWidget {
                                 'C',
                                 maxLines: 1,
                                 style: AppTypography.headline.copyWith(
-                                  color: AppColors.dangerDark,
+                                  color: p.slabDanger,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -1347,8 +1487,14 @@ class WeightReadout extends StatelessWidget {
   }
 }
 
+typedef _QuickItem = ({
+  String label,
+  String semanticsLabel,
+  VoidCallback onTap,
+});
+
 class _NumpadQuickRow extends StatelessWidget {
-  final List<(String, VoidCallback)> quickItems;
+  final List<_QuickItem> quickItems;
   final bool compact;
 
   const _NumpadQuickRow({
@@ -1380,11 +1526,11 @@ class _NumpadQuickRow extends StatelessWidget {
                     borderRadius: Radii.fieldAll,
                     clipBehavior: Clip.antiAlias,
                     child: InkWell(
-                      onTap: quickItems[i].$2,
+                      onTap: quickItems[i].onTap,
                       borderRadius: Radii.fieldAll,
                       child: Semantics(
                         button: true,
-                        label: 'Прибавить ${quickItems[i].$1}',
+                        label: quickItems[i].semanticsLabel,
                         child: ExcludeSemantics(
                           child: Container(
                             constraints: const BoxConstraints(
@@ -1398,14 +1544,11 @@ class _NumpadQuickRow extends StatelessWidget {
                             child: FittedBox(
                               fit: BoxFit.scaleDown,
                               child: Text(
-                                quickItems[i].$1,
+                                quickItems[i].label,
                                 maxLines: 1,
                                 softWrap: false,
                                 textAlign: TextAlign.center,
-                                style: (compactQuick
-                                        ? AppTypography.caption
-                                        : AppTypography.numSm)
-                                    .copyWith(
+                                style: AppTypography.numSm.copyWith(
                                   color: p.accent,
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -1427,7 +1570,7 @@ class _NumpadQuickRow extends StatelessWidget {
 }
 
 class _NumpadKeypadBlock extends StatelessWidget {
-  final List<(String, VoidCallback)> quickItems;
+  final List<_QuickItem> quickItems;
   final String confirmLabel;
   final bool canConfirm;
   final Key? confirmMaterialKey;
@@ -1545,7 +1688,11 @@ class _NumpadKeypadBlock extends StatelessWidget {
                 child: ExcludeSemantics(
                   child: Center(
                     child: isBackspace
-                        ? Icon(Icons.backspace_outlined, size: 22, color: p.ink)
+                        ? Icon(
+                            Icons.backspace_outlined,
+                            size: IconSizes.md,
+                            color: p.ink,
+                          )
                         : Text(
                             k,
                             maxLines: 1,
@@ -1579,19 +1726,21 @@ class _NumpadKeypadBlock extends StatelessWidget {
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: canConfirm ? onConfirm : null,
-            child: Container(
-              constraints: BoxConstraints(minHeight: height),
-              alignment: Alignment.center,
-              padding: EdgeInsets.symmetric(
-                horizontal: Space.x4,
-                vertical: compact ? Space.x1 : Space.x2,
-              ),
-              child: Text(
-                confirmLabel,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                style: AppTypography.label.copyWith(
-                  color: canConfirm ? p.onAccent : p.inkMuted,
+            child: ExcludeSemantics(
+              child: Container(
+                constraints: BoxConstraints(minHeight: height),
+                alignment: Alignment.center,
+                padding: EdgeInsets.symmetric(
+                  horizontal: Space.x4,
+                  vertical: compact ? Space.x1 : Space.x2,
+                ),
+                child: Text(
+                  confirmLabel,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  style: AppTypography.label.copyWith(
+                    color: canConfirm ? p.onAccent : p.inkMuted,
+                  ),
                 ),
               ),
             ),
@@ -1757,7 +1906,7 @@ class _SimpleGramsNumpadSheetState extends State<SimpleGramsNumpadSheet> {
                     'до ${CalculationEngine.formatGrams(widget.maxGrams)} г',
                     textAlign: TextAlign.center,
                     style: AppTypography.numSm.copyWith(
-                      color: AppColors.dangerDark,
+                      color: p.slabDanger,
                     ),
                   )
                 : null,
@@ -1766,11 +1915,27 @@ class _SimpleGramsNumpadSheetState extends State<SimpleGramsNumpadSheet> {
       ),
     );
 
-    final quickItems = [
-      ('+10 г', () => _onAdd(10)),
-      ('+50 г', () => _onAdd(50)),
-      ('+100 г', () => _onAdd(100)),
-      ('+250 г', () => _onAdd(250)),
+    final quickItems = <_QuickItem>[
+      (
+        label: '+10 г',
+        semanticsLabel: 'Прибавить 10 г',
+        onTap: () => _onAdd(10),
+      ),
+      (
+        label: '+50 г',
+        semanticsLabel: 'Прибавить 50 г',
+        onTap: () => _onAdd(50),
+      ),
+      (
+        label: '+100 г',
+        semanticsLabel: 'Прибавить 100 г',
+        onTap: () => _onAdd(100),
+      ),
+      (
+        label: '+250 г',
+        semanticsLabel: 'Прибавить 250 г',
+        onTap: () => _onAdd(250),
+      ),
     ];
 
     final keypadPane = _NumpadKeypadBlock(
@@ -1879,7 +2044,7 @@ class _TapChip extends StatelessWidget {
       label: semanticsLabel,
       child: TactilePress(
         child: Material(
-          color: selected ? p.accentSoft : p.sunken,
+          color: selected ? p.accent : p.sunken,
           borderRadius: Radii.chipAll,
           clipBehavior: Clip.antiAlias,
           child: InkWell(
@@ -1903,7 +2068,7 @@ class _TapChip extends StatelessWidget {
                           width: Space.x1,
                           height: Space.x1,
                           decoration: BoxDecoration(
-                            color: accent,
+                            color: selected ? p.onAccent : accent,
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -1913,7 +2078,7 @@ class _TapChip extends StatelessWidget {
                         child: Text(
                           label,
                           style: AppTypography.label.copyWith(
-                            color: selected ? accent : p.ink,
+                            color: selected ? p.onAccent : p.ink,
                           ),
                         ),
                       ),
@@ -1926,7 +2091,7 @@ class _TapChip extends StatelessWidget {
                         trailing!,
                         style: AppTypography.caption.copyWith(
                           fontFeatures: const [FontFeature.tabularFigures()],
-                          color: selected ? accent : p.inkSecondary,
+                          color: selected ? p.onAccent : p.inkSecondary,
                         ),
                       ),
                     ),

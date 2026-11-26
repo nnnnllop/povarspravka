@@ -4,9 +4,9 @@ import 'app_colors.dart';
 
 /// 4-dp сетка отступов (аудит §3.3).
 ///
-/// Правило: внутри карточки — [x3] (12), между карточками — [x2] (8),
-/// между секциями — [x6] (24). Никаких 6/10/14/18/22 — восемь значений на
-/// одном экране и есть «визуальный дребезг».
+/// Правило: внутри карточки — [x4] (16), между карточками — [x2] (8),
+/// между секциями — [x6] (24), внешние поля экрана — [x4] (16).
+/// Никаких 6/10/14/18/22 — дробление отступов даёт визуальный дребезг.
 class Space {
   static const double x1 = 4;
   static const double x2 = 8;
@@ -18,13 +18,22 @@ class Space {
   static const double x10 = 40;
 
   static const double maxWidth = 640;
+  static const double minRowHeight = 56;
 
   static const EdgeInsets screenH = EdgeInsets.symmetric(horizontal: x4);
   static const EdgeInsets card = EdgeInsets.all(x4);
   static const EdgeInsets sheet = EdgeInsets.fromLTRB(x4, x3, x4, x4);
 
   /// Единый горизонтальный отступ экрана: 16 dp.
-  static double gutter(double width) => x4;
+  static double gutter([double? width]) => x4;
+}
+
+/// Единые токены размеров иконок (шаг 4 dp + явная роль 18 dp для кнопок).
+class IconSizes {
+  static const double xs = 16;
+  static const double btn = 18;
+  static const double md = 20;
+  static const double lg = 24;
 }
 
 /// Единая политика адаптивных порогов для всего интерфейса.
@@ -32,8 +41,22 @@ class AppLayout {
   /// Очень узкий экран (<360 dp, например 320 dp).
   static bool isNarrow(double width) => width < 360;
 
+  /// Узкий для 1-строчной панели зума и плашки бланка (<380 dp).
+  static bool isCompactBlankBar(double width) => width < 380;
+
   /// Компактный телефонный экран (<480 dp).
   static bool isCompact(double width) => width < 480;
+
+  /// Короткий экран (landscape, <460 dp).
+  static bool isShort(double height) => height < 460;
+
+  /// Сжатая высота портретного экрана при крупном тексте.
+  static bool isCompactHeight(double height, double textScale) =>
+      height < 580 && isLargeText(textScale);
+
+  /// Переводить ли нижнюю шторку в единый скролл целиком.
+  static bool isTightSheet(double height, double textScale) =>
+      isShort(height) || isCompactHeight(height, textScale);
 
   /// Крупный пользовательский масштаб текста.
   static bool isLargeText(double textScale) => textScale >= 1.3;
@@ -42,12 +65,16 @@ class AppLayout {
   static bool shouldStackActions(double width, double textScale) =>
       width < 360 || textScale >= 1.45;
 
+  /// Складывать ли строку ввода веса готового блюда в 2 строки.
+  static bool shouldStackYieldRow(double width, double textScale) =>
+      width < 340 || textScale > 1.35;
+
   /// Разрешена ли 2-колоночная компоновка нумпада (ввод + клавиатура рядом).
   static bool canSideBySideNumpad(
     double width,
-    double height,
-    double textScale,
-  ) =>
+    double height, [
+    double textScale = 1.0,
+  ]) =>
       width >= 540 && height >= 260 && height < 460;
 }
 
@@ -149,21 +176,41 @@ class Palette {
   Color get sheetHandle =>
       isDark ? AppColors.sheetHandleDark : AppColors.sheetHandle;
 
-  /// Цвета точек/полосы макронутриентов на тёмной приборной плите (AA >= 4.5).
+  /// Цвета акцента, статусов и полосы нутриентов на тёмной приборной плите (AA >= 4.5).
   Color get slabProtein => AppColors.proteinDark;
   Color get slabFat => AppColors.fatDark;
   Color get slabCarbs => AppColors.carbsDark;
+  Color get slabAccent => AppColors.accentDark;
+  Color get slabDanger => AppColors.dangerDark;
+  Color get slabWarning => AppColors.warningDark;
 
   /// Поднятая поверхность для плавающих капсул и кнопок в тёмной теме.
   Color get raised => isDark ? AppColors.surfaceRaisedDark : AppColors.surface;
 
+  /// Тень парящего дока (токенизированный цвет вместо сырых литералов).
+  List<BoxShadow> get dockShadow => isDark
+      ? const <BoxShadow>[
+          BoxShadow(
+            color: AppColors.dockShadowDark,
+            blurRadius: 16,
+            offset: Offset(0, 6),
+          ),
+        ]
+      : const <BoxShadow>[
+          BoxShadow(
+            color: AppColors.dockShadowLight,
+            blurRadius: 20,
+            offset: Offset(0, 6),
+          ),
+        ];
+
   /// Контрастный «монтажный стол» под белым печатным листом бланка.
   Color get mountingTable =>
-      isDark ? const Color(0xFF090A0C) : const Color(0xFFE6E8EC);
+      isDark ? AppColors.mountingTableDark : AppColors.mountingTableLight;
 
   /// Калибровочная точка монтажного стола под печатным бланком.
   Color get tableDot =>
-      isDark ? const Color(0xFF181A1F) : const Color(0xFFD5D8DF);
+      isDark ? AppColors.tableDotDark : AppColors.tableDotLight;
 
   /// Поверхности в «Приборе» разделяются тоном и скруглениями без диффузных теней.
   List<BoxShadow> get cardShadow => const <BoxShadow>[];

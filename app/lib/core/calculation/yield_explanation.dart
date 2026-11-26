@@ -27,9 +27,9 @@ class YieldExplanation {
     if (!changed) return 'Вес равен сумме нетто';
     final factor = concentration.toStringAsFixed(2).replaceAll('.', ',');
     if (delta > 0) {
-      return '+${CalculationEngine.formatGrams(delta)} г жидкости · разбавление ×$factor';
+      return '+${CalculationEngine.formatGrams(delta)} г жидкости · плотность ×$factor';
     }
-    return '−${CalculationEngine.formatGrams(-delta / rawGrams * 100)}% уварка · концентрация ×$factor';
+    return '−${CalculationEngine.formatGrams(-delta / rawGrams * 100)}\u202F% массы · концентрация ×$factor';
   }
 
   String get description {
@@ -42,9 +42,10 @@ class YieldExplanation {
     if (!changed) {
       return 'Вес готового блюда совпадает с суммой нетто ингредиентов.';
     }
+    final factor = concentration.toStringAsFixed(2).replaceAll('.', ',');
     if (delta > 0) {
-      return 'Расчёт предполагает добавление воды или жидкости без БЖУ: плотность на 100 г снижена в ${CalculationEngine.formatMacro(1 / concentration)} раза. Бульон, молоко или масло добавляйте отдельными ингредиентами.';
+      return 'Расчёт предполагает добавление воды или жидкости без БЖУ: плотность на 100 г снижена до ×$factor. Бульон, молоко или масло добавляйте отдельными ингредиентами.';
     }
-    return 'Расчёт предполагает уварку при готовке: плотность на 100 г выросла в ${CalculationEngine.formatMacro(concentration)} раза. Новые нутриенты не появляются — КБЖУ всего блюда не меняется.';
+    return 'Расчёт предполагает потерю влаги при готовке: плотность на 100 г выросла до ×$factor. Новые нутриенты не появляются — КБЖУ всего блюда не меняется.';
   }
 }

@@ -15,6 +15,16 @@ import 'xlsx_blank_generator.dart';
 enum ExportType { pdf, docx, xlsx }
 
 class ExportService {
+  static String _pluralDishes(int count) {
+    final n = count.abs();
+    final mod100 = n % 100;
+    final mod10 = n % 10;
+    if (mod100 >= 11 && mod100 <= 14) return '$count блюд';
+    if (mod10 == 1) return '$count блюдо';
+    if (mod10 >= 2 && mod10 <= 4) return '$count блюда';
+    return '$count блюд';
+  }
+
   /// Remove abandoned staging directories after a crash. Never follow links or
   /// touch the plugin-owned share_plus cache / user documents.
   static Future<void> pruneAbandonedExports(Directory root,
@@ -111,7 +121,7 @@ class ExportService {
 
       await Share.shareXFiles(
         [XFile(filePath, mimeType: mimeType, name: fileName)],
-        subject: 'Бланк расчета пищевой ценности: $baseTitle',
+        subject: 'Бланк расчёта пищевой ценности: $baseTitle',
       );
       handedOff = true;
     } finally {
@@ -171,7 +181,7 @@ class ExportService {
 
       await Share.shareXFiles(
         [XFile(filePath, mimeType: mimeType, name: fileName)],
-        subject: 'Сборник бланков КБЖУ (${dishes.length} блюд)',
+        subject: 'Сборник бланков КБЖУ (${_pluralDishes(dishes.length)})',
       );
       handedOff = true;
     } finally {

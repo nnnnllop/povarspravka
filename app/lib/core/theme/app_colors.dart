@@ -29,14 +29,20 @@ class AppColors {
   static const slabSurface = Color(0xFF23262C);
   static const signal = Color(0xFFFF6A1F);
   static const sheetHandle = Color(0xFFB8BCC4);
+  static const dockShadowLight = Color(0x16000000);
 
   static const slabDark = Color(0xFF1E2126);
   static const slabInkDark = Color(0xFFF7F7F8);
   static const slabSecondaryDark = Color(0xFFAEB4BE);
-  static const slabEdgeDark = Color(0xFF2E333B);
+  static const slabEdgeDark = Color(0xFF393F4A);
   static const slabSurfaceDark = Color(0xFF2A2D33);
   static const signalDark = Color(0xFFFF8A4C);
   static const sheetHandleDark = Color(0xFF3B404A);
+  static const dockShadowDark = Color(0x33000000);
+  static const mountingTableLight = Color(0xFFE6E8EC);
+  static const mountingTableDark = Color(0xFF090A0C);
+  static const tableDotLight = Color(0xFFD5D8DF);
+  static const tableDotDark = Color(0xFF181A1F);
 
   // ─── Границы и внутренние разделители ───────────────────────────────────
   /// ≥ 3:1 на canvas/surface (для доступности интерактивных границ).
@@ -117,8 +123,7 @@ class AppColors {
   static const backgroundDark = canvasDark;
   static const borderSubtleDark = dividerDark;
 
-  /// Акцент бренда: раньше был `#B45309` — то же значение, что и `fat`.
-  /// Теперь это настоящий янтарь `#9A5B14`.
+  /// Основной токен основного текста (устаревший алиас, используйте `ink`).
   static const primary = ink;
   static const primaryLight = Color(0xFFE7E5E4);
   static const primaryContainerLight = surfaceSunken;

@@ -96,6 +96,8 @@ void main() {
       final editor = src('lib/presentation/screens/recipe_editor_screen.dart');
       expect(editor.contains('_titleCtrl.dispose()'), isTrue);
       expect(editor.contains('_yieldCtrl.dispose()'), isTrue);
+      expect(editor.contains('_yieldFocusNode.removeListener'), isTrue);
+      expect(editor.contains('_yieldFocusNode.dispose()'), isTrue);
       // All three controllers in `_RecipeSettingsDialogState` are owned and
       // disposed in `State.dispose`:
       expect(editor.contains('_pCtrl.dispose()'), isTrue);
@@ -115,14 +117,17 @@ void main() {
       expect(preview.contains('_transform.dispose()'), isTrue);
       expect(preview.contains('_transform.removeListener'), isTrue);
 
-      // No StreamSubscription anywhere in lib/ (grep result), no FocusNode.
+      // No StreamSubscription anywhere in lib/, and FocusNode only in owned RecipeEditorScreen.
       for (final f in Directory('lib').listSync(recursive: true)) {
         if (f is! File || !f.path.endsWith('.dart')) continue;
         final s = f.readAsStringSync();
         expect(s.contains('StreamSubscription'), isFalse,
             reason: 'unexpected StreamSubscription in ${f.path}');
-        expect(s.contains('FocusNode('), isFalse,
-            reason: 'unexpected FocusNode in ${f.path}');
+        final normalized = f.path.replaceAll('\\', '/');
+        if (!normalized.endsWith('recipe_editor_screen.dart')) {
+          expect(s.contains('FocusNode('), isFalse,
+              reason: 'unexpected FocusNode in ${f.path}');
+        }
       }
       // ignore: avoid_print
       print('STATE-07 probe: $findings');

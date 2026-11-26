@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/calculation/calculation_engine.dart';
 import '../../core/calculation/loss_table.dart';
 import '../../core/calculation/models/dish.dart';
+import '../../core/calculation/models/product.dart';
 import '../../core/theme/app_haptics.dart';
 import '../../core/theme/app_space.dart';
 import '../../core/theme/app_typography.dart';
@@ -100,7 +101,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final recoveryNotice = ref.watch(storageRecoveryNoticeProvider);
     final compatibilityNotice = ref.watch(storageCompatibilityNoticeProvider);
     final persistenceError = ref.watch(persistenceErrorProvider);
+    final isLoadError = ref.watch(persistenceIsLoadErrorProvider);
     final savedDishesError = ref.watch(savedDishesErrorProvider);
+    final dishById = <String, Dish>{for (final d in savedDishes) d.id: d};
     final width = MediaQuery.sizeOf(context).width;
     final gutter = Space.gutter(width);
     final listHPad = math.max(gutter, (width - Space.maxWidth) / 2);
@@ -136,16 +139,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return t.contains(normQuery);
     }).toList();
 
+    String sortKey(Dish d) {
+      final raw = d.title.trim().isEmpty ? 'блюдо без названия' : d.title.trim();
+      return raw.toLowerCase().replaceAll('ё', 'е\u0001');
+    }
+
     if (_librarySort == _LibrarySort.title) {
-      filteredDishes.sort((a, b) {
-        final at = a.title.trim().isEmpty
-            ? 'блюдо без названия'
-            : a.title.trim().toLowerCase();
-        final bt = b.title.trim().isEmpty
-            ? 'блюдо без названия'
-            : b.title.trim().toLowerCase();
-        return at.compareTo(bt);
-      });
+      filteredDishes.sort((a, b) => sortKey(a).compareTo(sortKey(b)));
     } else if (_librarySort == _LibrarySort.kcalPer100g) {
       final kcalById = <String, double>{
         for (final d in filteredDishes)
@@ -157,9 +157,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       filteredDishes.sort((a, b) {
         final cmp = (kcalById[b.id] ?? -1.0).compareTo(kcalById[a.id] ?? -1.0);
         if (cmp != 0) return cmp;
-        return a.title.trim().toLowerCase().compareTo(
-              b.title.trim().toLowerCase(),
-            );
+        return sortKey(a).compareTo(sortKey(b));
       });
     } else {
       filteredDishes.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
@@ -168,8 +166,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final liveIds = {for (final d in savedDishes) d.id};
     _selectedDishIds.removeWhere((id) => !liveIds.contains(id));
     final selectedDishes = [
-      for (final d in savedDishes)
-        if (_selectedDishIds.contains(d.id)) d,
+      for (final id in _selectedDishIds)
+        if (dishById[id] != null) dishById[id]!,
     ];
     final isSelecting = _selectionMode || selectedDishes.isNotEmpty;
     final visibleIds = {for (final d in filteredDishes) d.id};
@@ -255,7 +253,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 toolbarHeight: kToolbarHeight,
                 title: Row(
                   children: [
-                    const AppScaleGlyph(size: 22),
+                    const AppScaleGlyph(size: IconSizes.lg),
                     const SizedBox(width: Space.x2),
                     Expanded(
                       child: Text(
@@ -289,6 +287,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               child: PersistenceErrorBanner(
                 margin: EdgeInsets.fromLTRB(
                     gutter, Space.x2, gutter, Space.x2),
+                icon: isLoadError && persistenceError != null
+                    ? Icons.error_outline_rounded
+                    : Icons.cloud_off,
+                message: isLoadError && persistenceError != null
+                    ? 'Не удалось прочитать «Мои блюда». Данные не удалены.'
+                    : 'Ошибка сохранения: изменения не сохранены на диск',
                 onRetry: () async {
                   ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
                   var ok = true;
@@ -343,6 +347,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       opacity: isSelecting ? 0.45 : 1.0,
                       child: _ActiveDraftCard(
                         dish: activeDish,
+                        isSavedInLibrary: liveIds.contains(activeDish.id),
                         onOpen: () => _openEditor(context),
                         onNew: () => _newCalculation(context, ref),
                       ),
@@ -476,9 +481,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                 ],
                 const SizedBox(height: Space.x2),
-                if (savedDishes.isEmpty)
+                if (savedDishes.isEmpty &&
+                    !(isLoadError && persistenceError != null))
                   _EmptyLibrary(palette: p)
-                else if (filteredDishes.isEmpty)
+                else if (savedDishes.isNotEmpty && filteredDishes.isEmpty)
                   Container(
                     padding: const EdgeInsets.all(Space.x4),
                     decoration: BoxDecoration(
@@ -606,6 +612,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// сохранённые блюда вниз (аудит P1-7).
   void _showHowItWorks(BuildContext context) {
     final container = ProviderScope.containerOf(context, listen: false);
+    String? sheetNotice;
+    var sheetNoticeIsError = false;
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -614,45 +622,50 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => UncontrolledProviderScope(
         container: container,
-        child: Consumer(
-          builder: (sheetCtx, sheetRef, _) {
-            final p = Palette.of(sheetCtx);
-            final settings = sheetRef.watch(appSettingsProvider);
-            final savedDishes = sheetRef.watch(savedDishesProvider);
-            final customProducts = sheetRef.watch(customProductsProvider);
-            final favoriteProducts = sheetRef.watch(favoriteProductsProvider);
-            final savedCount = savedDishes.length;
-            final customCount = customProducts.length;
-            final favoriteCount = favoriteProducts.length;
-            final hasBackupData =
-                savedCount > 0 || customCount > 0 || favoriteCount > 0;
+        child: StatefulBuilder(
+          builder: (sheetBuildCtx, setSheetState) => Consumer(
+            builder: (sheetCtx, sheetRef, _) {
+              final p = Palette.of(sheetCtx);
+              final settings = sheetRef.watch(appSettingsProvider);
+              final savedDishes = sheetRef.watch(savedDishesProvider);
+              final customProducts = sheetRef.watch(customProductsProvider);
+              final favoriteProducts =
+                  sheetRef.watch(favoriteProductsProvider);
+              final savedCount = savedDishes.length;
+              final customCount = customProducts.length;
+              final favoriteCount = favoriteProducts.length;
+              final hasBackupData =
+                  savedCount > 0 || customCount > 0 || favoriteCount > 0;
 
-            return AppSheetScaffold(
-              title: 'Настройки и справка',
-              subtitle: 'Версия ${BackupService.appVersionLabel}',
-              showHandle: true,
-              maxHeightFactor: 0.9,
-              bodyPadding: const EdgeInsets.fromLTRB(
-                Space.x4,
-                Space.x3,
-                Space.x4,
-                Space.x4,
-              ),
-              footer: SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: () => Navigator.pop(sheetCtx),
-                  child: const Text('Понятно'),
+              return AppSheetScaffold(
+                title: 'Настройки и справка',
+                subtitle: 'Версия ${BackupService.appVersionLabel}',
+                showHandle: true,
+                showClose: true,
+                maxHeightFactor: 0.9,
+                noticeText: sheetNotice,
+                noticeIsError: sheetNoticeIsError,
+                bodyPadding: const EdgeInsets.fromLTRB(
+                  Space.x4,
+                  Space.x3,
+                  Space.x4,
+                  Space.x4,
                 ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+                footer: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(sheetCtx),
+                    child: const Text('Понятно'),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                     Row(
                       children: [
                         Icon(
                           Icons.palette_outlined,
-                          size: 18,
+                          size: IconSizes.btn,
                           color: p.accent,
                         ),
                         const SizedBox(width: Space.x2),
@@ -763,7 +776,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       children: [
                         Icon(
                           Icons.backup_outlined,
-                          size: 18,
+                          size: IconSizes.btn,
                           color: p.accent,
                         ),
                         const SizedBox(width: Space.x2),
@@ -807,21 +820,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     );
                                   } catch (e) {
                                     if (!sheetCtx.mounted) return;
-                                    ScaffoldMessenger.maybeOf(sheetCtx)
-                                        ?.showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          friendlyErrorMessage(
-                                            e,
-                                            prefix:
-                                                'Не удалось выгрузить копию',
-                                          ),
-                                        ),
-                                      ),
-                                    );
+                                    setSheetState(() {
+                                      sheetNoticeIsError = true;
+                                      sheetNotice = friendlyErrorMessage(
+                                        e,
+                                        prefix: 'Не удалось выгрузить копию',
+                                      );
+                                    });
                                   }
                                 },
-                          icon: const Icon(Icons.ios_share_rounded, size: 18),
+                          icon: const Icon(
+                            Icons.ios_share_rounded,
+                            size: IconSizes.btn,
+                          ),
                           label: const Text('Поделиться файлом'),
                         ),
                         OutlinedButton.icon(
@@ -843,16 +854,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   );
                                   AppHaptics.commit();
                                   if (!sheetCtx.mounted) return;
-                                  ScaffoldMessenger.maybeOf(sheetCtx)
-                                      ?.showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'JSON резервной копии скопирован',
-                                      ),
-                                    ),
-                                  );
+                                  setSheetState(() {
+                                    sheetNoticeIsError = false;
+                                    sheetNotice =
+                                        'JSON резервной копии скопирован';
+                                  });
                                 },
-                          icon: const Icon(Icons.copy_all_rounded, size: 18),
+                          icon: const Icon(
+                            Icons.copy_all_rounded,
+                            size: IconSizes.btn,
+                          ),
                           label: const Text('Скопировать JSON'),
                         ),
                         FilledButton.tonalIcon(
@@ -868,10 +879,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               context: context,
                               isScrollControlled: true,
                               useSafeArea: true,
-                              showDragHandle: true,
-                              shape: const RoundedRectangleBorder(
-                                borderRadius: Radii.sheetTop,
-                              ),
+                              showDragHandle: false,
+                              backgroundColor: Colors.transparent,
                               builder: (restoreCtx) =>
                                   UncontrolledProviderScope(
                                 container: container,
@@ -879,7 +888,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               ),
                             );
                           },
-                          icon: const Icon(Icons.restore_rounded, size: 18),
+                          icon: const Icon(
+                            Icons.restore_rounded,
+                            size: IconSizes.btn,
+                          ),
                           label: const Text('Восстановить из копии'),
                         ),
                       ],
@@ -940,8 +952,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       icon: Icons.file_download_outlined,
                       title: 'Форматы экспорта',
                       body: 'PDF (векторный, идентичен типовому бланку), Word (.docx) '
-                          'и Excel (.xlsx) с живыми формулами — файлы сохраняются на '
-                          'телефоне и печатаются оттуда.',
+                          'и Excel (.xlsx) с живыми формулами — при выгрузке открывается '
+                          'меню «Поделиться», откуда файл можно сохранить или отправить в печать.',
                     ),
                     Divider(color: p.divider, height: Space.x5),
                     Theme(
@@ -954,7 +966,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             const EdgeInsets.only(bottom: Space.x2),
                         leading: Icon(
                           Icons.folder_open_rounded,
-                          size: 18,
+                          size: IconSizes.btn,
                           color: p.inkSecondary,
                         ),
                         title: Text(
@@ -967,10 +979,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ],
                       ),
                     ),
-                ],
-              ),
-            );
-          },
+                  ],
+                ),
+              );
+            },
+          ),
         ),
       ),
     );
@@ -1135,9 +1148,13 @@ class _RestoreBackupSheetState extends ConsumerState<_RestoreBackupSheet> {
         _parseError = null;
       });
     } on FormatException catch (e) {
+      final msg = e.message;
+      final isRussian = RegExp(r'[А-Яа-яЁё]').hasMatch(msg);
       setState(() {
         _parsed = null;
-        _parseError = e.message;
+        _parseError = isRussian
+            ? msg
+            : 'Не удалось разобрать JSON: проверьте, что текст скопирован целиком';
       });
     } catch (_) {
       setState(() {
@@ -1164,15 +1181,22 @@ class _RestoreBackupSheetState extends ConsumerState<_RestoreBackupSheet> {
   Future<void> _applyRestore({required bool replaceExisting}) async {
     final parsed = _parsed;
     if (parsed == null || _busy) return;
+    final currentDishes = List<Dish>.from(ref.read(savedDishesProvider));
+    final currentProducts = List<Product>.from(ref.read(customProductsProvider));
+    final currentFavs = List<Product>.from(ref.read(favoriteProductsProvider));
     if (replaceExisting) {
       final p = Palette.of(context);
+      final zeroDishesNote = parsed.savedDishes.isEmpty && currentDishes.isNotEmpty
+          ? '\n\nВнимание: в копии нет ни одного блюда — текущая библиотека будет очищена.'
+          : '';
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Заменить библиотеку?'),
-          content: const Text(
-            'Текущие сохранённые блюда и свои продукты будут заменены '
-            'данными из резервной копии.',
+          content: Text(
+            'Сейчас: блюд ${currentDishes.length}, своих продуктов ${currentProducts.length}.\n'
+            'После замены: блюд ${parsed.savedDishes.length}, своих продуктов ${parsed.customProducts.length}.'
+            '$zeroDishesNote',
           ),
           actions: [
             TextButton(
@@ -1191,17 +1215,21 @@ class _RestoreBackupSheetState extends ConsumerState<_RestoreBackupSheet> {
     }
 
     setState(() => _busy = true);
+    var dishesApplied = false;
+    var productsApplied = false;
     try {
       final dishesAdded =
           await ref.read(savedDishesProvider.notifier).importDishes(
                 parsed.savedDishes,
                 replaceExisting: replaceExisting,
               );
+      dishesApplied = true;
       final productsAdded =
           await ref.read(customProductsProvider.notifier).importProducts(
                 parsed.customProducts,
                 replaceExisting: replaceExisting,
               );
+      productsApplied = true;
       final favoritesAdded = parsed.favoriteProducts.isNotEmpty
           ? await ref.read(favoriteProductsProvider.notifier).importFavorites(
                 parsed.favoriteProducts,
@@ -1212,8 +1240,9 @@ class _RestoreBackupSheetState extends ConsumerState<_RestoreBackupSheet> {
       if (!mounted) return;
       final messenger = ScaffoldMessenger.maybeOf(context);
       Navigator.pop(context);
-      final favPart =
-          favoritesAdded > 0 ? ', избранных ${replaceExisting ? favoritesAdded : '+$favoritesAdded'}' : '';
+      final favPart = favoritesAdded > 0
+          ? ', избранных ${replaceExisting ? favoritesAdded : '+$favoritesAdded'}'
+          : '';
       messenger
         ?..hideCurrentSnackBar()
         ..showSnackBar(
@@ -1226,6 +1255,24 @@ class _RestoreBackupSheetState extends ConsumerState<_RestoreBackupSheet> {
           ),
         );
     } catch (e) {
+      if (productsApplied) {
+        await ref
+            .read(customProductsProvider.notifier)
+            .importProducts(currentProducts, replaceExisting: true)
+            .then<void>((_) {}, onError: (Object _) {});
+      }
+      if (dishesApplied) {
+        await ref
+            .read(savedDishesProvider.notifier)
+            .importDishes(currentDishes, replaceExisting: true)
+            .then<void>((_) {}, onError: (Object _) {});
+      }
+      if (replaceExisting && parsed.favoriteProducts.isNotEmpty) {
+        await ref
+            .read(favoriteProductsProvider.notifier)
+            .importFavorites(currentFavs, replaceExisting: true)
+            .then<void>((_) {}, onError: (Object _) {});
+      }
       if (!mounted) return;
       setState(() {
         _busy = false;
@@ -1240,30 +1287,47 @@ class _RestoreBackupSheetState extends ConsumerState<_RestoreBackupSheet> {
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
-    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     final parsed = _parsed;
     final hasItems = parsed != null &&
         (parsed.savedDishes.isNotEmpty ||
             parsed.customProducts.isNotEmpty ||
             parsed.favoriteProducts.isNotEmpty);
 
-    return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(
-        Space.x4,
-        0,
-        Space.x4,
-        Space.x4 + bottomInset,
+    return AppSheetScaffold(
+      title: 'Восстановление из копии',
+      subtitle: 'Вставьте скопированный JSON резервной копии.',
+      showHandle: true,
+      showClose: true,
+      bodyPadding: const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, Space.x4),
+      footer: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          FilledButton(
+            key: const ValueKey('backup-merge-btn'),
+            onPressed: (!hasItems || _busy)
+                ? null
+                : () => _applyRestore(replaceExisting: false),
+            child: const Text('Добавить к текущим'),
+          ),
+          const SizedBox(height: Space.x2),
+          OutlinedButton(
+            key: const ValueKey('backup-replace-btn'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: p.danger,
+            ),
+            onPressed: (!hasItems || _busy)
+                ? null
+                : () => _applyRestore(replaceExisting: true),
+            child: const Text('Заменить библиотеку'),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Восстановление из копии',
-            style: AppTypography.title.copyWith(color: p.ink),
-          ),
-          const SizedBox(height: Space.x1),
-          Text(
-            'Вставьте JSON из файла резервной копии или буфера обмена.',
+            'Если копия сохранена в .json-файле, откройте его в «Файлах» или текстовом редакторе, выделите всё и скопируйте.',
             style: AppTypography.bodySm.copyWith(color: p.inkSecondary),
           ),
           const SizedBox(height: Space.x3),
@@ -1271,12 +1335,8 @@ class _RestoreBackupSheetState extends ConsumerState<_RestoreBackupSheet> {
             alignment: Alignment.centerLeft,
             child: OutlinedButton.icon(
               key: const ValueKey('backup-paste-btn'),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(0, kMinTapTarget),
-                tapTargetSize: MaterialTapTargetSize.padded,
-              ),
               onPressed: _busy ? null : _pasteFromClipboard,
-              icon: const Icon(Icons.content_paste_rounded, size: 18),
+              icon: const Icon(Icons.content_paste_rounded, size: IconSizes.btn),
               label: const Text('Вставить из буфера'),
             ),
           ),
@@ -1301,7 +1361,7 @@ class _RestoreBackupSheetState extends ConsumerState<_RestoreBackupSheet> {
               decoration: BoxDecoration(
                 color: p.sunken,
                 borderRadius: Radii.cardAll,
-                border: Border.all(color: p.border),
+                border: Border.all(color: p.borderStatic),
               ),
               child: Padding(
                 padding: Space.card,
@@ -1328,7 +1388,7 @@ class _RestoreBackupSheetState extends ConsumerState<_RestoreBackupSheet> {
                     if (parsed.exportedAt != null) ...[
                       const SizedBox(height: Space.x1),
                       Text(
-                        'Создана: ${parsed.exportedAt!.toLocal().toString().substring(0, 16)}',
+                        'Создана: ${UiFormat.dateTimeRu(parsed.exportedAt!)}',
                         style:
                             AppTypography.caption.copyWith(color: p.inkMuted),
                       ),
@@ -1338,29 +1398,6 @@ class _RestoreBackupSheetState extends ConsumerState<_RestoreBackupSheet> {
               ),
             ),
           ],
-          const SizedBox(height: Space.x4),
-          FilledButton(
-            key: const ValueKey('backup-merge-btn'),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(0, kMinTapTarget),
-            ),
-            onPressed: (!hasItems || _busy)
-                ? null
-                : () => _applyRestore(replaceExisting: false),
-            child: const Text('Добавить к текущим'),
-          ),
-          const SizedBox(height: Space.x2),
-          OutlinedButton(
-            key: const ValueKey('backup-replace-btn'),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(0, kMinTapTarget),
-              foregroundColor: p.danger,
-            ),
-            onPressed: (!hasItems || _busy)
-                ? null
-                : () => _applyRestore(replaceExisting: true),
-            child: const Text('Заменить библиотеку'),
-          ),
         ],
       ),
     );
@@ -1502,11 +1539,13 @@ class _InfoSection extends StatelessWidget {
 /// Строка активного расчёта: единственный «продолжить» на экране.
 class _ActiveDraftCard extends StatelessWidget {
   final Dish dish;
+  final bool isSavedInLibrary;
   final VoidCallback onOpen;
   final VoidCallback onNew;
 
   const _ActiveDraftCard({
     required this.dish,
+    this.isSavedInLibrary = false,
     required this.onOpen,
     required this.onNew,
   });
@@ -1523,10 +1562,41 @@ class _ActiveDraftCard extends StatelessWidget {
     final title = !hasTitle
         ? (hasIngredients ? 'Черновик без названия' : 'Новый расчёт')
         : dish.title.trim();
+    final statusSuffix =
+        isSavedInLibrary ? ' · из «Моих блюд»' : ' · не сохранён';
 
     final width = MediaQuery.sizeOf(context).width;
     final textScale = MediaQuery.textScalerOf(context).scale(1);
     final stackHeader = AppLayout.shouldStackActions(width, textScale);
+
+    final titleSpan = Text(
+      hasDraft ? 'Открытый расчёт' : 'Новый расчёт',
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: AppTypography.caption.copyWith(
+        color: p.inkSecondary,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+    final labelWidget = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          flex: 2,
+          child: titleSpan,
+        ),
+        if (hasDraft)
+          Flexible(
+            flex: 1,
+            child: Text(
+              statusSuffix,
+              style: AppTypography.caption.copyWith(color: p.inkMuted),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+      ],
+    );
 
     return TactilePress(
       child: GroupedSurface(
@@ -1536,13 +1606,7 @@ class _ActiveDraftCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (stackHeader) ...[
-              Text(
-                hasDraft ? 'Открытый расчёт' : 'Новый расчёт',
-                style: AppTypography.caption.copyWith(
-                  color: p.inkSecondary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              labelWidget,
               const SizedBox(height: Space.x1),
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -1556,7 +1620,7 @@ class _ActiveDraftCard extends StatelessWidget {
                   const SizedBox(width: Space.x1),
                   Icon(
                     Icons.arrow_forward_rounded,
-                    size: 16,
+                    size: IconSizes.xs,
                     color: p.accent,
                   ),
                 ],
@@ -1567,37 +1631,25 @@ class _ActiveDraftCard extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Expanded(
-                      child: Text(
-                        hasDraft ? 'Открытый расчёт' : 'Новый расчёт',
-                        style: AppTypography.caption.copyWith(
-                          color: p.inkSecondary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    Flexible(
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              hasDraft ? 'Продолжить' : 'Открыть',
-                              style: AppTypography.label.copyWith(
-                                color: p.accent,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: Space.x1),
-                          Icon(
-                            Icons.arrow_forward_rounded,
-                            size: 16,
+                    Expanded(child: labelWidget),
+                    const SizedBox(width: Space.x2),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          hasDraft ? 'Продолжить' : 'Открыть',
+                          style: AppTypography.label.copyWith(
                             color: p.accent,
                           ),
-                        ],
-                      ),
+                          maxLines: 1,
+                        ),
+                        const SizedBox(width: Space.x1),
+                        Icon(
+                          Icons.arrow_forward_rounded,
+                          size: IconSizes.xs,
+                          color: p.accent,
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -1679,7 +1731,7 @@ class _SectionHeader extends StatelessWidget {
         Expanded(
           child: Text(
             title,
-            style: AppTypography.title.copyWith(color: p.ink),
+            style: AppTypography.headline.copyWith(color: p.ink),
           ),
         ),
         if (trailing != null)
@@ -1822,7 +1874,22 @@ class _SavedDishCard extends ConsumerWidget {
                 if (notifier.isDirty) {
                   final ok = await _confirmReplaceDirtyDraft(context, ref);
                   if (!ok || !context.mounted) return;
+                } else if (notifier.hasUnsavedDraftContent) {
+                  try {
+                    await notifier.saveCurrentToLibrary();
+                  } catch (_) {
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Не удалось сохранить текущий черновик. Повторите попытку.',
+                        ),
+                      ),
+                    );
+                    return;
+                  }
                 }
+                if (!context.mounted) return;
                 notifier.loadDish(dish);
                 Navigator.push(
                   context,
@@ -1852,8 +1919,10 @@ class _SavedDishCard extends ConsumerWidget {
                                   Expanded(
                                     child: Text(
                                       title,
-                                      style: AppTypography.headline
-                                          .copyWith(color: p.ink),
+                                      style: AppTypography.headline.copyWith(
+                                        color: p.ink,
+                                        fontWeight: FontWeight.w700,
+                                      ),
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -1873,13 +1942,13 @@ class _SavedDishCard extends ConsumerWidget {
                                           style:
                                               AppTypography.headline.copyWith(
                                             color: p.ink,
-                                            fontWeight: FontWeight.w700,
+                                            fontWeight: FontWeight.w600,
                                           ),
                                         ),
                                         Text(
                                           calc.hasYield
                                               ? 'ккал / 100 г'
-                                              : 'ккал всего',
+                                              : 'ккал на всё блюдо',
                                           style: AppTypography.caption.copyWith(
                                             color: p.inkMuted,
                                           ),
@@ -1890,25 +1959,39 @@ class _SavedDishCard extends ConsumerWidget {
                                 ],
                               ),
                               const SizedBox(height: Space.x1),
-                              Text(
-                                calc == null
-                                    ? '$prefixParts · выход — г · — ккал'
-                                    : showRightKcal
-                                        ? '$prefixParts · '
-                                            '${calc.usesLossTable && !calc.hasYield ? 'вес не указан' : '${CalculationEngine.formatGrams(calc.yieldGrams)} г'} · '
-                                            'Б ${CalculationEngine.formatMacro(calc.hasYield ? calc.per100gProtein : calc.cookedProtein)} · '
-                                            'Ж ${CalculationEngine.formatMacro(calc.hasYield ? calc.per100gFat : calc.cookedFat)} · '
-                                            'У ${CalculationEngine.formatMacro(calc.hasYield ? calc.per100gCarbs : calc.cookedCarbs)}'
-                                        : '$prefixParts · '
-                                            '${calc.usesLossTable && !calc.hasYield ? 'вес не указан' : '${CalculationEngine.formatGrams(calc.yieldGrams)} г'} · '
-                                            '${CalculationEngine.formatKcal(calc.hasYield ? calc.per100gKcal : calc.cookedKcal)} '
-                                            '${calc.hasYield ? 'ккал / 100 г' : 'ккал всего'} · '
-                                            'Б ${CalculationEngine.formatMacro(calc.hasYield ? calc.per100gProtein : calc.cookedProtein)} · '
-                                            'Ж ${CalculationEngine.formatMacro(calc.hasYield ? calc.per100gFat : calc.cookedFat)} · '
-                                            'У ${CalculationEngine.formatMacro(calc.hasYield ? calc.per100gCarbs : calc.cookedCarbs)}',
-                                style: AppTypography.numSm
-                                    .copyWith(color: p.inkSecondary),
-                              ),
+                              if (calc == null)
+                                Text(
+                                  '$prefixParts · выход — г · — ккал',
+                                  style: AppTypography.numSm
+                                      .copyWith(color: p.inkSecondary),
+                                )
+                              else ...[
+                                Text(
+                                  '$prefixParts · '
+                                  '${calc.usesLossTable && !calc.hasYield ? 'вес готового блюда не указан' : 'выход ${CalculationEngine.formatGrams(calc.yieldGrams)} г'}',
+                                  style: AppTypography.caption
+                                      .copyWith(color: p.inkMuted),
+                                ),
+                                const SizedBox(height: Space.x1),
+                                Text(
+                                  showRightKcal
+                                      ? '${calc.hasYield ? 'на 100 г' : 'на всё блюдо'}: '
+                                          '${UiFormat.macrosWithUnits(
+                                          calc.hasYield ? calc.per100gProtein : calc.cookedProtein,
+                                          calc.hasYield ? calc.per100gFat : calc.cookedFat,
+                                          calc.hasYield ? calc.per100gCarbs : calc.cookedCarbs,
+                                        )}'
+                                      : '${calc.hasYield ? 'на 100 г' : 'на всё блюдо'}: '
+                                          '${CalculationEngine.formatKcal(calc.hasYield ? calc.per100gKcal : calc.cookedKcal)} ккал · '
+                                          '${UiFormat.macrosWithUnits(
+                                          calc.hasYield ? calc.per100gProtein : calc.cookedProtein,
+                                          calc.hasYield ? calc.per100gFat : calc.cookedFat,
+                                          calc.hasYield ? calc.per100gCarbs : calc.cookedCarbs,
+                                        )}',
+                                  style: AppTypography.numSm
+                                      .copyWith(color: p.inkSecondary),
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -2029,9 +2112,18 @@ class _SavedDishCard extends ConsumerWidget {
                                     await notifier.duplicateDish(dish);
                                   }
                                   if (value == 'delete') {
+                                    final dishNotifier =
+                                        ref.read(dishProvider.notifier);
+                                    final activeDish = ref.read(dishProvider);
+                                    final wasActive = activeDish.id == dish.id;
+                                    final messenger =
+                                        ScaffoldMessenger.of(context);
                                     await notifier.deleteDish(dish.id);
+                                    if (wasActive) {
+                                      dishNotifier.createNewDish();
+                                    }
                                     if (!context.mounted) return;
-                                    ScaffoldMessenger.of(context)
+                                    messenger
                                       ..hideCurrentSnackBar()
                                       ..showSnackBar(
                                         SnackBar(
@@ -2041,8 +2133,12 @@ class _SavedDishCard extends ConsumerWidget {
                                             onPressed: () {
                                               notifier
                                                   .saveDish(dish)
-                                                  .then<void>((_) {},
-                                                      onError: (Object _) {});
+                                                  .then<void>((_) {
+                                                if (wasActive) {
+                                                  dishNotifier
+                                                      .loadDish(activeDish);
+                                                }
+                                              }, onError: (Object _) {});
                                             },
                                           ),
                                         ),
@@ -2171,7 +2267,8 @@ class _SelectionDock extends StatelessWidget {
     final width = size.width;
     final textScale = MediaQuery.textScalerOf(context).scale(1.0);
     final stackActions = AppLayout.shouldStackActions(width, textScale);
-    final compactDock = stackActions && size.height < 640;
+    final compactDock =
+        AppLayout.isShort(size.height) || (stackActions && size.height < 640);
 
     final String hint = switch (selectedCount) {
       0 => 'Выберите блюда из списка',
@@ -2212,43 +2309,46 @@ class _SelectionDock extends StatelessWidget {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(minHeight: kMinTapTarget),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
+                padding: const EdgeInsets.symmetric(
                     horizontal: Space.x2,
                     vertical: Space.x2,
                   ),
-                  child: horizontal
-                      ? Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(icon, size: 20, color: fg),
-                            const SizedBox(width: Space.x2),
-                            Flexible(
-                              child: Text(
+                  child: ExcludeSemantics(
+                    child: horizontal
+                        ? Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(icon, size: IconSizes.md, color: fg),
+                              const SizedBox(width: Space.x2),
+                              Flexible(
+                                child: Text(
+                                  label,
+                                  maxLines: 2,
+                                  textAlign: TextAlign.center,
+                                  style:
+                                      AppTypography.label.copyWith(color: fg),
+                                ),
+                              ),
+                            ],
+                          )
+                        : Column(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(icon, size: IconSizes.md, color: fg),
+                              const SizedBox(height: Space.x1),
+                              Text(
                                 label,
                                 maxLines: 2,
                                 textAlign: TextAlign.center,
-                                style: AppTypography.label.copyWith(color: fg),
+                                style: AppTypography.caption.copyWith(
+                                  color: fg,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
-                            ),
-                          ],
-                        )
-                      : Column(
-                          mainAxisSize: MainAxisSize.min,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(icon, size: 20, color: fg),
-                            const SizedBox(height: Space.x1),
-                            Text(
-                              label,
-                              maxLines: 2,
-                              textAlign: TextAlign.center,
-                              style: AppTypography.caption.copyWith(
-                                color: fg,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
+                            ],
+                          ),
+                  ),
                 ),
               ),
             ),
@@ -2384,7 +2484,7 @@ class _HomeDock extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 20),
+          Icon(icon, size: IconSizes.md),
           const SizedBox(width: Space.x2),
           Flexible(
             child: Text(

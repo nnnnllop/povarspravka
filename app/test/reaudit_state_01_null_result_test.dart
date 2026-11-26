@@ -268,8 +268,8 @@ void main() {
     });
 
     testWidgets(
-        'DEFECT: blank shows a visible text but layout of the banner FAILS '
-        '(unbounded width inside InteractiveViewer)', (tester) async {
+        'BlankPreviewScreen lays out CalcErrorBanner cleanly outside InteractiveViewer',
+        (tester) async {
       phoneSize(tester);
       final n = DishNotifier(storage: RecordingStorage());
       n.loadDish(BadDish.subGramYield());
@@ -278,17 +278,12 @@ void main() {
       await tester.pump();
       expect(find.text('Проверьте выход и параметры блюда'), findsOneWidget,
           reason: 'the text exists in the tree');
-      final errors = <Object>[];
-      for (var i = 0; i < 12; i++) {
-        final e = tester.takeException();
-        if (e != null) errors.add(e);
-      }
-      expect(errors, isNotEmpty,
-          reason: 'BoxConstraints(w=Infinity, 0<=h<=Infinity) handed to the '
-              'CalcErrorBanner Container — the banner is never painted');
+      expect(tester.takeException(), isNull,
+          reason:
+              'CalcErrorBanner sits outside InteractiveViewer and paints cleanly');
     });
 
-    testWidgets('export/print are still enabled on an uncalculable dish',
+    testWidgets('export/print are disabled on an uncalculable dish',
         (tester) async {
       phoneSize(tester);
       final n = DishNotifier(storage: RecordingStorage());
@@ -296,13 +291,13 @@ void main() {
       final h = Harness(dish: n);
       await tester.pumpWidget(h.wrap(const BlankPreviewScreen()));
       await tester.pump();
-      while (tester.takeException() != null) {}
+      expect(tester.takeException(), isNull);
       final printBtn = tester.widget<IconButton>(
           find.widgetWithIcon(IconButton, Icons.print_rounded));
-      expect(printBtn.onPressed, isNotNull);
+      expect(printBtn.onPressed, isNull);
       final shareBtn = tester.widget<IconButton>(
           find.widgetWithIcon(IconButton, Icons.ios_share_rounded));
-      expect(shareBtn.onPressed, isNotNull);
+      expect(shareBtn.onPressed, isNull);
     });
   });
 

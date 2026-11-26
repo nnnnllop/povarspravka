@@ -117,7 +117,7 @@ void main() {
 
     expect(find.text('Нетто 100 г'), findsOneWidget);
     expect(find.text('Нетто 80 г'), findsOneWidget);
-    expect(find.text('Введено брутто 100 г · отходы 20 %'), findsOneWidget);
+    expect(find.text('Введено брутто 100 г · отходы 20\u00A0%'), findsOneWidget);
     expect(find.textContaining('брутто'), findsOneWidget);
   });
 

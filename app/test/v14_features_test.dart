@@ -386,7 +386,10 @@ void main() {
       expect(container.read(dishProvider).ingredients[1].weightGrams, 625);
 
       // 2) Replace ingredient product via CustomNumpadSheet menu button.
-      await tester.tap(find.text('Курица (грудка)'));
+      final chickenFinder = find.text('Курица (грудка)');
+      await tester.ensureVisible(chickenFinder);
+      await tester.pumpAndSettle();
+      await tester.tap(chickenFinder);
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('numpad-more-btn')));
       await tester.pumpAndSettle();

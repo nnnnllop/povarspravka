@@ -110,7 +110,6 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
   final TextEditingController _searchCtrl = TextEditingController();
   late final SearchNotifier _searchNotifier;
   bool _didResetOnExit = false;
-  bool _onlyFavorites = false;
   String? _lastAddedSummary;
   int? _invalidProductId;
 
@@ -140,6 +139,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
           clearSource: true,
           clearGroup: true,
           clearIsDish: true,
+          clearOnlyFavorites: true,
         );
       });
     }
@@ -155,6 +155,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
       clearSource: true,
       clearGroup: true,
       clearIsDish: true,
+      clearOnlyFavorites: true,
     );
   }
 
@@ -173,9 +174,8 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
     final filteredFavorites = ref.watch(filteredFavoritesProvider);
     final allFavorites = ref.watch(favoriteProductsProvider);
     final favoriteIds = {for (final item in allFavorites) item.id};
-    if (_onlyFavorites && allFavorites.isEmpty) {
-      _onlyFavorites = false;
-    }
+    final effectiveOnlyFavorites =
+        searchState.onlyFavorites && allFavorites.isNotEmpty;
     final dish = ref.watch(dishProvider);
     final p = Palette.of(context);
     final isCatalog = widget.mode == SearchMode.browseCatalog;
@@ -191,6 +191,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
       context,
       p: p,
       searchState: searchState,
+      onlyFavorites: effectiveOnlyFavorites,
       favoriteProducts: filteredFavorites,
       favoriteIds: favoriteIds,
       recentProducts: recentProducts,
@@ -226,7 +227,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                         child: Row(
                           children: [
                             Icon(Icons.swap_horiz_rounded,
-                                size: 15, color: p.accent),
+                                size: IconSizes.xs, color: p.accent),
                             const SizedBox(width: Space.x1),
                             Expanded(
                               child: Text(
@@ -247,10 +248,10 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                       color: p.sunken,
                       padding: const EdgeInsets.symmetric(
                         horizontal: Space.x4,
-                        vertical: 4,
+                        vertical: Space.x1,
                       ),
                       child: Text(
-                        'КБЖУ в списке указано на 100 г продукта',
+                        'КБЖУ в списке указано на 100 г продукта (по формуле 4/9/4)',
                         style: AppTypography.caption.copyWith(color: p.inkMuted),
                       ),
                     ),
@@ -310,8 +311,11 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                     : (isCatalog
                         ? 'Поиск в справочнике…'
                         : 'Картофель, масло, курица…'),
-                prefixIcon:
-                    Icon(Icons.search_rounded, size: 20, color: p.inkMuted),
+                prefixIcon: Icon(
+                  Icons.search_rounded,
+                  size: IconSizes.md,
+                  color: p.inkMuted,
+                ),
                 suffixIcon: _searchCtrl.text.isNotEmpty
                     ? IconButton(
                         tooltip: 'Очистить запрос',
@@ -321,7 +325,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                         ),
                         icon: Icon(
                           Icons.close_rounded,
-                          size: 18,
+                          size: IconSizes.btn,
                           color: p.inkMuted,
                         ),
                         onPressed: () {
@@ -355,10 +359,12 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
 
   Widget _buildFilterStrip(BuildContext context, Palette p, bool isCatalog) {
     final searchState = ref.watch(searchProvider);
+    final favCount = ref.watch(favoriteProductsProvider).length;
     final selectedIsDish = searchState.selectedIsDish;
+    final onlyFav = searchState.onlyFavorites && favCount > 0;
     final activeExtraCount = (searchState.selectedSource != null ? 1 : 0) +
         (searchState.selectedGroupId != null ? 1 : 0) +
-        (_onlyFavorites ? 1 : 0);
+        (onlyFav ? 1 : 0);
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -444,7 +450,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
           }
           final hasExtra = st.selectedSource != null ||
               st.selectedGroupId != null ||
-              _onlyFavorites;
+              (st.onlyFavorites && favCount > 0);
 
           return AppSheetScaffold(
             title: 'Фильтры справочника',
@@ -454,12 +460,12 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                 ? TextButton(
                     onPressed: () {
                       AppHaptics.toggle();
-                      setState(() => _onlyFavorites = false);
                       sheetRef.read(searchProvider.notifier).resetFilters(
                             clearQuery: false,
                             clearSource: true,
                             clearGroup: true,
                             clearIsDish: false,
+                            clearOnlyFavorites: true,
                           );
                     },
                     child: const Text('Сбросить'),
@@ -556,11 +562,13 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                         _FilterPill(
                           key: const ValueKey('favorites-filter-pill'),
                           label: '★ Избранное · $favCount',
-                          selected: _onlyFavorites,
+                          selected: st.onlyFavorites,
                           palette: p,
                           onTap: () {
                             AppHaptics.toggle();
-                            setState(() => _onlyFavorites = !_onlyFavorites);
+                            sheetRef
+                                .read(searchProvider.notifier)
+                                .toggleOnlyFavorites();
                           },
                         ),
                       if (groups.isNotEmpty)
@@ -588,6 +596,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
     BuildContext context, {
     required Palette p,
     required SearchState searchState,
+    required bool onlyFavorites,
     required List<Product> favoriteProducts,
     required Set<int> favoriteIds,
     required List<Product> recentProducts,
@@ -595,7 +604,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
     required bool isCatalog,
     required bool sliver,
   }) {
-    if (_onlyFavorites) {
+    if (onlyFavorites) {
       if (favoriteProducts.isEmpty) {
         final emptyFav = Center(
           child: SingleChildScrollView(
@@ -603,7 +612,11 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.star_outline_rounded, size: 40, color: p.inkMuted),
+                Icon(
+                  Icons.star_outline_rounded,
+                  size: Space.x10,
+                  color: p.inkMuted,
+                ),
                 const SizedBox(height: Space.x2),
                 Text(
                   'В избранном нет подходящих продуктов',
@@ -612,7 +625,8 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                 ),
                 const SizedBox(height: Space.x2),
                 TextButton(
-                  onPressed: () => setState(() => _onlyFavorites = false),
+                  onPressed: () =>
+                      ref.read(searchProvider.notifier).setOnlyFavorites(false),
                   child: const Text('Показать весь справочник'),
                 ),
               ],
@@ -727,6 +741,9 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
         entries.add(_SearchProductEntry(product));
       }
     }
+    if (searchState.results.length >= 60) {
+      entries.add(const _SearchTruncatedNote());
+    }
 
     if (sliver) {
       return SliverPadding(
@@ -771,14 +788,14 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
         searchState.selectedSource != null ||
         searchState.selectedGroupId != null ||
         searchState.selectedIsDish != null ||
-        _onlyFavorites;
+        searchState.onlyFavorites;
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(Space.x4),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.search_off_rounded, size: 40, color: p.inkMuted),
+            Icon(Icons.search_off_rounded, size: Space.x10, color: p.inkMuted),
             const SizedBox(height: Space.x2),
             Text(
               'Ничего не найдено',
@@ -801,8 +818,8 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                         clearSource: true,
                         clearGroup: true,
                         clearIsDish: true,
+                        clearOnlyFavorites: true,
                       );
-                  setState(() => _onlyFavorites = false);
                 },
                 child: const Text('Сбросить фильтры'),
               ),
@@ -811,7 +828,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
             OutlinedButton.icon(
               onPressed: () =>
                   _openCustomProductForm(initialName: searchState.query.trim()),
-              icon: const Icon(Icons.add_rounded, size: 18),
+              icon: const Icon(Icons.add_rounded, size: IconSizes.btn),
               label: const Text('Создать свой продукт'),
             ),
           ],
@@ -839,6 +856,16 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
             color: p.inkMuted,
             fontWeight: FontWeight.w600,
           ),
+        ),
+      );
+    }
+    if (entry is _SearchTruncatedNote) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(Space.x4, Space.x3, Space.x4, Space.x2),
+        child: Text(
+          'Показаны первые 60 — уточните запрос или выберите категорию',
+          textAlign: TextAlign.center,
+          style: AppTypography.caption.copyWith(color: p.inkMuted),
         ),
       );
     }
@@ -873,7 +900,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
     final showInvalidInline = !valid && _invalidProductId == product.id;
 
     final subtitle = valid
-        ? '${CalculationEngine.formatKcal(product.kcal)} ккал · '
+        ? '${CalculationEngine.formatKcal(UiFormat.productKcal(product))} ккал · '
             'Б ${CalculationEngine.formatMacro(product.protein)} · '
             'Ж ${CalculationEngine.formatMacro(product.fat)} · '
             'У ${CalculationEngine.formatMacro(product.carbs)} · '
@@ -909,7 +936,8 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
               }
             },
             child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 58),
+              constraints:
+                  const BoxConstraints(minHeight: Space.minRowHeight),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(
                     Space.x4, Space.x2, Space.x1, Space.x2),
@@ -926,10 +954,13 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                             crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               if (isFavorite)
-                                Icon(
-                                  Icons.star_rounded,
-                                  size: 16,
-                                  color: p.accent,
+                                Semantics(
+                                  label: 'Избранное',
+                                  child: Icon(
+                                    Icons.star_rounded,
+                                    size: IconSizes.xs,
+                                    color: p.accent,
+                                  ),
                                 ),
                               _HighlightedProductName(
                                 name: product.name,
@@ -979,7 +1010,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                         padding: const EdgeInsets.symmetric(horizontal: Space.x2),
                         child: Icon(
                           Icons.chevron_right_rounded,
-                          size: 20,
+                          size: IconSizes.md,
                           color: p.inkMuted,
                         ),
                       )
@@ -992,7 +1023,7 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                         ),
                         icon: Icon(
                           Icons.info_outline_rounded,
-                          size: 20,
+                          size: IconSizes.md,
                           color: p.inkMuted,
                         ),
                         onPressed: () => _openProductInfoCard(
@@ -1052,7 +1083,11 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
         child: Row(
           children: [
             if (_lastAddedSummary != null) ...[
-              Icon(Icons.check_circle_rounded, size: 18, color: p.accent),
+              Icon(
+                Icons.check_circle_rounded,
+                size: IconSizes.btn,
+                color: p.accent,
+              ),
               const SizedBox(width: Space.x2),
             ],
             Expanded(
@@ -1125,12 +1160,34 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
                 });
               }
             : null,
+        onAddAsNewRow: existing != null && widget.mode == SearchMode.pickForRecipe
+            ? (grams, isGross) {
+                confirmed = true;
+                _addToRecipe(
+                  activeProduct,
+                  grams,
+                  isGross,
+                  recentProduct: product,
+                );
+              }
+            : null,
         onConfirm: (grams, isGross) {
           confirmed = true;
           if (existing != null) {
-            _updateInRecipe(existing.id, activeProduct, grams, isGross);
+            _updateInRecipe(
+              existing.id,
+              activeProduct,
+              grams,
+              isGross,
+              recentProduct: product,
+            );
           } else {
-            _addToRecipe(activeProduct, grams, isGross);
+            _addToRecipe(
+              activeProduct,
+              grams,
+              isGross,
+              recentProduct: product,
+            );
           }
         },
       ),
@@ -1143,13 +1200,18 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
     }
   }
 
-  void _addToRecipe(Product product, double grams, bool isGross) {
+  void _addToRecipe(
+    Product product,
+    double grams,
+    bool isGross, {
+    Product? recentProduct,
+  }) {
     ref.read(dishProvider.notifier).addIngredient(
           product,
           grams,
           isGross: isGross,
         );
-    recordRecentProduct(ref, product);
+    recordRecentProduct(ref, recentProduct ?? product);
     if (!mounted) return;
     setState(() {
       _lastAddedSummary =
@@ -1161,15 +1223,16 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
     String ingredientId,
     Product product,
     double grams,
-    bool isGross,
-  ) {
+    bool isGross, {
+    Product? recentProduct,
+  }) {
     ref.read(dishProvider.notifier).updateIngredient(
           ingredientId,
           grams,
           isGross: isGross,
           product: product,
         );
-    recordRecentProduct(ref, product);
+    recordRecentProduct(ref, recentProduct ?? product);
     if (!mounted) return;
     setState(() {
       _lastAddedSummary =
@@ -1182,14 +1245,12 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
     int? selectedGroupId,
   ) async {
     FocusManager.instance.primaryFocus?.unfocus();
-    final p = Palette.of(context);
     final chosen = await showModalBottomSheet<int?>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      showDragHandle: true,
-      backgroundColor: p.surface,
-      shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
+      showDragHandle: false,
+      backgroundColor: Colors.transparent,
       builder: (_) => _GroupPickerSheet(
         groups: groups,
         selectedGroupId: selectedGroupId,
@@ -1210,26 +1271,21 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
     final p = Palette.of(context);
     final selected = await showModalBottomSheet<Object?>(
       context: context,
+      isScrollControlled: true,
       useSafeArea: true,
-      showDragHandle: true,
-      backgroundColor: p.surface,
-      shape: const RoundedRectangleBorder(borderRadius: Radii.sheetTop),
-      builder: (sheetCtx) => SafeArea(
-        top: false,
+      showDragHandle: false,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => AppSheetScaffold(
+        title: product.name,
+        subtitle: 'Продукт уже добавлен в блюдо',
+        showHandle: true,
+        showClose: true,
+        maxHeightFactor: 0.75,
+        bodyPadding: EdgeInsets.zero,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Padding(
-              padding:
-                  const EdgeInsets.fromLTRB(Space.x4, 0, Space.x4, Space.x2),
-              child: Text(
-                product.name,
-                style: AppTypography.headline.copyWith(color: p.ink),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
             Divider(height: 1, color: p.divider),
             for (var i = 0; i < existingList.length; i++) ...[
               ListTile(
@@ -1289,6 +1345,14 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
   void _openProductInfoCard(Product product, {Ingredient? existing}) {
     FocusManager.instance.primaryFocus?.unfocus();
     final isCustom = product.source.trim().toLowerCase() == 'custom';
+    final dishTitle = ref.read(dishProvider).title.trim();
+    final String? ctaLabel = _isReplaceMode
+        ? 'Выбрать для замены'
+        : (widget.mode == SearchMode.pickForRecipe &&
+                existing == null &&
+                dishTitle.isNotEmpty
+            ? 'Добавить в «$dishTitle»'
+            : null);
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -1297,7 +1361,14 @@ class _SearchProductModalState extends ConsumerState<SearchProductModal> {
       backgroundColor: Colors.transparent,
       builder: (sheetCtx) => ProductInfoCardSheet(
         product: product,
-        actionLabel: _isReplaceMode ? 'Выбрать для замены' : null,
+        actionLabel: ctaLabel,
+        onAddAnotherRow:
+            widget.mode == SearchMode.pickForRecipe && existing != null
+                ? () {
+                    Navigator.pop(sheetCtx);
+                    _openWeightPicker(product);
+                  }
+                : null,
         onAddToRecipe: () {
           Navigator.pop(sheetCtx);
           if (_isReplaceMode) {
@@ -1383,6 +1454,10 @@ class _SearchProductEntry extends _SearchListEntry {
   const _SearchProductEntry(this.product);
 }
 
+class _SearchTruncatedNote extends _SearchListEntry {
+  const _SearchTruncatedNote();
+}
+
 class _FilterPill extends StatelessWidget {
   final String label;
   final IconData? trailingIcon;
@@ -1401,56 +1476,60 @@ class _FilterPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TactilePress(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: Radii.chipAll,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              minWidth: kMinTapTarget,
-              minHeight: kMinTapTarget,
-              maxWidth: 220,
-            ),
-            child: Center(
-              widthFactor: 1,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: Space.x3,
-                  vertical: Space.x2,
-                ),
-                decoration: BoxDecoration(
-                  color: selected ? palette.accent : palette.sunken,
-                  borderRadius: Radii.chipAll,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        softWrap: false,
-                        style: AppTypography.label.copyWith(
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: TactilePress(
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: Radii.chipAll,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                minWidth: kMinTapTarget,
+                minHeight: kMinTapTarget,
+                maxWidth: 220,
+              ),
+              child: Center(
+                widthFactor: 1,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: Space.x3,
+                    vertical: Space.x2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: selected ? palette.accent : palette.sunken,
+                    borderRadius: Radii.chipAll,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          softWrap: false,
+                          style: AppTypography.label.copyWith(
+                            color: selected
+                                ? palette.onAccent
+                                : palette.inkSecondary,
+                          ),
+                        ),
+                      ),
+                      if (trailingIcon != null) ...[
+                        const SizedBox(width: Space.x1),
+                        Icon(
+                          trailingIcon,
+                          size: IconSizes.xs,
                           color: selected
                               ? palette.onAccent
                               : palette.inkSecondary,
                         ),
-                      ),
-                    ),
-                    if (trailingIcon != null) ...[
-                      const SizedBox(width: Space.x1),
-                      Icon(
-                        trailingIcon,
-                        size: 16,
-                        color: selected
-                            ? palette.onAccent
-                            : palette.inkSecondary,
-                      ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -1576,6 +1655,7 @@ final sourceCountsProvider = FutureProvider<SourceCounts>((ref) async {
 class ProductInfoCardSheet extends ConsumerWidget {
   final Product product;
   final VoidCallback onAddToRecipe;
+  final VoidCallback? onAddAnotherRow;
   final VoidCallback? onEditCustom;
   final VoidCallback? onDeleteCustom;
   final String? actionLabel;
@@ -1584,6 +1664,7 @@ class ProductInfoCardSheet extends ConsumerWidget {
     super.key,
     required this.product,
     required this.onAddToRecipe,
+    this.onAddAnotherRow,
     this.onEditCustom,
     this.onDeleteCustom,
     this.actionLabel,
@@ -1697,7 +1778,7 @@ class ProductInfoCardSheet extends ConsumerWidget {
                     value: 'edit',
                     child: Row(
                       children: [
-                        Icon(Icons.edit_outlined, size: 18),
+                        Icon(Icons.edit_outlined, size: IconSizes.btn),
                         SizedBox(width: Space.x2),
                         Expanded(child: Text('Редактировать продукт')),
                       ],
@@ -1711,7 +1792,7 @@ class ProductInfoCardSheet extends ConsumerWidget {
                       children: [
                         Icon(
                           Icons.delete_outline_rounded,
-                          size: 18,
+                          size: IconSizes.btn,
                           color: p.danger,
                         ),
                         const SizedBox(width: Space.x2),
@@ -1752,18 +1833,36 @@ class ProductInfoCardSheet extends ConsumerWidget {
         Space.x4,
         Space.x4,
       ),
-      footer: SizedBox(
-        width: double.infinity,
-        child: ElevatedButton.icon(
-          onPressed: isValid ? onAddToRecipe : null,
-          icon: const Icon(Icons.add_circle_outline_rounded, size: 20),
-          label: Text(
-            isValid
-                ? (actionLabel ?? 'Добавить в расчет')
-                : 'Недоступно для расчёта (ошибка БЖУ в источнике)',
-            textAlign: TextAlign.center,
+      footer: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ElevatedButton.icon(
+            onPressed: isValid ? onAddToRecipe : null,
+            icon: const Icon(
+              Icons.add_circle_outline_rounded,
+              size: IconSizes.md,
+            ),
+            label: Text(
+              isValid
+                  ? (actionLabel ?? 'Добавить в расчет')
+                  : 'Недоступно для расчёта (ошибка БЖУ в источнике)',
+              textAlign: TextAlign.center,
+            ),
           ),
-        ),
+          if (isValid && onAddAnotherRow != null) ...[
+            const SizedBox(height: Space.x2),
+            OutlinedButton.icon(
+              key: const ValueKey('info-add-new-row-btn'),
+              onPressed: onAddAnotherRow,
+              icon: const Icon(
+                Icons.playlist_add_rounded,
+                size: IconSizes.btn,
+              ),
+              label: const Text('Добавить ещё строкой'),
+            ),
+          ],
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1780,7 +1879,11 @@ class ProductInfoCardSheet extends ConsumerWidget {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.warning_amber_rounded, color: p.danger, size: 18),
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    color: p.danger,
+                    size: IconSizes.btn,
+                  ),
                   const SizedBox(width: Space.x2),
                   Expanded(
                     child: Text(
@@ -1862,6 +1965,8 @@ class ProductInfoCardSheet extends ConsumerWidget {
       );
 
   Widget _buildMacroStrip(Palette p) {
+    final calcKcal = UiFormat.productKcal(product);
+    final sourceNote = UiFormat.sourceKcalFootnote(product);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1898,12 +2003,19 @@ class ProductInfoCardSheet extends ConsumerWidget {
             InlineMacroCell(
               type: NutrientType.kcal,
               label: 'Энергия',
-              value: CalculationEngine.formatKcal(product.kcal),
+              value: CalculationEngine.formatKcal(calcKcal),
               unit: 'ккал',
               stacked: true,
             ),
           ],
         ),
+        if (sourceNote != null) ...[
+          const SizedBox(height: Space.x2),
+          Text(
+            '$sourceNote ккал · в расчётах используется 4/9/4',
+            style: AppTypography.caption.copyWith(color: p.inkMuted),
+          ),
+        ],
       ],
     );
   }
@@ -1969,7 +2081,6 @@ class _GroupPickerSheetState extends State<_GroupPickerSheet> {
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
-    final maxH = MediaQuery.sizeOf(context).height * 0.78;
     final showSearch = widget.groups.length >= 8;
     final norm = CustomProductsRepository.normalizeText(_query);
     final filtered = norm.isEmpty
@@ -1979,93 +2090,89 @@ class _GroupPickerSheetState extends State<_GroupPickerSheet> {
                 .contains(norm))
             .toList();
 
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxHeight: maxH),
-      child: Padding(
-        padding:
-            EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                    Space.x4, 0, Space.x4, Space.x2),
-                child: Text(
-                  'Категория продуктов',
-                  style: AppTypography.title.copyWith(color: p.ink),
-                ),
-              ),
-              if (showSearch)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                      Space.x4, 0, Space.x4, Space.x2),
-                  child: TextField(
-                    key: const ValueKey('group-filter-search'),
-                    controller: _ctrl,
-                    onChanged: (v) => setState(() => _query = v),
-                    decoration: InputDecoration(
-                      isDense: true,
-                      hintText: 'Поиск категории…',
-                      prefixIcon: Icon(Icons.search_rounded,
-                          size: 20, color: p.inkMuted),
-                      suffixIcon: _query.isNotEmpty
-                          ? IconButton(
-                              tooltip: 'Очистить',
-                              icon: Icon(Icons.close_rounded,
-                                  size: 18, color: p.inkMuted),
-                              onPressed: () {
-                                _ctrl.clear();
-                                setState(() => _query = '');
-                              },
-                            )
-                          : null,
-                    ),
+    return AppSheetScaffold(
+      title: 'Категория продуктов',
+      showHandle: true,
+      showClose: true,
+      maxHeightFactor: 0.78,
+      scrollable: false,
+      bodyPadding: EdgeInsets.zero,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (showSearch)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  Space.x4, Space.x2, Space.x4, Space.x2),
+              child: TextField(
+                key: const ValueKey('group-filter-search'),
+                controller: _ctrl,
+                onChanged: (v) => setState(() => _query = v),
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: 'Поиск категории…',
+                  prefixIcon: Icon(
+                    Icons.search_rounded,
+                    size: IconSizes.md,
+                    color: p.inkMuted,
                   ),
+                  suffixIcon: _query.isNotEmpty
+                      ? IconButton(
+                          tooltip: 'Очистить',
+                          icon: Icon(
+                            Icons.close_rounded,
+                            size: IconSizes.btn,
+                            color: p.inkMuted,
+                          ),
+                          onPressed: () {
+                            _ctrl.clear();
+                            setState(() => _query = '');
+                          },
+                        )
+                      : null,
                 ),
-              Divider(height: 1, color: p.divider),
-              Flexible(
-                child: filtered.isEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.all(Space.x4),
-                        child: Text(
-                          'Категория не найдена',
-                          textAlign: TextAlign.center,
-                          style: AppTypography.bodySm
-                              .copyWith(color: p.inkSecondary),
-                        ),
-                      )
-                    : ListView(
-                        shrinkWrap: true,
-                        children: [
-                          if (norm.isEmpty) ...[
-                            ListTile(
-                              title: const Text('Все категории'),
-                              trailing: widget.selectedGroupId == null
-                                  ? Icon(Icons.check_rounded, color: p.accent)
-                                  : null,
-                              onTap: () => Navigator.pop(context, -1),
-                            ),
-                            Divider(height: 1, color: p.divider),
-                          ],
-                          for (final g in filtered) ...[
-                            ListTile(
-                              title: Text(g.name),
-                              trailing: widget.selectedGroupId == g.id
-                                  ? Icon(Icons.check_rounded, color: p.accent)
-                                  : null,
-                              onTap: () => Navigator.pop(context, g.id),
-                            ),
-                            Divider(height: 1, color: p.divider),
-                          ],
-                        ],
-                      ),
               ),
-            ],
+            ),
+          Divider(height: 1, color: p.divider),
+          Flexible(
+            child: filtered.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(Space.x4),
+                    child: Text(
+                      'Категория не найдена',
+                      textAlign: TextAlign.center,
+                      style: AppTypography.bodySm
+                          .copyWith(color: p.inkSecondary),
+                    ),
+                  )
+                : ListView(
+                    shrinkWrap: true,
+                    children: [
+                      if (norm.isEmpty) ...[
+                        ListTile(
+                          title: const Text('Все категории'),
+                          trailing: widget.selectedGroupId == null
+                              ? Icon(Icons.check_rounded, color: p.accent)
+                              : null,
+                          onTap: () => Navigator.pop(context, -1),
+                        ),
+                        Divider(height: 1, color: p.divider),
+                      ],
+                      for (final g in filtered) ...[
+                        ListTile(
+                          title: Text(g.name),
+                          trailing: widget.selectedGroupId == g.id
+                              ? Icon(Icons.check_rounded, color: p.accent)
+                              : null,
+                          onTap: () => Navigator.pop(context, g.id),
+                        ),
+                        Divider(height: 1, color: p.divider),
+                      ],
+                    ],
+                  ),
           ),
-        ),
+        ],
       ),
     );
   }
